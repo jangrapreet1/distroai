@@ -340,7 +340,7 @@ export default function InventoryPage() {
                                             <p className="text-2xl font-bold mb-0.5 mt-2" style={{ fontFamily: "var(--font-mono)", color: stockColor }}>
                                                 {qty} <span className="text-sm font-normal text-[var(--text-muted)]">{p.unit as string}</span>
                                             </p>
-                                            {p.secondaryUnit && (
+                                            {(p.secondaryUnit as string | null | undefined) && (
                                                 <p className="text-xs text-[var(--text-muted)] mt-1 mb-2 font-mono">
                                                     ({qty * ((p.conversionFactor as number) || 1)} {p.secondaryUnit as string})
                                                 </p>
@@ -372,7 +372,7 @@ export default function InventoryPage() {
                                             <td className="p-4 font-medium"><Link href={`/inventory/products/${p.id}`} className="text-[var(--gold)] hover:underline">{p.name as string}</Link></td>
                                             <td className="p-4 text-right">
                                                 <div style={{ fontFamily: "var(--font-mono)" }}>{(p.totalQuantity as number) ?? 0} {p.unit as string}</div>
-                                                {p.secondaryUnit && (
+                                                {(p.secondaryUnit as string | null | undefined) && (
                                                     <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                                                         ({((p.totalQuantity as number) ?? 0) * ((p.conversionFactor as number) || 1)} {p.secondaryUnit as string})
                                                     </div>
