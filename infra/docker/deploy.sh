@@ -27,11 +27,11 @@ fi
 
 # Build images
 echo "🔨 Building Docker images..."
-docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
 
 # Start database + redis first
 echo "🗄️  Starting database and Redis..."
-docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres redis
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres redis
 echo "⏳ Waiting for database to be ready..."
 sleep 5
 
@@ -44,7 +44,7 @@ docker compose -f $COMPOSE_FILE --env-file $ENV_FILE run --rm api \
 
 # Start all services
 echo "🚀 Starting all services..."
-docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
 # Cleanup old images
 echo "🧹 Cleaning up old images..."
@@ -55,7 +55,7 @@ echo "════════════════════════�
 echo "✅ Deployment complete!"
 echo ""
 echo "Services:"
-docker compose -f $COMPOSE_FILE ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+docker compose -f "$COMPOSE_FILE" ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 echo ""
 echo "Useful commands:"
 echo "  Logs:     docker compose -f $COMPOSE_FILE logs -f"
