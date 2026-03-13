@@ -11,7 +11,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     constructor(config: ConfigService) {
         const isDev = config.get('NODE_ENV') === 'development';
-        const logLevels: Prisma.LogLevel[] = isDev
+        const logLevels: any[] = isDev
             ? ['query', 'info', 'warn', 'error']
             : ['warn', 'error'];
 

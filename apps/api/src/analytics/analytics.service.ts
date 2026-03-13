@@ -49,7 +49,7 @@ export class AnalyticsService {
         const products = productIds.length > 0
             ? await this.prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true, sku: true } })
             : [];
-        const productMap = new Map(products.map((p: any) => [p.id, p]));
+        const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
         const enrichedTopProducts = topProducts.map((p: any) => ({
             ...p,
             productName: productMap.get(p.productId)?.name ?? 'Unknown',
