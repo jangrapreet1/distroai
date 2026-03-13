@@ -1,0 +1,47 @@
+# Daily database backup: pg_dump → compress → upload to S3
+# Runs at 1:00 AM IST (19:30 UTC previous day)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: distroai
+spec:
+  schedule: "30 19 * * *"  # 1:00 AM IST
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:15-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +%Y-%m-%d_%H%M)
+                  FILENAME="distroai-backup-${TIMESTAMP}.sql.gz"
+
+                  echo "Starting backup: ${FILENAME}"
+                  pg_dump "$DATABASE_URL" | gzip > "/tmp/${FILENAME}"
+
+                  echo "Uploading to S3..."
+                  apk add --no-cache aws-cli
+                  aws s3 cp "/tmp/${FILENAME}" "s3://distroai-prod-backups/daily/${FILENAME}"
+
+                  echo "Backup complete: ${FILENAME}"
+              envFrom:
+                - secretRef:
+                    name: api-secrets
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"

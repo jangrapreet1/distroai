@@ -1,0 +1,51 @@
+# Worker deployment — runs BullMQ processors only (no HTTP)
+# Uses the same Docker image as API but with worker.main.js entrypoint
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: distroai
+  labels:
+    app: worker
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: worker
+          image: ${ECR_REGISTRY}/distroai-worker:${IMAGE_TAG}
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # No HTTP probes — use exec probe to check process is alive
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -f 'node dist/worker.main.js' > /dev/null"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      terminationGracePeriodSeconds: 60  # Allow in-flight jobs to complete

@@ -1,0 +1,35 @@
+# =========================================================
+# Worker — same build as API, different entrypoint
+# Runs BullMQ queue processors only (no HTTP server)
+# =========================================================
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/ ./packages/
+COPY apps/api/ ./apps/api/
+
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+RUN cd apps/api && pnpm run build
+
+# =========================================================
+# Runner
+# =========================================================
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nestjs
+
+COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/node_modules ./node_modules
+COPY --from=builder /app/apps/api/package.json ./package.json
+COPY --from=builder /app/packages/ ./packages/
+
+USER nestjs
+
+# No EXPOSE — worker doesn't serve HTTP
+# No HEALTHCHECK — managed via K8s liveness exec probes
+
+CMD ["node", "dist/worker.main.js"]

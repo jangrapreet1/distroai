@@ -1,0 +1,153 @@
+{
+    "dashboard": {
+        "title": "DistroAI — Infrastructure",
+        "uid": "distroai-infra",
+        "timezone": "Asia/Kolkata",
+        "refresh": "15s",
+        "panels": [
+            {
+                "title": "API CPU Usage per Pod",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                },
+                "targets": [
+                    {
+                        "expr": "rate(container_cpu_usage_seconds_total{namespace='distroai', container='api'}[5m])",
+                        "legendFormat": "{{ pod }}"
+                    }
+                ]
+            },
+            {
+                "title": "API Memory per Pod",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 0
+                },
+                "targets": [
+                    {
+                        "expr": "container_memory_working_set_bytes{namespace='distroai', container='api'} / 1024 / 1024",
+                        "legendFormat": "{{ pod }} MB"
+                    }
+                ]
+            },
+            {
+                "title": "Request Rate (RED)",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                },
+                "targets": [
+                    {
+                        "expr": "sum(rate(http_requests_total{job='distroai-api'}[5m]))",
+                        "legendFormat": "Total"
+                    },
+                    {
+                        "expr": "sum(rate(http_requests_total{job='distroai-api', status=~'5..'}[5m]))",
+                        "legendFormat": "5xx Errors"
+                    }
+                ]
+            },
+            {
+                "title": "HTTP Latency Heatmap",
+                "type": "heatmap",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                },
+                "targets": [
+                    {
+                        "expr": "rate(http_request_duration_ms_bucket{job='distroai-api'}[5m])"
+                    }
+                ]
+            },
+            {
+                "title": "Redis Hit Rate",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 8,
+                    "x": 0,
+                    "y": 16
+                },
+                "targets": [
+                    {
+                        "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "percent"
+                    }
+                }
+            },
+            {
+                "title": "Redis Memory",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 8,
+                    "x": 8,
+                    "y": 16
+                },
+                "targets": [
+                    {
+                        "expr": "redis_memory_used_bytes / 1024 / 1024"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "decmbytes"
+                    }
+                }
+            },
+            {
+                "title": "DB Connections",
+                "type": "gauge",
+                "gridPos": {
+                    "h": 4,
+                    "w": 8,
+                    "x": 16,
+                    "y": 16
+                },
+                "targets": [
+                    {
+                        "expr": "pg_stat_activity_count"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "max": 200,
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 100
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 150
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}

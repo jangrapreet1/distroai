@@ -1,0 +1,41 @@
+version: '3.8'
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: distroai_postgres
+    environment:
+      POSTGRES_USER: distroai
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: distroai_dev
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: distroai_redis
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  ai-service:
+    build:
+      context: ../../apps/ai-service
+      dockerfile: Dockerfile
+    container_name: distroai_ai_service
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://distroai:devpassword@distroai_postgres:5432/distroai_dev?schema=public
+      - PORT=8000
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

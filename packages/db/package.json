@@ -1,0 +1,30 @@
+{
+    "name": "@distroai/db",
+    "version": "1.0.0",
+    "private": true,
+    "main": "index.ts",
+    "types": "index.ts",
+    "scripts": {
+        "lint": "eslint \"**/*.ts*\"",
+        "build": "tsc",
+        "db:generate": "prisma generate",
+        "db:push": "prisma db push",
+        "db:studio": "prisma studio",
+        "db:format": "prisma format"
+    },
+    "dependencies": {
+        "@prisma/client": "^5.13.0"
+    },
+    "prisma": {
+        "seed": "tsx prisma/seed.ts"
+    },
+    "devDependencies": {
+        "@distroai/config": "workspace:*",
+        "@types/bcrypt": "^5.0.2",
+        "@types/node": "^25.3.3",
+        "bcrypt": "^5.1.1",
+        "prisma": "^5.13.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.4.5"
+    }
+}

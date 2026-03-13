@@ -1,0 +1,33 @@
+{
+    "extends": "../../packages/config/tsconfig.node.json",
+    "compilerOptions": {
+        "outDir": "./dist",
+        "baseUrl": "./",
+        "types": [
+            "node",
+            "jest"
+        ],
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "jsx": "react",
+        "paths": {
+            "@distroai/db": [
+                "../../packages/db/index.ts"
+            ],
+            "@distroai/types": [
+                "../../packages/types/src/index.ts"
+            ],
+            "@distroai/utils": [
+                "../../packages/utils/src/index.ts"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "test"
+    ]
+}

@@ -1,0 +1,78 @@
+# AlertManager rules for DistroAI
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: distroai-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: distroai.critical
+      rules:
+        - alert: APIDown
+          expr: up{job="distroai-api"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "DistroAI API is down"
+            description: "API pod {{ $labels.instance }} has been unreachable for 1 minute."
+
+        - alert: HighErrorRate
+          expr: |
+            (
+              rate(http_requests_total{job="distroai-api", status=~"5.."}[5m])
+              / rate(http_requests_total{job="distroai-api"}[5m])
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "API error rate above 5%"
+            description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+    - name: distroai.warning
+      rules:
+        - alert: QueueBacklog
+          expr: bullmq_queue_depth{queue="notification"} > 1000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Notification queue backlog: {{ $value }} jobs"
+            description: "The notification queue has accumulated {{ $value }} pending jobs."
+
+        - alert: AIServiceDown
+          expr: up{job="distroai-ai-service"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "AI service is down"
+            description: "AI service has been unreachable for 5 minutes. AI features will be degraded."
+
+        - alert: DiskSpaceLow
+          expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disk space below 10%"
+            description: "Node {{ $labels.instance }} has only {{ $value | humanizePercentage }} disk space remaining."
+
+        - alert: DatabaseConnectionsHigh
+          expr: pg_stat_activity_count > 150
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Database connections nearing limit ({{ $value }}/200)"
+
+        - alert: HighP95Latency
+          expr: histogram_quantile(0.95, rate(http_request_duration_ms_bucket{job="distroai-api"}[5m])) > 1000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "API P95 latency above 1s: {{ $value }}ms"

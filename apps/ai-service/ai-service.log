@@ -1,0 +1,13 @@
+INFO:     Will watch for changes in these directories: ['/home/preet/projects/distroai/apps/ai-service']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [151296] using StatReload
+Importing plotly failed. Interactive plots will not work.
+/home/preet/projects/distroai/apps/ai-service/venv/lib/python3.12/site-packages/pydantic/_internal/_fields.py:149: UserWarning: Field "model_used" has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [151298]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:60692 - "HEAD /health HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:45756 - "GET /favicon.ico HTTP/1.1" 404 Not Found

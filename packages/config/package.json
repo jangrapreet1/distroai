@@ -1,0 +1,21 @@
+{
+    "name": "@distroai/config",
+    "version": "1.0.0",
+    "private": true,
+    "license": "unlicensed",
+    "files": [
+        "eslint-preset.js",
+        "tailwind.config.ts",
+        "tsconfig.base.json",
+        "tsconfig.next.json",
+        "tsconfig.node.json",
+        "prettier.config.js"
+    ],
+    "dependencies": {
+        "eslint": "^8.57.0",
+        "prettier": "^3.2.5",
+        "prettier-plugin-tailwindcss": "^0.5.11",
+        "tailwindcss": "^3.4.1",
+        "typescript": "^5.4.5"
+    }
+}

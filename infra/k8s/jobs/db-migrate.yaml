@@ -1,0 +1,31 @@
+# Runs prisma migrate deploy BEFORE API pods roll out
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate-${IMAGE_TAG}
+  namespace: distroai
+  labels:
+    app: db-migrate
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: migrate
+          image: ${ECR_REGISTRY}/distroai-api:${IMAGE_TAG}
+          command: ["npx", "prisma", "migrate", "deploy"]
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

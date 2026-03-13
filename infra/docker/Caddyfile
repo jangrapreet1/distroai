@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────────────────────
+# Caddy Reverse Proxy — Auto-HTTPS via Let's Encrypt
+# ─────────────────────────────────────────────────────────
+#
+# BEFORE DEPLOYING: Replace {$DOMAIN} below with your actual
+# domain, or set the DOMAIN env var in your .env.production.
+#
+# Example:  DOMAIN=distroai.in
+#
+# If you don't have a domain yet, use :80 instead of {$DOMAIN}
+# to serve over HTTP on port 80 (no SSL).
+# ─────────────────────────────────────────────────────────
+
+# Frontend — serves the Next.js app
+{$DOMAIN:localhost} {
+	reverse_proxy web:3001
+}
+
+# API — serves the NestJS backend
+api.{$DOMAIN:localhost} {
+	reverse_proxy api:3000
+}

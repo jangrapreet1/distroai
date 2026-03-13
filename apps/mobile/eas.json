@@ -1,0 +1,42 @@
+{
+    "cli": {
+        "version": ">= 10.0.0"
+    },
+    "build": {
+        "development": {
+            "developmentClient": true,
+            "distribution": "internal",
+            "android": {
+                "buildType": "apk",
+                "gradleCommand": ":app:assembleDebug"
+            },
+            "ios": {
+                "simulator": true
+            }
+        },
+        "preview": {
+            "distribution": "internal",
+            "android": {
+                "buildType": "apk"
+            },
+            "env": {
+                "EXPO_PUBLIC_API_URL": "https://api-staging.distroai.in"
+            }
+        },
+        "production": {
+            "android": {
+                "buildType": "app-bundle"
+            },
+            "env": {
+                "EXPO_PUBLIC_API_URL": "https://api.distroai.in"
+            }
+        }
+    },
+    "submit": {
+        "production": {
+            "android": {
+                "serviceAccountKeyPath": "./google-services.json"
+            }
+        }
+    }
+}

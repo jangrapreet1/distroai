@@ -1,0 +1,221 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - heading "DistroAI" [level=1] [ref=e5]
+        - generic [ref=e6]:
+          - generic [ref=e7]: Test Org
+          - generic [ref=e8]: PRO
+      - navigation [ref=e9]:
+        - generic [ref=e10]:
+          - paragraph [ref=e11]: OPERATIONS
+          - link "Dashboard" [ref=e12] [cursor=pointer]:
+            - /url: /
+            - img [ref=e13]
+            - text: Dashboard
+          - link "Orders" [ref=e18] [cursor=pointer]:
+            - /url: /orders
+            - img [ref=e19]
+            - text: Orders
+          - link "Invoices" [ref=e23] [cursor=pointer]:
+            - /url: /invoices
+            - img [ref=e24]
+            - text: Invoices
+          - link "Inventory" [ref=e27] [cursor=pointer]:
+            - /url: /inventory
+            - img [ref=e28]
+            - text: Inventory
+          - link "Customers" [ref=e32] [cursor=pointer]:
+            - /url: /customers
+            - img [ref=e33]
+            - text: Customers
+          - link "Suppliers" [ref=e38] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e39]
+            - text: Suppliers
+        - generic [ref=e44]:
+          - paragraph [ref=e45]: FINANCE
+          - link "Payments" [ref=e46] [cursor=pointer]:
+            - /url: /payments
+            - img [ref=e47]
+            - text: Payments
+          - link "Purchase Orders" [ref=e49] [cursor=pointer]:
+            - /url: /purchase-orders
+            - img [ref=e50]
+            - text: Purchase Orders
+        - generic [ref=e53]:
+          - paragraph [ref=e54]: FIELD
+          - link "Field Force" [ref=e55] [cursor=pointer]:
+            - /url: /field
+            - img [ref=e56]
+            - text: Field Force
+          - link "Routes" [ref=e59] [cursor=pointer]:
+            - /url: /field/routes
+            - img [ref=e60]
+            - text: Routes
+          - link "Visits" [ref=e62] [cursor=pointer]:
+            - /url: /field/visits
+            - img [ref=e63]
+            - text: Visits
+        - generic [ref=e66]:
+          - paragraph [ref=e67]: INTELLIGENCE
+          - link "Analytics" [ref=e68] [cursor=pointer]:
+            - /url: /analytics
+            - img [ref=e69]
+            - text: Analytics
+          - link "DistroAI Chat" [ref=e71] [cursor=pointer]:
+            - /url: /ai
+            - img [ref=e72]
+            - text: DistroAI Chat
+        - generic [ref=e75]:
+          - paragraph [ref=e76]: SETTINGS
+          - link "Settings" [ref=e77] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e78]
+            - text: Settings
+          - link "Billing" [ref=e81] [cursor=pointer]:
+            - /url: /settings/billing
+            - img [ref=e82]
+            - text: Billing
+      - generic [ref=e86]:
+        - generic [ref=e87]: T
+        - generic [ref=e88]:
+          - paragraph [ref=e89]: Test
+          - paragraph [ref=e90]: admin
+        - button "Logout" [ref=e91]:
+          - img [ref=e92]
+    - generic [ref=e95]:
+      - banner [ref=e96]:
+        - navigation [ref=e98]:
+          - link "Home" [ref=e99] [cursor=pointer]:
+            - /url: /
+        - generic [ref=e100] [cursor=pointer]:
+          - img [ref=e101]
+          - generic [ref=e104]: Search...
+          - generic [ref=e105]: ⌘K
+        - generic [ref=e106]:
+          - button "3" [ref=e107]:
+            - img [ref=e108]
+            - generic [ref=e111]: "3"
+          - generic [ref=e112]: T
+      - main [ref=e113]:
+        - generic [ref=e114]:
+          - generic [ref=e117]:
+            - generic [ref=e118]:
+              - heading "Good morning, Test. Here's your day." [level=2] [ref=e119]
+              - button "Refresh" [ref=e120]:
+                - img [ref=e121]
+                - text: Refresh
+            - generic [ref=e126]:
+              - link "📦 10 orders today worth ₹1,000 View Orders" [ref=e127] [cursor=pointer]:
+                - /url: /orders
+                - generic [ref=e128]:
+                  - generic [ref=e129]: 📦
+                  - generic [ref=e130]:
+                    - paragraph [ref=e131]: 10 orders today worth ₹1,000
+                    - generic [ref=e132]:
+                      - text: View Orders
+                      - img [ref=e133]
+              - link "💰 ₹5,000 outstanding collections View Plan" [ref=e135] [cursor=pointer]:
+                - /url: /customers
+                - generic [ref=e136]:
+                  - generic [ref=e137]: 💰
+                  - generic [ref=e138]:
+                    - paragraph [ref=e139]: ₹5,000 outstanding collections
+                    - generic [ref=e140]:
+                      - text: View Plan
+                      - img [ref=e141]
+              - link "📊 ₹0 revenue this month from 0 orders See Report" [ref=e143] [cursor=pointer]:
+                - /url: /analytics
+                - generic [ref=e144]:
+                  - generic [ref=e145]: 📊
+                  - generic [ref=e146]:
+                    - paragraph [ref=e147]: ₹0 revenue this month from 0 orders
+                    - generic [ref=e148]:
+                      - text: See Report
+                      - img [ref=e149]
+          - generic [ref=e151]:
+            - generic [ref=e152]:
+              - generic [ref=e153]:
+                - img [ref=e155]
+                - generic [ref=e158]:
+                  - img [ref=e159]
+                  - text: 0%
+              - paragraph [ref=e162]: ₹1,000
+              - paragraph [ref=e163]: vs monthly avg
+              - application [ref=e167]
+            - generic [ref=e173]:
+              - generic [ref=e174]:
+                - img [ref=e176]
+                - generic [ref=e180]:
+                  - img [ref=e181]
+                  - text: 12%
+              - paragraph [ref=e184]: "10"
+              - paragraph [ref=e185]: today
+              - application [ref=e189]
+            - generic [ref=e195]:
+              - generic [ref=e196]:
+                - img [ref=e198]
+                - generic [ref=e200]:
+                  - img [ref=e201]
+                  - text: 5%
+              - paragraph [ref=e204]: ₹5,000
+              - paragraph [ref=e205]: total due
+              - application [ref=e209]
+            - link "2% 2 products below min" [ref=e215] [cursor=pointer]:
+              - /url: /inventory
+              - generic [ref=e216]:
+                - generic [ref=e217]:
+                  - img [ref=e219]
+                  - generic [ref=e223]:
+                    - img [ref=e224]
+                    - text: 2%
+                - paragraph [ref=e227]: "2"
+                - paragraph [ref=e228]: products below min
+                - application [ref=e232]
+          - generic [ref=e238]:
+            - generic [ref=e239]:
+              - generic [ref=e240]:
+                - heading "Sales Trend" [level=3] [ref=e241]
+                - generic [ref=e242]:
+                  - button "7D" [ref=e243]
+                  - button "30D" [ref=e244]
+                  - button "90D" [ref=e245]
+              - generic [ref=e247]: No sales data for this period. Create orders to see trends.
+            - generic [ref=e248]:
+              - generic [ref=e249]:
+                - heading "Alerts" [level=3] [ref=e250]
+                - generic [ref=e251]: "2"
+              - generic [ref=e252]:
+                - link "2 products below reorder level Now View" [ref=e253] [cursor=pointer]:
+                  - /url: /inventory
+                  - generic [ref=e256]:
+                    - paragraph [ref=e257]: 2 products below reorder level
+                    - generic [ref=e258]:
+                      - generic [ref=e259]:
+                        - img [ref=e260]
+                        - text: Now
+                      - generic [ref=e263]: View
+                - link "₹5,000 total outstanding from customers Now Collect" [ref=e264] [cursor=pointer]:
+                  - /url: /customers
+                  - generic [ref=e267]:
+                    - paragraph [ref=e268]: ₹5,000 total outstanding from customers
+                    - generic [ref=e269]:
+                      - generic [ref=e270]:
+                        - img [ref=e271]
+                        - text: Now
+                      - generic [ref=e274]: Collect
+          - generic [ref=e275]:
+            - generic [ref=e276]:
+              - heading "Top Products" [level=3] [ref=e277]
+              - paragraph [ref=e279]: No product data yet
+            - generic [ref=e280]:
+              - heading "Top Customers" [level=3] [ref=e281]
+              - paragraph [ref=e283]: No customer data yet
+  - button "Open Next.js Dev Tools" [ref=e289] [cursor=pointer]:
+    - img [ref=e290]
+  - alert [ref=e293]
+```

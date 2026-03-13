@@ -1,0 +1,21 @@
+{
+    "name": "DistroAI",
+    "short_name": "DistroAI",
+    "description": "Smart Distribution Management Platform",
+    "start_url": "/",
+    "display": "standalone",
+    "theme_color": "#07070E",
+    "background_color": "#07070E",
+    "icons": [
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

@@ -1,0 +1,118 @@
+services:
+  # ─── Database ───────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: distroai_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-distroai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-distroai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - distroai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-distroai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (queues + cache) ─────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: distroai_redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - distroai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── NestJS API ─────────────────────────────────────────
+  api:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: distroai_api
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-distroai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-distroai}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - distroai
+    restart: unless-stopped
+
+  # ─── BullMQ Worker ──────────────────────────────────────
+  worker:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.worker
+    container_name: distroai_worker
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-distroai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-distroai}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - distroai
+    restart: unless-stopped
+
+  # ─── Next.js Frontend ──────────────────────────────────
+  web:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.web
+    container_name: distroai_web
+    environment:
+      NEXT_PUBLIC_API_URL: http://api:3000
+    depends_on:
+      - api
+    networks:
+      - distroai
+    restart: unless-stopped
+
+  # ─── Caddy (Reverse Proxy + Auto-SSL) ──────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: distroai_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+    networks:
+      - distroai
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  distroai:
+    driver: bridge

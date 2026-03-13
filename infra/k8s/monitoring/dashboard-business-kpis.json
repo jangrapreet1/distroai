@@ -1,0 +1,137 @@
+{
+    "dashboard": {
+        "title": "DistroAI — Business KPIs",
+        "uid": "distroai-business-kpis",
+        "timezone": "Asia/Kolkata",
+        "refresh": "30s",
+        "panels": [
+            {
+                "title": "Orders / Minute",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 0,
+                    "y": 0
+                },
+                "targets": [
+                    {
+                        "expr": "rate(orders_created_total[1m]) * 60"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "short",
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 1
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 5
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                "title": "Revenue This Month (₹)",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 6,
+                    "y": 0
+                },
+                "targets": [
+                    {
+                        "expr": "increase(orders_created_total[30d])"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "currencyINR"
+                    }
+                }
+            },
+            {
+                "title": "Active WhatsApp Sessions",
+                "type": "stat",
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 12,
+                    "y": 0
+                },
+                "targets": [
+                    {
+                        "expr": "rate(whatsapp_messages_total[5m]) * 300"
+                    }
+                ]
+            },
+            {
+                "title": "AI Query Rate",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 4
+                },
+                "targets": [
+                    {
+                        "expr": "rate(ai_queries_total[5m]) * 60",
+                        "legendFormat": "{{ model }}"
+                    }
+                ]
+            },
+            {
+                "title": "AI Latency P50/P95/P99",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 4
+                },
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.50, rate(ai_query_duration_ms_bucket[5m]))",
+                        "legendFormat": "P50"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.95, rate(ai_query_duration_ms_bucket[5m]))",
+                        "legendFormat": "P95"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.99, rate(ai_query_duration_ms_bucket[5m]))",
+                        "legendFormat": "P99"
+                    }
+                ]
+            },
+            {
+                "title": "Queue Depths",
+                "type": "timeseries",
+                "gridPos": {
+                    "h": 8,
+                    "w": 24,
+                    "x": 0,
+                    "y": 12
+                },
+                "targets": [
+                    {
+                        "expr": "bullmq_queue_depth",
+                        "legendFormat": "{{ queue }}"
+                    }
+                ]
+            }
+        ]
+    }
+}

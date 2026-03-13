@@ -1,0 +1,13 @@
+node_modules
+.git
+.github
+*.md
+.env*
+.turbo
+dist
+.next
+__tests__
+*.test.ts
+*.spec.ts
+coverage
+infra

@@ -1,0 +1,53 @@
+{
+    "expo": {
+        "name": "DistroAI Field",
+        "slug": "distroai-field",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "scheme": "distroai",
+        "backgroundColor": "#07070E",
+        "userInterfaceStyle": "dark",
+        "splash": {
+            "backgroundColor": "#07070E",
+            "resizeMode": "contain"
+        },
+        "android": {
+            "package": "in.distroai.field",
+            "permissions": [
+                "ACCESS_FINE_LOCATION",
+                "ACCESS_COARSE_LOCATION",
+                "CAMERA",
+                "READ_EXTERNAL_STORAGE",
+                "WRITE_EXTERNAL_STORAGE",
+                "RECORD_AUDIO",
+                "RECEIVE_BOOT_COMPLETED",
+                "VIBRATE"
+            ],
+            "adaptiveIcon": {
+                "backgroundColor": "#07070E"
+            }
+        },
+        "ios": {
+            "bundleIdentifier": "in.distroai.field",
+            "supportsTablet": false
+        },
+        "plugins": [
+            "expo-router",
+            "expo-camera",
+            "expo-location",
+            "expo-local-authentication",
+            "expo-barcode-scanner",
+            "expo-image-picker",
+            [
+                "expo-notifications",
+                {
+                    "icon": "./assets/notification-icon.png",
+                    "color": "#C9A84C"
+                }
+            ]
+        ],
+        "experiments": {
+            "typedRoutes": true
+        }
+    }
+}

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service
+  namespace: distroai
+  labels:
+    app: ai-service
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-service
+  template:
+    metadata:
+      labels:
+        app: ai-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      # Schedule on AI node group with toleration for taint
+      nodeSelector:
+        workload: ai
+      tolerations:
+        - key: workload
+          value: ai
+          effect: NoSchedule
+      containers:
+        - name: ai-service
+          image: ${ECR_REGISTRY}/distroai-ai-service:${IMAGE_TAG}
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - secretRef:
+                name: api-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      terminationGracePeriodSeconds: 30

@@ -1,0 +1,18 @@
+# ── Ignore for Docker builds ──
+node_modules
+.git
+.github
+.turbo
+.cursor
+.next
+dist
+coverage
+__tests__
+*.test.ts
+*.spec.ts
+*.md
+!pnpm-workspace.yaml
+
+# Logs and temp files
+*.log
+.DS_Store

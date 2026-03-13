@@ -1,0 +1,279 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { IndianRupee, CreditCard, X } from "lucide-react";
+import { useOutstanding, usePayments, useRecordPayment, useCustomers } from "@/hooks/api-hooks";
+import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts";
+import { formatDate } from "@/lib/utils";
+import Link from "next/link";
+
+function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
+
+const PAYMENT_METHODS = ["CASH", "UPI", "CHEQUE", "BANK_TRANSFER", "CREDIT"] as const;
+
+/* ─── Record Payment Modal ─── */
+function RecordPaymentModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const recordPayment = useRecordPayment();
+    const [customerSearch, setCustomerSearch] = useState("");
+    const [customerId, setCustomerId] = useState("");
+    const [amount, setAmount] = useState(0);
+    const [method, setMethod] = useState<string>("CASH");
+    const [referenceNumber, setReferenceNumber] = useState("");
+    const [notes, setNotes] = useState("");
+
+    const { data: customersData } = useCustomers({ search: customerSearch || undefined, limit: 10 });
+    const customers = customersData?.data?.data ?? customersData?.data ?? [];
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!customerId || amount <= 0) return;
+        recordPayment.mutate({ customerId, amount, method, referenceNumber: referenceNumber || undefined, notes: notes || undefined }, {
+            onSuccess: () => { onClose(); setCustomerSearch(""); setCustomerId(""); setAmount(0); setMethod("CASH"); setReferenceNumber(""); setNotes(""); },
+        });
+    };
+
+    if (!open) return null;
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
+                    <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Record Payment</h2>
+                    <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                    <label>
+                        <span className="text-xs text-[var(--text-muted)] mb-1 block">Customer</span>
+                        <input value={customerSearch} onChange={(e) => { setCustomerSearch(e.target.value); setCustomerId(""); }} placeholder="Search customer..." className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
+                    </label>
+                    {customerSearch && !customerId && (
+                        <div className="border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)] max-h-36 overflow-y-auto">
+                            {(Array.isArray(customers) ? customers : []).map((c: Record<string, unknown>) => (
+                                <button key={c.id as string} type="button" onClick={() => { setCustomerId(c.id as string); setCustomerSearch(c.name as string); }}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] transition">
+                                    {c.name as string}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {customerId && <p className="text-xs text-[var(--green-bright)]">✓ Customer selected</p>}
+                    <label>
+                        <span className="text-xs text-[var(--text-muted)] mb-1 block">Amount (₹)</span>
+                        <input type="number" min={0.01} step={0.01} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                    </label>
+                    <label>
+                        <span className="text-xs text-[var(--text-muted)] mb-1 block">Method</span>
+                        <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition">
+                            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m.replace("_", " ")}</option>)}
+                        </select>
+                    </label>
+                    <label>
+                        <span className="text-xs text-[var(--text-muted)] mb-1 block">Reference</span>
+                        <input value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} placeholder="UPI Ref / Cheque No." className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
+                    </label>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition">Cancel</button>
+                        <button type="submit" disabled={recordPayment.isPending || !customerId} className="px-6 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 disabled:opacity-50 transition">
+                            {recordPayment.isPending ? "Recording..." : "Record"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+/* ─── Main Page ─── */
+export default function PaymentsPage() {
+    const [tab, setTab] = useState<"outstanding" | "history">("outstanding");
+    const [showRecord, setShowRecord] = useState(false);
+    const { data: outstanding } = useOutstanding();
+    const { data: paymentsData } = usePayments({ page: 1, limit: 50 });
+
+    const customerList: Record<string, unknown>[] = outstanding?.data ?? outstanding ?? [];
+    const paymentsList: Record<string, unknown>[] = paymentsData?.data?.data ?? paymentsData?.data ?? [];
+
+    // Compute real summary from outstanding data
+    const totalOutstanding = useMemo(() => {
+        if (Array.isArray(customerList)) return customerList.reduce((s, c) => s + ((c.total as number) ?? 0), 0);
+        return 0;
+    }, [customerList]);
+
+    const collectedThisMonth = useMemo(() => {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        if (!Array.isArray(paymentsList)) return 0;
+        return paymentsList
+            .filter((p) => new Date(p.paidAt as string ?? p.createdAt as string) >= monthStart)
+            .reduce((s, p) => s + ((p.amount as number) ?? 0), 0);
+    }, [paymentsList]);
+
+    // Build ageing from outstanding data
+    const ageingData = useMemo(() => {
+        const buckets = [
+            { label: "0-30 days", value: 0, color: "var(--green-bright)" },
+            { label: "31-60 days", value: 0, color: "var(--warning)" },
+            { label: "61-90 days", value: 0, color: "var(--orange)" },
+            { label: "90+ days", value: 0, color: "var(--red)" },
+        ];
+
+        let hasData = false;
+        if (Array.isArray(customerList)) {
+            customerList.forEach((c) => {
+                const days = (c.avgDaysOverdue as number) ?? 0;
+                const amount = (c.total as number) ?? 0;
+                if (amount > 0) hasData = true;
+
+                if (days <= 30) buckets[0].value += amount;
+                else if (days <= 60) buckets[1].value += amount;
+                else if (days <= 90) buckets[2].value += amount;
+                else buckets[3].value += amount;
+            });
+        }
+
+        // If there's outstanding money but it somehow wasn't bucketed (e.g. no invoices attached),
+        // or if totalOutstanding > 0 but buckets are empty, force it into 0-30 days.
+        const bucketTotal = buckets.reduce((sum, b) => sum + b.value, 0);
+        if (bucketTotal === 0 && totalOutstanding > 0) {
+            buckets[0].value = totalOutstanding;
+        }
+        return buckets;
+    }, [customerList, totalOutstanding]);
+
+    const summary = [
+        { label: "Total Outstanding", value: formatINR(totalOutstanding), color: "var(--red)" },
+        { label: "Collected This Month", value: formatINR(collectedThisMonth), color: "var(--green-bright)" },
+        { label: "Customers", value: Array.isArray(customerList) ? customerList.length : 0, color: "var(--gold)" },
+        { label: "Payments", value: Array.isArray(paymentsList) ? paymentsList.length : 0, color: "var(--purple)" },
+    ];
+
+    return (
+        <div>
+            {/* Header — stacks on mobile */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Payments &amp; Collections</h1>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setTab("outstanding")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${tab === "outstanding" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>Outstanding</button>
+                    <button onClick={() => setTab("history")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${tab === "history" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>History</button>
+                    <button onClick={() => setShowRecord(true)} className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 transition whitespace-nowrap">
+                        <CreditCard size={14} /> <span className="hidden sm:inline">Record Payment</span><span className="sm:hidden">Record</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Summary */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                {summary.map((s) => (
+                    <div key={s.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4">
+                        <p className="text-xs text-[var(--text-muted)] mb-1">{s.label}</p>
+                        <p className="text-lg font-bold" style={{ fontFamily: "var(--font-mono)", color: s.color }}>{s.value}</p>
+                    </div>
+                ))}
+            </div>
+
+            {tab === "outstanding" ? (
+                <>
+                    {/* Ageing Chart */}
+                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5 mb-6">
+                        <h3 className="font-semibold mb-4 text-[var(--text-primary)]">Payment Ageing</h3>
+                        <div className="h-40 w-full relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={ageingData} layout="vertical" barSize={20} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                                    <XAxis type="number" tick={{ fontSize: 11, fill: "#5A5040" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                                    <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "#9A9080" }} axisLine={false} tickLine={false} width={80} />
+                                    <Tooltip cursor={{ fill: 'rgba(255,255,255,0.02)' }} contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }} formatter={(v: number | undefined) => [formatINR(v ?? 0)]} />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                        {ageingData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Outstanding — Desktop table, Mobile cards */}
+                    {/* Desktop table */}
+                    <div className="hidden sm:block bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
+                                    <th className="text-left p-4">Customer</th><th className="text-right p-4">Outstanding</th><th className="text-center p-4">Score</th><th className="text-right p-4">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Array.isArray(customerList) && customerList.length > 0 ? customerList.map((c, i) => (
+                                    <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
+                                        <td className="p-4">
+                                            <p className="font-medium">{(c.customer as Record<string, unknown>)?.name as string ?? "Customer"}</p>
+                                            <p className="text-xs text-[var(--text-muted)]">{(c.customer as Record<string, unknown>)?.phone as string ?? ""}</p>
+                                        </td>
+                                        <td className="p-4 text-right font-semibold" style={{ fontFamily: "var(--font-mono)", color: "var(--orange)" }}>{formatINR((c.total as number) ?? 0)}</td>
+                                        <td className="p-4 text-center text-sm" style={{ fontFamily: "var(--font-mono)" }}>{Number((c.customer as Record<string, unknown>)?.paymentScore ?? 50)}</td>
+                                        <td className="p-4 text-right">
+                                            <button onClick={() => setShowRecord(true)} className="text-xs text-[var(--gold)] hover:underline mr-3">Record Payment</button>
+                                            {((c.customer as Record<string, unknown>)?.phone as string) && (
+                                                <a href={`https://wa.me/91${(c.customer as Record<string, unknown>)?.phone as string}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>
+                                            )}
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={4} className="p-8 text-center text-[var(--text-muted)]">No outstanding payments</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile cards */}
+                    <div className="sm:hidden space-y-3">
+                        {Array.isArray(customerList) && customerList.length > 0 ? customerList.map((c, i) => (
+                            <div key={i} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4">
+                                <div className="flex items-start justify-between mb-2">
+                                    <div>
+                                        <p className="font-medium text-sm">{(c.customer as Record<string, unknown>)?.name as string ?? "Customer"}</p>
+                                        <p className="text-xs text-[var(--text-muted)]">{(c.customer as Record<string, unknown>)?.phone as string ?? ""}</p>
+                                    </div>
+                                    <p className="text-base font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--orange)" }}>{formatINR((c.total as number) ?? 0)}</p>
+                                </div>
+                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border)]">
+                                    <span className="text-xs text-[var(--text-muted)]">Score: <span style={{ fontFamily: "var(--font-mono)" }}>{Number((c.customer as Record<string, unknown>)?.paymentScore ?? 50)}</span></span>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setShowRecord(true)} className="text-xs text-[var(--gold)] hover:underline">Record</button>
+                                        {((c.customer as Record<string, unknown>)?.phone as string) && (
+                                            <a href={`https://wa.me/91${(c.customer as Record<string, unknown>)?.phone as string}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-8 text-center text-[var(--text-muted)]">No outstanding payments</div>
+                        )}
+                    </div>
+                </>
+            ) : (
+                /* Payment History */
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
+                                <th className="text-left p-4">Date</th><th className="text-left p-4">Customer</th><th className="text-left p-4">Method</th><th className="text-right p-4">Amount</th><th className="text-left p-4">Reference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(Array.isArray(paymentsList) ? paymentsList : []).length === 0 ? (
+                                <tr><td colSpan={5} className="p-8 text-center text-[var(--text-muted)]">No payments recorded</td></tr>
+                            ) : (Array.isArray(paymentsList) ? paymentsList : []).map((p, i) => (
+                                <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
+                                    <td className="p-4 text-[var(--text-secondary)]">{formatDate(p.paidAt as string ?? p.createdAt as string)}</td>
+                                    <td className="p-4 font-medium">{(p.customer as Record<string, unknown>)?.name as string ?? "—"}</td>
+                                    <td className="p-4"><span className="px-2 py-0.5 rounded-full text-xs bg-[var(--gold)]/15 text-[var(--gold)]">{(p.method as string)?.replace("_", " ")}</span></td>
+                                    <td className="p-4 text-right text-[var(--green-bright)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((p.amount as number) ?? 0)}</td>
+                                    <td className="p-4 text-[var(--text-muted)]">{(p.referenceNumber as string) ?? "—"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            <RecordPaymentModal open={showRecord} onClose={() => setShowRecord(false)} />
+        </div>
+    );
+}
