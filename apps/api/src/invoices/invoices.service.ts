@@ -116,7 +116,7 @@ export class InvoicesService {
         const invoiceNumber = await this.generateInvoiceNumber(orgId);
         const dueDate = dto.dueDate ? new Date(dto.dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-        const invoice = await this.prisma.$transaction(async (tx) => {
+        const invoice = await this.prisma.$transaction(async (tx: any) => {
             const inv = await tx.invoice.create({
                 data: {
                     orgId, invoiceNumber, customerId: dto.customerId,

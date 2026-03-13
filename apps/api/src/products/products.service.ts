@@ -50,10 +50,10 @@ export class ProductsService {
             this.prisma.product.count({ where }),
         ]);
 
-        const data = products.map((p) => ({
+        const data = products.map((p: any) => ({
             ...p,
-            totalQuantity: p.inventories.reduce((s, i) => s + i.quantity, 0),
-            totalReserved: p.inventories.reduce((s, i) => s + i.reservedQty, 0),
+            totalQuantity: p.inventories.reduce((s: number, i: any) => s + i.quantity, 0),
+            totalReserved: p.inventories.reduce((s: number, i: any) => s + i.reservedQty, 0),
         }));
 
         const result = { data, meta: { total, page, limit, pages: Math.ceil(total / limit) } };
@@ -150,8 +150,8 @@ export class ProductsService {
         if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Product not found' });
         return {
             ...product,
-            totalQuantity: product.inventories.reduce((s, i) => s + i.quantity, 0),
-            totalReserved: product.inventories.reduce((s, i) => s + i.reservedQty, 0),
+            totalQuantity: product.inventories.reduce((s: number, i: any) => s + i.quantity, 0),
+            totalReserved: product.inventories.reduce((s: number, i: any) => s + i.reservedQty, 0),
         };
     }
 

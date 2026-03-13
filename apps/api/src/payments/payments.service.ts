@@ -53,7 +53,7 @@ export class PaymentsService {
     }
 
     async create(orgId: string, dto: CreatePaymentDto) {
-        return this.prisma.$transaction(async (tx) => {
+        return this.prisma.$transaction(async (tx: any) => {
             const payment = await tx.payment.create({
                 data: { orgId, customerId: dto.customerId, invoiceId: dto.invoiceId, amount: dto.amount, method: dto.method, referenceNumber: dto.referenceNumber, notes: dto.notes, paidAt: dto.paidAt ? new Date(dto.paidAt) : new Date(), status: 'COMPLETED' },
             });

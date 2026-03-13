@@ -42,7 +42,7 @@ export class AuthService {
         const now = new Date();
         const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-        const result = await this.prisma.$transaction(async (tx) => {
+        const result = await this.prisma.$transaction(async (tx: any) => {
             const org = await tx.organization.create({
                 data: {
                     name: dto.orgName,

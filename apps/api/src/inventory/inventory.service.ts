@@ -22,19 +22,19 @@ export class InventoryService {
             grouped.set(inv.productId, list);
         }
 
-        const result = Array.from(grouped.values()).map((invs) => ({
+        const result = Array.from(grouped.values()).map((invs: any[]) => ({
             product: invs[0].product,
-            warehouses: invs.map((i) => ({
+            warehouses: invs.map((i: any) => ({
                 warehouse: i.warehouse,
                 quantity: i.quantity,
                 reservedQty: i.reservedQty,
                 availableQty: i.quantity - i.reservedQty,
             })),
-            totalQty: invs.reduce((s, i) => s + i.quantity, 0),
+            totalQty: invs.reduce((s: number, i: any) => s + i.quantity, 0),
         }));
 
         if (query.lowStockOnly) {
-            return result.filter((r) => r.totalQty <= (r.product.minStockLevel ?? 0));
+            return result.filter((r: any) => r.totalQty <= (r.product.minStockLevel ?? 0));
         }
         return result;
     }
@@ -85,7 +85,7 @@ export class InventoryService {
             where: { orgId, productId: dto.productId, warehouseId: dto.toWarehouseId },
         });
 
-        return this.prisma.$transaction(async (tx) => {
+        return this.prisma.$transaction(async (tx: any) => {
             await tx.inventory.update({ where: { id: source.id }, data: { quantity: { decrement: dto.quantity } } });
 
             if (!dest) {
@@ -97,7 +97,7 @@ export class InventoryService {
             await tx.inventoryTransaction.createMany({
                 data: [
                     { inventoryId: source.id, type: 'TRANSFER', quantity: -dto.quantity, referenceType: 'TRANSFER', note: `Transfer to WH ${dto.toWarehouseId}`, createdBy: userId },
-                    { inventoryId: dest.id, type: 'IN', quantity: dto.quantity, referenceType: 'TRANSFER', note: `Transfer from WH ${dto.fromWarehouseId}`, createdBy: userId },
+                    { inventoryId: dest!.id, type: 'IN', quantity: dto.quantity, referenceType: 'TRANSFER', note: `Transfer from WH ${dto.fromWarehouseId}`, createdBy: userId },
                 ],
             });
 

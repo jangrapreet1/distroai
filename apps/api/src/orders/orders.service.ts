@@ -142,7 +142,7 @@ export class OrdersService {
       discountAmount = 0,
       taxAmount = 0;
     const itemsWithTax = await Promise.all(
-      dto.items.map(async (item) => {
+      dto.items.map(async (item: any) => {
         const product = await this.prisma.product.findFirst({
           where: { id: item.productId, orgId },
         });
@@ -185,7 +185,7 @@ export class OrdersService {
         netAmount,
         balanceAmount: netAmount,
         items: {
-          create: itemsWithTax.map((i) => ({
+          create: itemsWithTax.map((i: any) => ({
             productId: i.productId,
             quantity: i.quantity,
             unit: i.unit,
@@ -251,7 +251,7 @@ export class OrdersService {
       });
 
     // Check inventory AND reserve inside a single transaction with row-level locks
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       const shortages: {
         productId: string;
         needed: number;
@@ -333,7 +333,7 @@ export class OrdersService {
       });
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       await tx.order.update({ where: { id }, data: { status: "DISPATCHED" } });
       for (const item of order.items) {
         await tx.inventory.updateMany({
@@ -374,7 +374,7 @@ export class OrdersService {
     await this.invoices.create(orgId, {
       customerId: order.customerId,
       invoiceDate: new Date().toISOString(),
-      items: order.items.map((item) => ({
+      items: order.items.map((item: any) => ({
         productId: item.productId,
         quantity: item.quantity,
         unit: item.unit,
@@ -409,7 +409,7 @@ export class OrdersService {
       });
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       await tx.order.update({ where: { id }, data: { status: "CANCELLED" } });
       if (["CONFIRMED", "PACKED"].includes(order.status)) {
         for (const item of order.items) {
@@ -457,7 +457,7 @@ export class OrdersService {
         message: "Can only return DELIVERED orders",
       });
 
-    const txResult = await this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx: any) => {
       const returnNumber = await this.generateOrderNumber(orgId);
       const returnOrder = await tx.order.create({
         data: {
@@ -470,7 +470,7 @@ export class OrdersService {
           items: {
             create: dto.items.map((ri) => {
               const origItem = original.items.find(
-                (i) => i.id === ri.orderItemId,
+                (i: any) => i.id === ri.orderItemId,
               );
               if (!origItem)
                 throw new BadRequestException({
@@ -496,7 +496,7 @@ export class OrdersService {
       });
 
       for (const ri of dto.items) {
-        const origItem = original.items.find((i) => i.id === ri.orderItemId);
+        const origItem = original.items.find((i: any) => i.id === ri.orderItemId);
         if (!origItem) continue;
         const inv = await tx.inventory.findFirst({
           where: {

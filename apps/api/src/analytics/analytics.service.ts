@@ -37,20 +37,20 @@ export class AnalyticsService {
             this.prisma.inventory.findMany({ where: { orgId }, include: { product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
         ]);
 
-        const lowStockCount = inventory.filter((i) => i.quantity <= i.product.minStockLevel).length;
-        const totalInventoryValue = inventory.reduce((s, i) => {
+        const lowStockCount = inventory.filter((i: any) => i.quantity <= i.product.minStockLevel).length;
+        const totalInventoryValue = inventory.reduce((s: number, i: any) => {
             const factor = i.product.conversionFactor || 1;
             return s + ((i.quantity / factor) * i.product.purchasePrice);
         }, 0);
         const totalOutstanding = await this.prisma.customer.aggregate({ where: { orgId }, _sum: { outstandingAmount: true } });
 
         // Enrich topProducts with product names
-        const productIds = topProducts.map((p) => p.productId);
+        const productIds = topProducts.map((p: any) => p.productId);
         const products = productIds.length > 0
             ? await this.prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true, sku: true } })
             : [];
-        const productMap = new Map(products.map((p) => [p.id, p]));
-        const enrichedTopProducts = topProducts.map((p) => ({
+        const productMap = new Map(products.map((p: any) => [p.id, p]));
+        const enrichedTopProducts = topProducts.map((p: any) => ({
             ...p,
             productName: productMap.get(p.productId)?.name ?? 'Unknown',
             productSku: productMap.get(p.productId)?.sku ?? '',

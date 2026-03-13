@@ -46,13 +46,13 @@ export class PurchaseOrdersService {
         const settings = await this.prisma.orgSettings.findUnique({ where: { orgId } });
         const poNumber = `${settings?.poPrefix ?? 'PO'}-${String(count + 1).padStart(5, '0')}`;
 
-        const totalAmount = dto.items.reduce((s, i) => s + i.quantity * i.price, 0);
+        const totalAmount = dto.items.reduce((s: number, i: any) => s + i.quantity * i.price, 0);
         return this.prisma.purchaseOrder.create({
             data: {
                 orgId, supplierId: dto.supplierId, poNumber, totalAmount,
                 expectedDate: dto.expectedDate ? new Date(dto.expectedDate) : undefined,
                 notes: dto.notes,
-                items: { create: dto.items.map((i) => ({ productId: i.productId, orderedQty: i.quantity, price: i.price, taxRate: 0, totalAmount: i.quantity * i.price })) },
+                items: { create: dto.items.map((i: any) => ({ productId: i.productId, orderedQty: i.quantity, price: i.price, taxRate: 0, totalAmount: i.quantity * i.price })) },
             },
             include: { items: true },
         });

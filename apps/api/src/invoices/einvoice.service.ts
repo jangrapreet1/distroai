@@ -186,9 +186,9 @@ export class EInvoiceService {
             })),
             ValDtls: {
                 AssVal: Number(invoice.totalAmount),
-                CgstVal: items.reduce((s, i) => s + Number(i.cgstAmount), 0),
-                SgstVal: items.reduce((s, i) => s + Number(i.sgstAmount), 0),
-                IgstVal: items.reduce((s, i) => s + Number(i.igstAmount), 0),
+                CgstVal: items.reduce((s: number, i: any) => s + Number(i.cgstAmount), 0),
+                SgstVal: items.reduce((s: number, i: any) => s + Number(i.sgstAmount), 0),
+                IgstVal: items.reduce((s: number, i: any) => s + Number(i.igstAmount), 0),
                 TotInvVal: Number(invoice.netAmount),
             },
         };
