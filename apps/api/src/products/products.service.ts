@@ -174,12 +174,12 @@ export class ProductsService {
         });
 
         return products
-            .map((p) => ({
+            .map((p: any) => ({
                 ...p,
-                currentQty: p.inventories.reduce((s, i) => s + i.quantity, 0),
-                deficit: Math.max(0, p.minStockLevel - p.inventories.reduce((s, i) => s + i.quantity, 0)),
+                currentQty: p.inventories.reduce((s: number, i: any) => s + i.quantity, 0),
+                deficit: Math.max(0, p.minStockLevel - p.inventories.reduce((s: number, i: any) => s + i.quantity, 0)),
             }))
-            .filter((p) => p.currentQty <= p.minStockLevel);
+            .filter((p: any) => p.currentQty <= p.minStockLevel);
     }
 
     async getExpiring(orgId: string, query: ExpiringQueryDto) {
@@ -192,7 +192,7 @@ export class ProductsService {
             orderBy: { expiryDate: 'asc' },
         });
 
-        return batches.map((b) => ({
+        return batches.map((b: any) => ({
             ...b,
             daysRemaining: b.expiryDate
                 ? Math.ceil((b.expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))

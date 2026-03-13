@@ -68,9 +68,9 @@ export class PurchaseOrdersService {
         const po = await this.prisma.purchaseOrder.findFirst({ where: { id, orgId }, include: { items: { include: { product: true } } } });
         if (!po) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Purchase order not found' });
 
-        return this.prisma.$transaction(async (tx) => {
+        return this.prisma.$transaction(async (tx: any) => {
             for (const ri of dto.items) {
-                const poItem = po.items.find((i) => i.id === ri.poItemId);
+                const poItem = po.items.find((i: any) => i.id === ri.poItemId);
                 if (!poItem || ri.receivedQty === 0) continue;
 
                 // Update PO Item with raw ordered units
@@ -95,7 +95,7 @@ export class PurchaseOrdersService {
 
             // Check if fully received
             const updated = await tx.purchaseOrderItem.findMany({ where: { poId: id } });
-            const allReceived = updated.every((i) => i.receivedQty >= i.orderedQty);
+            const allReceived = updated.every((i: any) => i.receivedQty >= i.orderedQty);
             if (allReceived) {
                 await tx.purchaseOrder.update({ where: { id }, data: { status: 'RECEIVED' } });
             } else {
