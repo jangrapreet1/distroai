@@ -37,10 +37,10 @@ sleep 5
 
 # Run Prisma migrations
 echo "📊 Running database migrations..."
-docker compose -f $COMPOSE_FILE --env-file $ENV_FILE run --rm api \
-    npx prisma migrate deploy --schema=./packages/db/prisma/schema.prisma 2>/dev/null || \
-docker compose -f $COMPOSE_FILE --env-file $ENV_FILE run --rm api \
-    npx prisma db push --schema=./packages/db/prisma/schema.prisma
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm api \
+    npx prisma@5.22.0 migrate deploy --schema=./packages/db/prisma/schema.prisma 2>/dev/null || \
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm api \
+    npx prisma@5.22.0 db push --schema=./packages/db/prisma/schema.prisma
 
 # Start all services
 echo "🚀 Starting all services..."
