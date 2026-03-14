@@ -80,11 +80,9 @@ services:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.web
-      args:
-        NEXT_PUBLIC_API_URL: http://api:3000
     container_name: distroai_web
     environment:
-      NEXT_PUBLIC_API_URL: http://api:3000
+      API_INTERNAL_URL: http://api:3000
     depends_on:
       - api
     networks:
