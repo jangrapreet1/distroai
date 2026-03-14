@@ -172,6 +172,20 @@ export function useUpdateOrgSettings() {
     });
 }
 
+// ===== STORAGE =====
+export function useUploadFile() {
+    return useMutation({
+        mutationFn: (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return apiClient.post("/api/v1/storage/upload", formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            }).then((r) => r.data);
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
 // ===== INVENTORY EXTENDED =====
 export function useWarehouses() {
     return useQuery({ queryKey: ["inventory", "warehouses"], queryFn: () => apiClient.get("/api/v1/inventory/warehouses").then((r) => r.data) });

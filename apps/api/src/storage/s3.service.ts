@@ -52,7 +52,7 @@ export class S3Service {
         const dir = join(filePath, '..');
         if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
         writeFileSync(filePath, buffer);
-        return `file://${filePath}`;
+        return `/api/v1/storage/local/${key}`;
     }
 
     async getSignedDownloadUrl(key: string, expiresInSeconds = 604800): Promise<string> {
@@ -63,7 +63,7 @@ export class S3Service {
                 { expiresIn: expiresInSeconds },
             );
         }
-        return `file://${join(this.localFallbackDir, key)}`;
+        return `/api/v1/storage/local/${key}`;
     }
 
     async delete(key: string): Promise<void> {

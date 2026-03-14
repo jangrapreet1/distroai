@@ -3,16 +3,19 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Package, Warehouse, AlertTriangle, Clock, Search, List, Grid, Plus, ArrowRightLeft, ArrowUpRight, ArrowDownRight, ArrowRight, X } from "lucide-react";
-import { useProducts, useInventoryValuation, useAdjustInventory, useTransferInventory, useInventoryTransactions, useCreateProduct, useWarehouses } from "@/hooks/api-hooks";
+import { useProducts, useInventoryValuation, useAdjustInventory, useTransferInventory, useInventoryTransactions, useCreateProduct, useWarehouses, useUploadFile } from "@/hooks/api-hooks";
 import { formatDate } from "@/lib/utils";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 /* ─── Add Product Modal ─── */
 function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const create = useCreateProduct();
+    const upload = useUploadFile();
     const [name, setName] = useState("");
     const [sku, setSku] = useState("");
+    const [imageUrl, setImageUrl] = useState("");
     const [unit, setUnit] = useState("Pieces");
     const [sellingPrice, setSellingPrice] = useState("");
     const [mrp, setMrp] = useState("");
@@ -24,7 +27,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
         e.preventDefault();
         if (!name || !sku || !sellingPrice || !gstRate) return;
         create.mutate({
-            name, sku, unit,
+            name, sku, unit, imageUrl,
             sellingPrice: Number(sellingPrice),
             mrp: Number(mrp),
             purchasePrice: Number(purchasePrice),
@@ -33,7 +36,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
         }, {
             onSuccess: () => {
                 onClose();
-                setName(""); setSku(""); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18");
+                setName(""); setSku(""); setImageUrl(""); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18");
             }
         });
     };
@@ -48,6 +51,10 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 </div>
                 <form onSubmit={handleSubmit} className="p-5 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Image</span>
+                            <ImageUpload value={imageUrl} onChange={setImageUrl} onUpload={(file) => upload.mutateAsync(file)} disabled={create.isPending || upload.isPending} />
+                        </div>
                         <label className="col-span-2">
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Name *</span>
                             <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Parle G 250g" className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
@@ -332,9 +339,16 @@ export default function InventoryPage() {
                                 const stockColor = qty <= minStock ? "var(--red)" : qty <= minStock * 2 ? "var(--warning)" : "var(--green-bright)";
                                 return (
                                     <Link key={p.id as string} href={`/inventory/products/${p.id}`} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4 hover:border-[var(--border-accent)] transition group flex flex-col h-full">
-                                        <div className="flex-1">
-                                            <p className="text-sm font-medium mb-0.5 truncate">{p.name as string}</p>
-                                            <p className="text-xs text-[var(--text-muted)] mb-3">{(p.brand as string) ?? ""} · {p.sku as string}</p>
+                                        <div className="flex gap-3 mb-3">
+                                            {p.imageUrl ? (
+                                                <img src={p.imageUrl as string} alt={p.name as string} className="w-12 h-12 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
+                                            ) : (
+                                                <div className="w-12 h-12 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={20} /></div>
+                                            )}
+                                            <div className="flex-1 overflow-hidden">
+                                                <p className="text-sm font-medium mb-0.5 truncate">{p.name as string}</p>
+                                                <p className="text-xs text-[var(--text-muted)] truncate">{(p.brand as string) ?? ""} · {p.sku as string}</p>
+                                            </div>
                                         </div>
                                         <div className="mt-auto">
                                             <p className="text-2xl font-bold mb-0.5 mt-2" style={{ fontFamily: "var(--font-mono)", color: stockColor }}>
@@ -369,7 +383,15 @@ export default function InventoryPage() {
                                 <tbody>
                                     {displayProducts.map((p: Record<string, unknown>) => (
                                         <tr key={p.id as string} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
-                                            <td className="p-4 font-medium"><Link href={`/inventory/products/${p.id}`} className="text-[var(--gold)] hover:underline">{p.name as string}</Link></td>
+                                            <td className="p-4 font-medium flex items-center gap-3">
+                                                {p.imageUrl ? (
+                                                    <img src={p.imageUrl as string} alt={p.name as string} className="w-8 h-8 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={14} /></div>
+                                                )}
+                                                <Link href={`/inventory/products/${p.id}`} className="text-[var(--gold)] hover:underline truncate">{p.name as string}</Link>
+                                            </td>
+                                            <td className="p-4 text-left">{(p.sku as string) || "-"}</td>
                                             <td className="p-4 text-right">
                                                 <div style={{ fontFamily: "var(--font-mono)" }}>{(p.totalQuantity as number) ?? 0} {p.unit as string}</div>
                                                 {(p.secondaryUnit as string | null | undefined) && (

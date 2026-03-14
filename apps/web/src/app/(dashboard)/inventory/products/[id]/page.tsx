@@ -3,7 +3,8 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Package, Edit, X } from "lucide-react";
-import { useProduct, useUpdateProduct } from "@/hooks/api-hooks";
+import { useProduct, useUpdateProduct, useUploadFile } from "@/hooks/api-hooks";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
@@ -12,10 +13,11 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
     const { data, isLoading } = useProduct(id);
     const product = data?.data ?? data;
     const updateProduct = useUpdateProduct();
+    const upload = useUploadFile();
 
     const [isEditing, setIsEditing] = useState(false);
     const [editData, setEditData] = useState({
-        name: "", sku: "", brand: "", category: "",
+        name: "", sku: "", brand: "", category: "", imageUrl: "",
         purchasePrice: 0, sellingPrice: 0, mrp: 0, gstRate: 0,
         unit: "", secondaryUnit: "", conversionFactor: 1, minStockLevel: 0
     });
@@ -27,6 +29,7 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 sku: product.sku || "",
                 brand: product.brand || "",
                 category: product.category || "",
+                imageUrl: product.imageUrl || "",
                 purchasePrice: product.purchasePrice || 0,
                 sellingPrice: product.sellingPrice || 0,
                 mrp: product.mrp || 0,
@@ -70,9 +73,13 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
             </div>
 
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 flex items-start gap-5">
-                <div className="w-16 h-16 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--gold)] shrink-0">
-                    <Package size={32} />
-                </div>
+                {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name} className="w-20 h-20 rounded-lg object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0 shadow-sm" />
+                ) : (
+                    <div className="w-20 h-20 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--gold)] shrink-0">
+                        <Package size={36} />
+                    </div>
+                )}
                 <div>
                     <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: "var(--font-playfair)" }}>{product.name}</h1>
                     <p className="text-sm text-[var(--text-muted)] mb-4">{product.sku} • {product.brand || "No Brand"}</p>
@@ -143,6 +150,11 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                         </div>
                         <form onSubmit={handleEditSubmit} className="p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* Product Image */}
+                                <div className="space-y-4 lg:col-span-3">
+                                    <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Product Image</h4>
+                                    <ImageUpload value={editData.imageUrl} onChange={(url) => setEditData({ ...editData, imageUrl: url })} onUpload={(file) => upload.mutateAsync(file)} disabled={updateProduct.isPending || upload.isPending} className="max-w-md" />
+                                </div>
                                 {/* Basic Info */}
                                 <div className="space-y-4 lg:col-span-3">
                                     <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Basic Info</h4>
