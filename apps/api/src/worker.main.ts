@@ -41,7 +41,6 @@ import { PaymentProcessor } from './queue/payment.processor';
         NotificationsModule,
         AiModule,
     ],
-    providers: [PaymentProcessor],
 })
 class WorkerModule { }
 
