@@ -93,6 +93,7 @@ services:
   caddy:
     image: caddy:2-alpine
     container_name: distroai_caddy
+    env_file: .env.production
     ports:
       - "80:80"
       - "443:443"
