@@ -5,6 +5,9 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Use hoisted node_modules so symlinks survive Docker COPY
+RUN echo "node-linker=hoisted" > .npmrc
+
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
@@ -23,9 +26,12 @@ RUN apk add --no-cache openssl && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
+# Copy compiled output
 COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/node_modules ./node_modules
 COPY --from=builder /app/apps/api/package.json ./package.json
+
+# Copy hoisted (flat) node_modules from root — no broken symlinks
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/ ./packages/
 
 USER nestjs
