@@ -1,5 +1,3 @@
-const { composePlugins } = require('@nestjs/cli/lib/compiler/helpers/plugins-loader');
-
 module.exports = function (options) {
     return {
         ...options,
