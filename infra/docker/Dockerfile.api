@@ -22,10 +22,12 @@ RUN apk add --no-cache openssl && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-# Copy compiled output and production deps only
+# Copy compiled output
 COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/node_modules ./node_modules
 COPY --from=builder /app/apps/api/package.json ./package.json
+
+# Copy ALL node_modules (pnpm hoists deps to root, so we need both)
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/ ./packages/
 
 USER nestjs
