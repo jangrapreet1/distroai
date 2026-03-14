@@ -80,6 +80,8 @@ services:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.web
+      args:
+        API_INTERNAL_URL: http://api:3000
     container_name: distroai_web
     environment:
       API_INTERNAL_URL: http://api:3000
