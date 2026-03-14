@@ -39,4 +39,5 @@ USER nestjs
 # No EXPOSE — worker doesn't serve HTTP
 # No HEALTHCHECK — managed via K8s liveness exec probes
 
-CMD ["node", "dist/apps/api/src/worker.main.js"]
+ENV TS_NODE_BASEURL=./dist
+CMD ["node", "-r", "tsconfig-paths/register", "dist/apps/api/src/worker.main.js"]
