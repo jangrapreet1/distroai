@@ -33,6 +33,7 @@ COPY --from=builder /app/apps/api/package.json ./package.json
 
 # Copy hoisted (flat) node_modules from root — no broken symlinks
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/packages/ ./packages/
 
 USER nestjs
