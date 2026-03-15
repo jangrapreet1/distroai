@@ -90,8 +90,19 @@ export default function InvoiceDetailPage() {
         try {
             const res = await apiClient.post(`/api/v1/invoices/${id}/pdf`);
             const url = res.data?.data?.url ?? res.data?.url;
-            if (url) window.open(url, "_blank");
-            else toast.success("PDF generation initiated");
+            if (url) {
+                // Trigger an actual file download
+                const link = document.createElement("a");
+                link.href = url;
+                link.setAttribute("download", `Invoice-${invoice.invoiceNumber}.pdf`);
+                // Append, click, and clean up for programmatic download
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast.success("PDF Downloaded");
+            } else {
+                toast.success("PDF generation initiated");
+            }
         } catch {
             toast.error("PDF generation failed");
         }

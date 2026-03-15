@@ -16,6 +16,8 @@ interface OrderItem {
     unit: string;
     price: number;
     discount: number;
+    taxRate: number;
+    stock: number;
 }
 
 export default function NewOrderPage() {
@@ -58,6 +60,8 @@ export default function NewOrderPage() {
                 unit: (product.unit as string) ?? "Pieces",
                 price: (product.sellingPrice as number) ?? 0,
                 discount: 0,
+                taxRate: (product.gstRate as number) ?? 0,
+                stock: (product.totalQuantity as number) ?? 0,
             }]);
         }
         setShowProductPicker(false);
@@ -73,6 +77,11 @@ export default function NewOrderPage() {
     };
 
     const subtotal = useMemo(() => items.reduce((s, i) => s + (i.price * i.quantity) - i.discount, 0), [items]);
+    const taxTotal = useMemo(() => items.reduce((s, i) => {
+        const lineTotal = (i.price * i.quantity) - i.discount;
+        return s + (lineTotal * i.taxRate / 100);
+    }, 0), [items]);
+    const grandTotal = subtotal + taxTotal;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -186,7 +195,9 @@ export default function NewOrderPage() {
                                 />
                             </div>
                             <div className="max-h-48 overflow-y-auto space-y-1">
-                                {(Array.isArray(products) ? products : []).map((p: Record<string, unknown>) => (
+                                {(Array.isArray(products) ? products : []).filter((p: Record<string, unknown>) =>
+                                    !productSearch || (p.name as string).toLowerCase().includes(productSearch.toLowerCase()) || (p.sku as string).toLowerCase().includes(productSearch.toLowerCase())
+                                ).map((p: Record<string, unknown>) => (
                                     <button
                                         key={p.id as string}
                                         type="button"
@@ -198,7 +209,12 @@ export default function NewOrderPage() {
                                             <span className="font-medium">{p.name as string}</span>
                                             <span className="text-xs text-[var(--text-muted)]">SKU: {p.sku as string}</span>
                                         </div>
-                                        <span className="text-sm font-medium" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((p.sellingPrice as number) ?? 0)}</span>
+                                        <div className="flex items-center gap-3">
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${((p.totalQuantity as number) ?? 0) > 0 ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)]' : 'bg-[var(--red)]/10 text-[var(--red)]'}`}>
+                                                {((p.totalQuantity as number) ?? 0)} in stock
+                                            </span>
+                                            <span className="text-sm font-medium" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((p.sellingPrice as number) ?? 0)}</span>
+                                        </div>
                                     </button>
                                 ))}
                                 {(Array.isArray(products) ? products : []).length === 0 && (
@@ -254,9 +270,19 @@ export default function NewOrderPage() {
                                 </tbody>
                             </table>
                             <div className="flex justify-end mt-3 pt-3 border-t border-[var(--border)]">
-                                <div className="text-right">
-                                    <p className="text-xs text-[var(--text-muted)]">Subtotal</p>
-                                    <p className="text-xl font-bold" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(subtotal)}</p>
+                                <div className="w-64 space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-[var(--text-muted)]">Subtotal</span>
+                                        <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(subtotal)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-[var(--text-muted)]">Estimated Tax</span>
+                                        <span className="text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(taxTotal)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-base font-bold pt-2 border-t border-[var(--border)]">
+                                        <span>Grand Total</span>
+                                        <span className="text-[var(--gold)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(grandTotal)}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

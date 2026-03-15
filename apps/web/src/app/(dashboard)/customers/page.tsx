@@ -58,7 +58,7 @@ export default function CustomersPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                 <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Customers</h1>
                 <div className="flex gap-2">
                     <button onClick={() => toast("CSV import coming soon!", { icon: "📁" })} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Upload size={14} /> Import</button>
@@ -107,7 +107,11 @@ export default function CustomersPage() {
                         {isLoading ? Array.from({ length: 5 }).map((_, i) => (
                             <tr key={i} className="border-b border-[var(--border)]"><td colSpan={6} className="p-4"><div className="skeleton h-5 rounded" /></td></tr>
                         )) : displayCustomers.length === 0 ? (
-                            <tr><td colSpan={6} className="p-12 text-center text-[var(--text-muted)]">No customers found</td></tr>
+                            <tr><td colSpan={6} className="p-12 text-center text-[var(--text-muted)]">
+                                <Search size={36} className="mx-auto mb-3 opacity-20" />
+                                <p className="font-medium">No customers found</p>
+                                <p className="text-xs mt-1">Try adjusting your search or filters</p>
+                            </td></tr>
                         ) : displayCustomers.map((c: Record<string, unknown>) => (
                             <tr key={c.id as string} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
                                 <td className="p-4 font-medium"><Link href={`/customers/${c.id}`} className="text-[var(--gold)] hover:underline">{c.name as string}</Link></td>

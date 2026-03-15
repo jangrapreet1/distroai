@@ -72,6 +72,9 @@ export function useCustomers(filters: Record<string, string | number | undefined
 export function useCustomer(id: string) {
     return useQuery({ queryKey: ["customers", id], queryFn: () => apiClient.get(`/api/v1/customers/${id}`).then((r) => r.data), enabled: !!id });
 }
+export function useCustomerCreditScore(id: string) {
+    return useQuery({ queryKey: ["customers", id, "credit-score"], queryFn: () => apiClient.get(`/api/v1/customers/${id}/credit-score`).then((r) => r.data), enabled: !!id });
+}
 export function useCreateCustomer() {
     const qc = useQueryClient();
     return useMutation({
@@ -95,6 +98,9 @@ export function useRecordPayment() {
 }
 export function useOutstanding() {
     return useQuery({ queryKey: ["payments", "outstanding"], queryFn: () => apiClient.get("/api/v1/payments/outstanding").then((r) => r.data) });
+}
+export function useInvoicePayments(invoiceId: string) {
+    return useQuery({ queryKey: ["payments", "invoice", invoiceId], queryFn: () => apiClient.get("/api/v1/payments", { params: { invoiceId } }).then((r) => r.data), enabled: !!invoiceId });
 }
 export function useCollectionPlan() {
     return useQuery({ queryKey: ["payments", "collection-plan"], queryFn: () => apiClient.get("/api/v1/payments/collection-plan").then((r) => r.data) });
@@ -219,6 +225,20 @@ export function useCreateInvoice() {
     return useMutation({
         mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/invoices", data).then((r) => r.data),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Invoice created"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useGenerateInvoicePdf() {
+    return useMutation({
+        mutationFn: (id: string) => apiClient.post(`/api/v1/invoices/${id}/pdf`).then((r) => r.data),
+        onSuccess: () => toast.success("PDF Generated"),
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useCreatePaymentLink() {
+    return useMutation({
+        mutationFn: (id: string) => apiClient.post(`/api/v1/invoices/${id}/payment-link`).then((r) => r.data),
+        onSuccess: () => toast.success("Payment Link Generated"),
         onError: (e) => toast.error(getApiError(e).message),
     });
 }

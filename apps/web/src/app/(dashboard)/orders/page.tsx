@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, Package } from "lucide-react";
 import { useOrders, useOrderAction } from "@/hooks/api-hooks";
 import { formatDate } from "@/lib/utils";
 
@@ -29,7 +29,7 @@ export default function OrdersPage() {
     return (
         <div>
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                 <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Orders</h1>
                 <Link href="/orders/new" className="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] transition">
                     <Plus size={16} /> New Order
@@ -77,8 +77,9 @@ export default function OrdersPage() {
                             ) : orders.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="p-12 text-center">
-                                        <p className="text-[var(--text-muted)] mb-2">No orders found</p>
-                                        <Link href="/orders/new" className="text-sm text-[var(--gold)] hover:underline">Create your first order</Link>
+                                        <Package size={36} className="mx-auto mb-3 opacity-20 text-[var(--text-muted)]" />
+                                        <p className="text-[var(--text-muted)] font-medium mb-2">No orders found</p>
+                                        <Link href="/orders/new" className="text-sm text-[var(--gold)] hover:underline">Create your first order →</Link>
                                     </td>
                                 </tr>
                             ) : (
