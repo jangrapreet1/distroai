@@ -242,3 +242,10 @@ export function useCreatePaymentLink() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+export function useSendInvoiceWhatsApp() {
+    return useMutation({
+        mutationFn: (id: string) => apiClient.post(`/api/v1/invoices/${id}/send`, { channels: ["whatsapp"] }).then((r) => r.data),
+        onSuccess: () => toast.success("Invoice sent via WhatsApp"),
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}

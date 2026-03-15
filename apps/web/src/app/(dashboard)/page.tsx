@@ -154,7 +154,9 @@ export default function DashboardPage() {
     const sparkOutstanding = useMemo(() => Array(7).fill(outstanding), [outstanding]);
     const sparkLowStock = useMemo(() => Array(7).fill(lowStock), [lowStock]);
 
-    const revenueChange = monthRevenue > 0 && todayRevenue > 0 ? Math.round((todayRevenue / (monthRevenue / 30)) * 100 - 100) : 0;
+    const daysElapsed = new Date().getDate(); // days elapsed this month
+    const revenueChange = monthRevenue > 0 && todayRevenue > 0 ? Math.round((todayRevenue / (monthRevenue / daysElapsed)) * 100 - 100) : 0;
+    const ordersChange = monthOrders > 0 && todayOrders > 0 ? Math.round((todayOrders / (monthOrders / daysElapsed)) * 100 - 100) : 0;
 
     return (
         <div className="space-y-6">
@@ -195,10 +197,10 @@ export default function DashboardPage() {
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard title="Revenue" value={formatINR(todayRevenue)} change={revenueChange} changeLabel="vs monthly avg" icon={IndianRupee} accentColor="var(--green-bright)" sparkData={sparkRevenue} />
-                <KPICard title="Orders" value={String(todayOrders)} change={todayOrders > 0 ? 12 : 0} changeLabel="today" icon={ShoppingCart} accentColor="var(--gold)" sparkData={sparkOrders} />
-                <KPICard title="Outstanding" value={formatINR(outstanding)} change={outstanding > 0 ? -5 : 0} changeLabel="total due" icon={AlertTriangle} accentColor="var(--red)" sparkData={sparkOutstanding} />
+                <KPICard title="Orders" value={String(todayOrders)} change={ordersChange} changeLabel="today" icon={ShoppingCart} accentColor="var(--gold)" sparkData={sparkOrders} />
+                <KPICard title="Outstanding" value={formatINR(outstanding)} change={0} changeLabel="total due" icon={AlertTriangle} accentColor="var(--red)" sparkData={sparkOutstanding} />
                 <Link href="/inventory">
-                    <KPICard title="Low Stock" value={String(lowStock)} change={lowStock > 0 ? -2 : 0} changeLabel="products below min" icon={Package} accentColor="var(--orange)" sparkData={sparkLowStock} />
+                    <KPICard title="Low Stock" value={String(lowStock)} change={0} changeLabel="products below min" icon={Package} accentColor="var(--orange)" sparkData={sparkLowStock} />
                 </Link>
             </div>
 

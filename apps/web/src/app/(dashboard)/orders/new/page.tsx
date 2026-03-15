@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Search, Package } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Search, Package, ArrowDownAZ, ArrowUpZA } from "lucide-react";
 import Link from "next/link";
 import { useCreateOrder, useCustomers, useProducts, useWarehouses } from "@/hooks/api-hooks";
 import { AddCustomerModal } from "@/components/AddCustomerModal";
@@ -27,6 +27,8 @@ export default function NewOrderPage() {
     const [customerId, setCustomerId] = useState("");
     const [customerSearch, setCustomerSearch] = useState("");
     const [showAddCustomer, setShowAddCustomer] = useState(false);
+    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+    const [customerSort, setCustomerSort] = useState<"asc" | "desc">("asc");
 
     const { data: whData } = useWarehouses();
     const warehouses = Array.isArray(whData) ? whData : (whData?.data ?? []);
@@ -38,8 +40,17 @@ export default function NewOrderPage() {
     const [productSearch, setProductSearch] = useState("");
     const [showProductPicker, setShowProductPicker] = useState(false);
 
-    const { data: customersData } = useCustomers({ search: customerSearch || undefined, limit: 10 });
-    const customers = customersData?.data ?? [];
+    const { data: customersData } = useCustomers({ search: customerSearch || undefined, limit: 200 });
+    const customersRaw = customersData?.data ?? [];
+    const customers = useMemo(() => {
+        const list = [...customersRaw];
+        list.sort((a: any, b: any) => {
+            const nameA = (a.name as string ?? "").toLowerCase();
+            const nameB = (b.name as string ?? "").toLowerCase();
+            return customerSort === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+        });
+        return list;
+    }, [customersRaw, customerSort]);
 
     const { data: prodData } = useProducts({ limit: 100, isActive: true });
     const products = prodData?.data?.data ?? prodData?.data ?? [];
@@ -128,13 +139,22 @@ export default function NewOrderPage() {
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                         <input
                             value={customerSearch}
-                            onChange={(e) => { setCustomerSearch(e.target.value); setCustomerId(""); }}
-                            placeholder="Search customer by name or phone..."
+                            onChange={(e) => { setCustomerSearch(e.target.value); setCustomerId(""); setShowCustomerDropdown(true); }}
+                            onFocus={() => { if (!customerId) setShowCustomerDropdown(true); }}
+                            placeholder="Click to browse or type to search customers..."
                             className="w-full pl-9 pr-4 py-2.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition"
                         />
                     </div>
-                    {customerSearch && !customerId && (
-                        <div className="mt-2 border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)] flex flex-col overflow-hidden max-h-60">
+                    {showCustomerDropdown && !customerId && (
+                        <div className="mt-2 border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)] flex flex-col overflow-hidden max-h-72">
+                            <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)] bg-[var(--bg-card)]">
+                                <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">{customers.length} customers</span>
+                                <button type="button" onClick={() => setCustomerSort(customerSort === "asc" ? "desc" : "asc")}
+                                    className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--gold)] transition">
+                                    {customerSort === "asc" ? <ArrowDownAZ size={14} /> : <ArrowUpZA size={14} />}
+                                    {customerSort === "asc" ? "A → Z" : "Z → A"}
+                                </button>
+                            </div>
                             {customers.length === 0 ? (
                                 <p className="p-3 text-sm text-[var(--text-muted)] text-center">No customers found</p>
                             ) : (
@@ -143,7 +163,7 @@ export default function NewOrderPage() {
                                         <button
                                             key={c.id as string}
                                             type="button"
-                                            onClick={() => { setCustomerId(c.id as string); setCustomerSearch(c.name as string); }}
+                                            onClick={() => { setCustomerId(c.id as string); setCustomerSearch(c.name as string); setShowCustomerDropdown(false); }}
                                             className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] transition flex items-center justify-between"
                                         >
                                             <span className="font-medium">{c.name as string}</span>
@@ -164,7 +184,10 @@ export default function NewOrderPage() {
                         </div>
                     )}
                     {customerId && (
-                        <p className="mt-2 text-xs text-[var(--green-bright)]">✓ Customer selected</p>
+                        <div className="mt-2 flex items-center justify-between">
+                            <p className="text-xs text-[var(--green-bright)]">✓ Customer selected</p>
+                            <button type="button" onClick={() => { setCustomerId(""); setCustomerSearch(""); setShowCustomerDropdown(true); }} className="text-xs text-[var(--text-muted)] hover:text-[var(--red)] transition">Change</button>
+                        </div>
                     )}
                 </div>
 

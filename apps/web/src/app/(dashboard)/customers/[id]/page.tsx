@@ -1,9 +1,9 @@
 "use client";
 
 import { use } from "react";
-import { useCustomer, useCustomerCreditScore } from "@/hooks/api-hooks";
+import { useCustomer, useCustomerCreditScore, useSendInvoiceWhatsApp } from "@/hooks/api-hooks";
 import Link from "next/link";
-import { ArrowLeft, Mail, Phone, MapPin, TrendingUp, CreditCard, ShieldCheck, AlertTriangle, Clock, Package } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, TrendingUp, CreditCard, ShieldCheck, AlertTriangle, Clock, Package, Send, MessageCircle } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
@@ -31,6 +31,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     const { id } = use(params);
     const { data: customerData, isLoading } = useCustomer(id);
     const { data: creditData } = useCustomerCreditScore(id);
+    const sendWhatsApp = useSendInvoiceWhatsApp();
 
     const customer = customerData?.customer;
     const stats = customerData?.stats;
@@ -49,6 +50,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             <Link href="/customers" className="inline-flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--gold)] transition">
                 <ArrowLeft size={16} /> Back to Customers
             </Link>
+
+            {/* Quick Actions Bar */}
+            {customer.phone && (
+                <div className="flex flex-wrap gap-2">
+                    <a href={`https://wa.me/91${customer.phone}`} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 transition">
+                        <MessageCircle size={14} /> WhatsApp
+                    </a>
+                    <a href={`tel:${customer.phone}`}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition">
+                        <Phone size={14} /> Call
+                    </a>
+                </div>
+            )}
 
             <div className="flex flex-col lg:flex-row gap-6">
                 {/* LEFT SIDEBAR — Customer Info + Payment Score */}
@@ -149,12 +164,13 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                         <th className="text-left p-4">Order #</th>
                                         <th className="text-left p-4">Date</th>
                                         <th className="text-right p-4">Amount</th>
-                                        <th className="text-right p-4">Status</th>
+                                        <th className="text-center p-4">Status</th>
+                                        <th className="text-right p-4">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {recentOrders.length === 0 ? (
-                                        <tr><td colSpan={4} className="p-8 text-center text-[var(--text-muted)]">
+                                        <tr><td colSpan={5} className="p-8 text-center text-[var(--text-muted)]">
                                             <Package size={32} className="mx-auto mb-2 opacity-30" />No orders yet
                                         </td></tr>
                                     ) : (
@@ -163,12 +179,23 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                                 <td className="p-4 font-medium"><Link href={`/orders/${order.id}`} className="text-[var(--gold)] hover:underline">{order.orderNumber}</Link></td>
                                                 <td className="p-4 text-[var(--text-secondary)]">{formatDate(order.createdAt)}</td>
                                                 <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.netAmount)}</td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-center">
                                                     <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase rounded-full tracking-wider ${order.status === 'DELIVERED' ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)]' :
                                                         order.status === 'CANCELLED' ? 'bg-red-500/10 text-red-500' :
                                                             order.status === 'DRAFT' ? 'bg-[var(--text-muted)]/10 text-[var(--text-secondary)]' :
                                                                 'bg-[var(--gold)]/10 text-[var(--gold)]'
                                                         }`}>{order.status}</span>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    {order.invoiceId && (
+                                                        <button
+                                                            onClick={() => sendWhatsApp.mutate(order.invoiceId)}
+                                                            disabled={sendWhatsApp.isPending}
+                                                            className="inline-flex items-center gap-1 text-xs text-[var(--whatsapp)] hover:underline transition disabled:opacity-50"
+                                                        >
+                                                            <Send size={12} /> Send Invoice
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))
