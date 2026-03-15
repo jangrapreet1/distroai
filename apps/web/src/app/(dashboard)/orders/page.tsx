@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter, Package } from "lucide-react";
-import { useOrders, useOrderAction } from "@/hooks/api-hooks";
+import { Plus, Search, Filter, Package, Send } from "lucide-react";
+import { useOrders, useOrderAction, useSendInvoiceWhatsApp } from "@/hooks/api-hooks";
 import { formatDate } from "@/lib/utils";
 
 const STATUS_TABS = ["All", "DRAFT", "CONFIRMED", "PACKED", "DISPATCHED", "DELIVERED", "CANCELLED"];
@@ -22,6 +22,7 @@ export default function OrdersPage() {
     const filters = { ...(status !== "All" && { status }), ...(search && { search }), page, limit: 20 };
     const { data, isLoading } = useOrders(filters);
     const orderAction = useOrderAction();
+    const sendWhatsApp = useSendInvoiceWhatsApp();
 
     const orders = data?.data ?? [];
     const meta = data?.meta ?? { total: 0, pages: 0 };
@@ -97,7 +98,15 @@ export default function OrdersPage() {
                                             </span>
                                         </td>
                                         <td className="p-4 text-right">
-                                            <Link href={`/orders/${order.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">View</Link>
+                                            <div className="flex items-center justify-end gap-2">
+                                                {(order as any).invoiceId && (
+                                                    <button onClick={() => sendWhatsApp.mutate((order as any).invoiceId)} disabled={sendWhatsApp.isPending}
+                                                        className="inline-flex items-center gap-1 text-xs text-[var(--whatsapp)] hover:underline transition disabled:opacity-50">
+                                                        <Send size={12} /> Send Invoice
+                                                    </button>
+                                                )}
+                                                <Link href={`/orders/${order.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">View</Link>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
