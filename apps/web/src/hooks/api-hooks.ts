@@ -224,19 +224,7 @@ export function useCreateInvoice() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/invoices", data).then((r) => r.data),
-        onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Invoice created successfully"); },
-        onError: (e) => toast.error(getApiError(e).message),
-    });
-}
-export function useCreateInvoiceFromOrder() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: (orderId: string) => apiClient.post(`/api/v1/invoices/from-order/${orderId}`).then((r) => r.data),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ["invoices"] });
-            qc.invalidateQueries({ queryKey: ["orders"] });
-            toast.success("Invoice generated successfully");
-        },
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Invoice created"); },
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
