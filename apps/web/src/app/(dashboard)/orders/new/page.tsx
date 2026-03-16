@@ -40,8 +40,8 @@ export default function NewOrderPage() {
     const [productSearch, setProductSearch] = useState("");
     const [showProductPicker, setShowProductPicker] = useState(false);
 
-    // Only pass search if it has actual text, otherwise pass undefined so we fetch all 200 customers
-    const { data: customersData } = useCustomers({ search: customerSearch.trim() || undefined, limit: 200 });
+    // Only pass search if it has actual text, otherwise pass undefined so we fetch all customers
+    const { data: customersData } = useCustomers({ search: customerSearch.trim() || undefined, limit: 100 });
     const customersRaw = customersData?.data ?? [];
     const customers = useMemo(() => {
         const list = [...customersRaw];

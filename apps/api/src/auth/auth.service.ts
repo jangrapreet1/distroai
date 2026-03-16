@@ -189,9 +189,6 @@ export class AuthService {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         await this.redis.set(`otp:${identifier}`, otp, 600); // 10 minutes
 
-        if (this.config.get('NODE_ENV') !== 'production') {
-            this.logger.log(`[DEV] OTP for ${identifier}: ${otp}`);
-        }
         // TODO: send via MSG91 / Resend in Phase 4
 
         return { message: 'OTP sent' };

@@ -78,7 +78,15 @@ export class RazorpayService {
     }
 
     verifyWebhookSignature(payload: string, signature: string): boolean {
-        if (!this.webhookSecret) return true; // skip verification if not configured
+        // In production, webhook secret MUST be configured
+        if (!this.webhookSecret) {
+            if (this.config.get('NODE_ENV') === 'production') {
+                this.logger.error('RAZORPAY_WEBHOOK_SECRET is not configured');
+                return false;
+            }
+            // Only allow skipping verification in non-production
+            return true;
+        }
         const expected = createHmac('sha256', this.webhookSecret).update(payload).digest('hex');
         return expected === signature;
     }

@@ -49,7 +49,6 @@ export class UsersService {
         });
 
         // TODO: send onboarding SMS/WhatsApp in Phase 4
-        console.log(`[DEV] Temp password for ${dto.email}: ${tempPassword}`);
         return user;
     }
 

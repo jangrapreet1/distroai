@@ -144,7 +144,7 @@ export class EInvoiceService {
     }
 
     private buildEInvoicePayload(invoice: Record<string, unknown>): Record<string, unknown> {
-        const org = invoice.org as Record<string, unknown>;
+        const org = invoice.organization as Record<string, unknown>;
         const customer = invoice.customer as Record<string, unknown>;
         const items = invoice.items as Array<Record<string, unknown>>;
 

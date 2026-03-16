@@ -59,7 +59,7 @@ export class PaymentsService {
             });
 
             if (dto.invoiceId) {
-                const invoice = await tx.invoice.findUnique({ where: { id: dto.invoiceId } });
+                const invoice = await tx.invoice.findFirst({ where: { id: dto.invoiceId, orgId } });
                 if (invoice) {
                     const newPaid = invoice.paidAmount + dto.amount;
                     const newBalance = invoice.totalAmount - newPaid;
@@ -86,6 +86,12 @@ export class PaymentsService {
 
     async handleRazorpayWebhook(rawBody: Buffer, signature: string) {
         const secret = this.config.get<string>('RAZORPAY_WEBHOOK_SECRET', '');
+        
+        // In production, webhook secret MUST be configured
+        if (!secret && this.config.get('NODE_ENV') === 'production') {
+            throw new BadRequestException({ code: 'FORBIDDEN', message: 'Webhook secret not configured' });
+        }
+        
         if (secret) {
             const computed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
             if (computed !== signature) {

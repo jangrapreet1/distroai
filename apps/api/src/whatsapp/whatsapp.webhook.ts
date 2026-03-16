@@ -61,28 +61,35 @@ export class WhatsAppWebhookController {
             const entry = (body as Record<string, unknown>).entry as Array<Record<string, unknown>>;
             if (!entry?.length) return { status: 'ok' };
 
-            for (const e of entry) {
-                const changes = e.changes as Array<Record<string, unknown>>;
-                if (!changes?.length) continue;
-
-                for (const change of changes) {
-                    const value = change.value as Record<string, unknown>;
-                    if (!value) continue;
-
-                    const messages = value.messages as Array<Record<string, unknown>>;
-                    const phoneNumberId = (value.metadata as Record<string, unknown>)?.phone_number_id as string;
-
-                    if (messages?.length) {
-                        for (const msg of messages) {
-                            await this.botHandler.handleIncoming(phoneNumberId, msg);
-                        }
-                    }
-                }
-            }
+            // Process asynchronously without awaiting
+            this.processWebhookAsync(entry).catch((err) => {
+                this.logger.error('Async webhook processing error', err.message);
+            });
         } catch (err) {
             this.logger.error('Error processing webhook', (err as Error).message);
         }
 
         return { status: 'ok' };
+    }
+
+    private async processWebhookAsync(entry: Array<Record<string, unknown>>): Promise<void> {
+        for (const e of entry) {
+            const changes = e.changes as Array<Record<string, unknown>>;
+            if (!changes?.length) continue;
+
+            for (const change of changes) {
+                const value = change.value as Record<string, unknown>;
+                if (!value) continue;
+
+                const messages = value.messages as Array<Record<string, unknown>>;
+                const phoneNumberId = (value.metadata as Record<string, unknown>)?.phone_number_id as string;
+
+                if (messages?.length) {
+                    for (const msg of messages) {
+                        await this.botHandler.handleIncoming(phoneNumberId, msg);
+                    }
+                }
+            }
+        }
     }
 }
