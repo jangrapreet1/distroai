@@ -59,6 +59,7 @@ export class PaymentsService {
             });
 
             if (dto.invoiceId) {
+                // Explicit invoice — update just that one
                 const invoice = await tx.invoice.findFirst({ where: { id: dto.invoiceId, orgId } });
                 if (invoice) {
                     const newPaid = invoice.paidAmount + dto.amount;
@@ -67,6 +68,25 @@ export class PaymentsService {
                         where: { id: dto.invoiceId },
                         data: { paidAmount: newPaid, balanceAmount: Math.max(0, newBalance), status: newBalance <= 0 ? 'PAID' : 'PARTIAL' },
                     });
+                }
+            } else {
+                // No specific invoice — auto-allocate to oldest unpaid invoices (FIFO)
+                const unpaidInvoices = await tx.invoice.findMany({
+                    where: { orgId, customerId: dto.customerId, balanceAmount: { gt: 0 } },
+                    orderBy: { dueDate: 'asc' },
+                });
+
+                let remaining = dto.amount;
+                for (const inv of unpaidInvoices) {
+                    if (remaining <= 0) break;
+                    const allocate = Math.min(remaining, inv.balanceAmount);
+                    const newPaid = inv.paidAmount + allocate;
+                    const newBalance = inv.totalAmount - newPaid;
+                    await tx.invoice.update({
+                        where: { id: inv.id },
+                        data: { paidAmount: newPaid, balanceAmount: Math.max(0, newBalance), status: newBalance <= 0 ? 'PAID' : 'PARTIAL' },
+                    });
+                    remaining -= allocate;
                 }
             }
 
@@ -84,14 +104,15 @@ export class PaymentsService {
         });
     }
 
+
     async handleRazorpayWebhook(rawBody: Buffer, signature: string) {
         const secret = this.config.get<string>('RAZORPAY_WEBHOOK_SECRET', '');
-        
+
         // In production, webhook secret MUST be configured
         if (!secret && this.config.get('NODE_ENV') === 'production') {
             throw new BadRequestException({ code: 'FORBIDDEN', message: 'Webhook secret not configured' });
         }
-        
+
         if (secret) {
             const computed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
             if (computed !== signature) {

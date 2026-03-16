@@ -53,7 +53,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             {/* Quick Actions Bar */}
             {customer.phone && (
                 <div className="flex flex-wrap gap-2">
-                    <a href={`https://wa.me/91${customer.phone}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer"
                         className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 transition">
                         <MessageCircle size={14} /> WhatsApp
                     </a>
