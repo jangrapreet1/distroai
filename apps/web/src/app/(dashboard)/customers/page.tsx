@@ -123,7 +123,7 @@ export default function CustomersPage() {
                                 <td className="p-4 text-center"><ScoreRing score={(c.paymentScore as number) ?? 50} /></td>
                                 <td className="p-4 text-right">
                                     <Link href={`/customers/${c.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition mr-3">View</Link>
-                                    {!!c.phone && <a href={`https://wa.me/91${c.phone as string}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>}
+                                    {!!c.phone && <a href={`https://wa.me/${(c.phone as string).replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>}
                                 </td>
                             </tr>
                         ))}

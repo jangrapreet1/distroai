@@ -22,6 +22,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
     const [purchasePrice, setPurchasePrice] = useState("");
     const [minStockLevel, setMinStockLevel] = useState("10");
     const [gstRate, setGstRate] = useState("18");
+    const [initialQuantity, setInitialQuantity] = useState("0");
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,11 +33,12 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
             mrp: Number(mrp),
             purchasePrice: Number(purchasePrice),
             minStockLevel: Number(minStockLevel),
-            gstRate: Number(gstRate)
+            gstRate: Number(gstRate),
+            initialQuantity: Number(initialQuantity),
         }, {
             onSuccess: () => {
                 onClose();
-                setName(""); setSku(""); setImageUrl(""); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18");
+                setName(""); setSku(""); setImageUrl(""); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18"); setInitialQuantity("0");
             }
         });
     };
@@ -44,13 +46,13 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
-                    <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Add Product</h2>
-                    <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+                    <h2 className="text-base font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Add Product</h2>
+                    <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={18} /></button>
                 </div>
-                <form onSubmit={handleSubmit} className="p-5 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
                         <div className="col-span-2">
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Image</span>
                             <ImageUpload value={imageUrl} onChange={setImageUrl} onUpload={(file) => upload.mutateAsync(file)} disabled={create.isPending || upload.isPending} />
@@ -89,11 +91,15 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                             <input type="number" step="1" min="0" value={gstRate} onChange={(e) => setGstRate(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
                         </label>
                         <label>
+                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Initial Stock Qty</span>
+                            <input type="number" min="0" value={initialQuantity} onChange={(e) => setInitialQuantity(e.target.value)} placeholder="0" className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                        </label>
+                        <label>
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Min Stock Level</span>
                             <input type="number" value={minStockLevel} onChange={(e) => setMinStockLevel(e.target.value)} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
                         </label>
                     </div>
-                    <div className="flex justify-end gap-3 pt-4">
+                    <div className="flex justify-end gap-3 pt-3">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition">Cancel</button>
                         <button type="submit" disabled={create.isPending} className="px-6 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] hover:bg-[var(--gold-light)] disabled:opacity-50 transition">
                             {create.isPending ? "Saving..." : "Save Product"}

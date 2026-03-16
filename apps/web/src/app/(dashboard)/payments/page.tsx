@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { IndianRupee, CreditCard, X } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { IndianRupee, CreditCard, X, Send } from "lucide-react";
 import { useOutstanding, usePayments, useRecordPayment, useCustomers } from "@/hooks/api-hooks";
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts";
 import { formatDate } from "@/lib/utils";
@@ -11,8 +11,27 @@ function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN")
 
 const PAYMENT_METHODS = ["CASH", "UPI", "CHEQUE", "BANK_TRANSFER", "CREDIT"] as const;
 
+function cleanPhone(phone: string): string {
+    return phone.replace(/[^0-9]/g, "");
+}
+
+function buildPaymentReminderLink(phone: string, customerName: string, amount: number): string {
+    const clean = cleanPhone(phone);
+    const message = `Hello ${customerName},
+
+This is a friendly reminder regarding your outstanding balance of *${formatINR(amount)}*.
+
+Please let us know when you can arrange the payment.
+
+Thank you!
+— Sent via DistroAI`;
+    return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
+}
+
 /* ─── Record Payment Modal ─── */
-function RecordPaymentModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerName }: {
+    open: boolean; onClose: () => void; prefillCustomerId?: string; prefillCustomerName?: string;
+}) {
     const recordPayment = useRecordPayment();
     const [customerSearch, setCustomerSearch] = useState("");
     const [customerId, setCustomerId] = useState("");
@@ -21,8 +40,16 @@ function RecordPaymentModal({ open, onClose }: { open: boolean; onClose: () => v
     const [referenceNumber, setReferenceNumber] = useState("");
     const [notes, setNotes] = useState("");
 
-    const { data: customersData } = useCustomers({ search: customerSearch || undefined, limit: 10 });
+    const { data: customersData } = useCustomers({ search: customerSearch.trim() || undefined, limit: 10 });
     const customers = customersData?.data?.data ?? customersData?.data ?? [];
+
+    // Pre-fill customer when modal opens with a prefillCustomerId
+    useEffect(() => {
+        if (open && prefillCustomerId && prefillCustomerName) {
+            setCustomerId(prefillCustomerId);
+            setCustomerSearch(prefillCustomerName);
+        }
+    }, [open, prefillCustomerId, prefillCustomerName]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -86,11 +113,25 @@ function RecordPaymentModal({ open, onClose }: { open: boolean; onClose: () => v
 export default function PaymentsPage() {
     const [tab, setTab] = useState<"outstanding" | "history">("outstanding");
     const [showRecord, setShowRecord] = useState(false);
+    const [recordCustomerId, setRecordCustomerId] = useState<string | undefined>();
+    const [recordCustomerName, setRecordCustomerName] = useState<string | undefined>();
     const { data: outstanding } = useOutstanding();
     const { data: paymentsData } = usePayments({ page: 1, limit: 50 });
 
     const customerList: Record<string, unknown>[] = outstanding?.data ?? outstanding ?? [];
     const paymentsList: Record<string, unknown>[] = paymentsData?.data?.data ?? paymentsData?.data ?? [];
+
+    const openRecordForCustomer = (custId: string, custName: string) => {
+        setRecordCustomerId(custId);
+        setRecordCustomerName(custName);
+        setShowRecord(true);
+    };
+
+    const openRecordGeneral = () => {
+        setRecordCustomerId(undefined);
+        setRecordCustomerName(undefined);
+        setShowRecord(true);
+    };
 
     // Compute real summary from outstanding data
     const totalOutstanding = useMemo(() => {
@@ -154,7 +195,7 @@ export default function PaymentsPage() {
                 <div className="flex items-center gap-2">
                     <button onClick={() => setTab("outstanding")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${tab === "outstanding" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>Outstanding</button>
                     <button onClick={() => setTab("history")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${tab === "history" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>History</button>
-                    <button onClick={() => setShowRecord(true)} className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 transition whitespace-nowrap">
+                    <button onClick={openRecordGeneral} className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 transition whitespace-nowrap">
                         <CreditCard size={14} /> <span className="hidden sm:inline">Record Payment</span><span className="sm:hidden">Record</span>
                     </button>
                 </div>
@@ -199,22 +240,29 @@ export default function PaymentsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {Array.isArray(customerList) && customerList.length > 0 ? customerList.map((c, i) => (
-                                    <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
-                                        <td className="p-4">
-                                            <p className="font-medium">{(c.customer as Record<string, unknown>)?.name as string ?? "Customer"}</p>
-                                            <p className="text-xs text-[var(--text-muted)]">{(c.customer as Record<string, unknown>)?.phone as string ?? ""}</p>
-                                        </td>
-                                        <td className="p-4 text-right font-semibold" style={{ fontFamily: "var(--font-mono)", color: "var(--orange)" }}>{formatINR((c.total as number) ?? 0)}</td>
-                                        <td className="p-4 text-center text-sm" style={{ fontFamily: "var(--font-mono)" }}>{Number((c.customer as Record<string, unknown>)?.paymentScore ?? 50)}</td>
-                                        <td className="p-4 text-right">
-                                            <button onClick={() => setShowRecord(true)} className="text-xs text-[var(--gold)] hover:underline mr-3">Record Payment</button>
-                                            {((c.customer as Record<string, unknown>)?.phone as string) && (
-                                                <a href={`https://wa.me/91${(c.customer as Record<string, unknown>)?.phone as string}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>
-                                            )}
-                                        </td>
-                                    </tr>
-                                )) : (
+                                {Array.isArray(customerList) && customerList.length > 0 ? customerList.map((c, i) => {
+                                    const cust = c.customer as Record<string, unknown>;
+                                    const custName = cust?.name as string ?? "Customer";
+                                    const custPhone = cust?.phone as string ?? "";
+                                    const custId = cust?.id as string ?? "";
+                                    const total = (c.total as number) ?? 0;
+                                    return (
+                                        <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
+                                            <td className="p-4">
+                                                <p className="font-medium">{custName}</p>
+                                                <p className="text-xs text-[var(--text-muted)]">{custPhone}</p>
+                                            </td>
+                                            <td className="p-4 text-right font-semibold" style={{ fontFamily: "var(--font-mono)", color: "var(--orange)" }}>{formatINR(total)}</td>
+                                            <td className="p-4 text-center text-sm" style={{ fontFamily: "var(--font-mono)" }}>{Number(cust?.paymentScore ?? 50)}</td>
+                                            <td className="p-4 text-right">
+                                                <button onClick={() => openRecordForCustomer(custId, custName)} className="text-xs text-[var(--gold)] hover:underline mr-3">Record Payment</button>
+                                                {custPhone && (
+                                                    <a href={buildPaymentReminderLink(custPhone, custName, total)} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                }) : (
                                     <tr><td colSpan={4} className="p-8 text-center text-[var(--text-muted)]">No outstanding payments</td></tr>
                                 )}
                             </tbody>
@@ -223,26 +271,33 @@ export default function PaymentsPage() {
 
                     {/* Mobile cards */}
                     <div className="sm:hidden space-y-3">
-                        {Array.isArray(customerList) && customerList.length > 0 ? customerList.map((c, i) => (
-                            <div key={i} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4">
-                                <div className="flex items-start justify-between mb-2">
-                                    <div>
-                                        <p className="font-medium text-sm">{(c.customer as Record<string, unknown>)?.name as string ?? "Customer"}</p>
-                                        <p className="text-xs text-[var(--text-muted)]">{(c.customer as Record<string, unknown>)?.phone as string ?? ""}</p>
+                        {Array.isArray(customerList) && customerList.length > 0 ? customerList.map((c, i) => {
+                            const cust = c.customer as Record<string, unknown>;
+                            const custName = cust?.name as string ?? "Customer";
+                            const custPhone = cust?.phone as string ?? "";
+                            const custId = cust?.id as string ?? "";
+                            const total = (c.total as number) ?? 0;
+                            return (
+                                <div key={i} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div>
+                                            <p className="font-medium text-sm">{custName}</p>
+                                            <p className="text-xs text-[var(--text-muted)]">{custPhone}</p>
+                                        </div>
+                                        <p className="text-base font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--orange)" }}>{formatINR(total)}</p>
                                     </div>
-                                    <p className="text-base font-bold" style={{ fontFamily: "var(--font-mono)", color: "var(--orange)" }}>{formatINR((c.total as number) ?? 0)}</p>
-                                </div>
-                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border)]">
-                                    <span className="text-xs text-[var(--text-muted)]">Score: <span style={{ fontFamily: "var(--font-mono)" }}>{Number((c.customer as Record<string, unknown>)?.paymentScore ?? 50)}</span></span>
-                                    <div className="flex gap-3">
-                                        <button onClick={() => setShowRecord(true)} className="text-xs text-[var(--gold)] hover:underline">Record</button>
-                                        {((c.customer as Record<string, unknown>)?.phone as string) && (
-                                            <a href={`https://wa.me/91${(c.customer as Record<string, unknown>)?.phone as string}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>
-                                        )}
+                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border)]">
+                                        <span className="text-xs text-[var(--text-muted)]">Score: <span style={{ fontFamily: "var(--font-mono)" }}>{Number(cust?.paymentScore ?? 50)}</span></span>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => openRecordForCustomer(custId, custName)} className="text-xs text-[var(--gold)] hover:underline">Record</button>
+                                            {custPhone && (
+                                                <a href={buildPaymentReminderLink(custPhone, custName, total)} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )) : (
+                            );
+                        }) : (
                             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-8 text-center text-[var(--text-muted)]">No outstanding payments</div>
                         )}
                     </div>
@@ -273,7 +328,8 @@ export default function PaymentsPage() {
                 </div>
             )}
 
-            <RecordPaymentModal open={showRecord} onClose={() => setShowRecord(false)} />
+            <RecordPaymentModal open={showRecord} onClose={() => setShowRecord(false)} prefillCustomerId={recordCustomerId} prefillCustomerName={recordCustomerName} />
         </div>
     );
 }
+
