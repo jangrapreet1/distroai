@@ -301,6 +301,38 @@ export default function PaymentsPage() {
                             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-8 text-center text-[var(--text-muted)]">No outstanding payments</div>
                         )}
                     </div>
+
+                    {/* Recent Transactions */}
+                    {Array.isArray(paymentsList) && paymentsList.length > 0 && (
+                        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-x-auto mt-6">
+                            <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+                                <h3 className="font-semibold text-[var(--text-primary)]">Recent Transactions</h3>
+                                <button onClick={() => setTab("history")} className="text-xs text-[var(--gold)] hover:underline">View All</button>
+                            </div>
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
+                                        <th className="text-left p-3 pl-4">Date</th>
+                                        <th className="text-left p-3">Customer</th>
+                                        <th className="text-left p-3">Method</th>
+                                        <th className="text-right p-3">Amount</th>
+                                        <th className="text-left p-3 pr-4">Reference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {paymentsList.slice(0, 5).map((p, i) => (
+                                        <tr key={i} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-card-hover)] transition">
+                                            <td className="p-3 pl-4 text-[var(--text-secondary)]">{formatDate(p.paidAt as string ?? p.createdAt as string)}</td>
+                                            <td className="p-3 font-medium">{(p.customer as Record<string, unknown>)?.name as string ?? "—"}</td>
+                                            <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs bg-[var(--gold)]/15 text-[var(--gold)]">{(p.method as string)?.replace("_", " ")}</span></td>
+                                            <td className="p-3 text-right text-[var(--green-bright)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((p.amount as number) ?? 0)}</td>
+                                            <td className="p-3 pr-4 text-[var(--text-muted)]">{(p.referenceNumber as string) ?? "—"}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </>
             ) : (
                 /* Payment History */

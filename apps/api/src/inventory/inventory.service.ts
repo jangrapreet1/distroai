@@ -150,7 +150,7 @@ export class InventoryService {
         let totalUnits = 0;
 
         for (const inv of inventories) {
-            const pp = inv.product.purchasePrice || inv.product.sellingPrice || 0;
+            const pp = inv.product.sellingPrice || inv.product.purchasePrice || 0;
             const value = inv.quantity * pp;
             totalUnits += inv.quantity;
             const existing = warehouseMap.get(inv.warehouseId);
