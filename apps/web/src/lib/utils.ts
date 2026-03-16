@@ -18,3 +18,32 @@ export function greeting(): string {
     if (hour < 17) return "Good afternoon";
     return "Good evening";
 }
+
+export function formatINRShared(n: number): string {
+    return "₹" + n.toLocaleString("en-IN");
+}
+
+/**
+ * Build a wa.me click-to-chat link for sending an invoice to a customer.
+ * Opens WhatsApp with a pre-filled message containing invoice details and a view link.
+ */
+export function buildWhatsAppInvoiceLink(opts: {
+    customerPhone: string;
+    customerName: string;
+    invoiceNumber: string;
+    invoiceAmount: number;
+    invoiceId: string;
+}): string {
+    const cleanPhone = opts.customerPhone.replace(/[^0-9]/g, "");
+    const invoiceUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/invoices/${opts.invoiceId}`;
+    const message = `Hello ${opts.customerName},
+
+Your invoice *${opts.invoiceNumber}* for *${formatINRShared(opts.invoiceAmount)}* is ready.
+
+View invoice: ${invoiceUrl}
+
+Thank you for your business!
+— Sent via DistroAI`;
+
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+}

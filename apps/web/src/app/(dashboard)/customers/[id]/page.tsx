@@ -1,10 +1,10 @@
 "use client";
 
 import { use } from "react";
-import { useCustomer, useCustomerCreditScore, useSendInvoiceWhatsApp } from "@/hooks/api-hooks";
+import { useCustomer, useCustomerCreditScore } from "@/hooks/api-hooks";
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, MapPin, TrendingUp, CreditCard, ShieldCheck, AlertTriangle, Clock, Package, Send, MessageCircle } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, buildWhatsAppInvoiceLink } from "@/lib/utils";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
@@ -31,7 +31,6 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     const { id } = use(params);
     const { data: customerData, isLoading } = useCustomer(id);
     const { data: creditData } = useCustomerCreditScore(id);
-    const sendWhatsApp = useSendInvoiceWhatsApp();
 
     const customer = customerData?.customer;
     const stats = customerData?.stats;
@@ -187,14 +186,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                                         }`}>{order.status}</span>
                                                 </td>
                                                 <td className="p-4 text-right">
-                                                    {order.invoiceId && (
-                                                        <button
-                                                            onClick={() => sendWhatsApp.mutate(order.invoiceId)}
-                                                            disabled={sendWhatsApp.isPending}
-                                                            className="inline-flex items-center gap-1 text-xs text-[var(--whatsapp)] hover:underline transition disabled:opacity-50"
-                                                        >
+                                                    {order.invoiceId && customer.phone && (
+                                                        <a href={buildWhatsAppInvoiceLink({
+                                                            customerPhone: customer.phone,
+                                                            customerName: customer.name,
+                                                            invoiceNumber: order.orderNumber,
+                                                            invoiceAmount: order.netAmount,
+                                                            invoiceId: order.invoiceId,
+                                                        })} target="_blank" rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 text-xs text-[var(--whatsapp)] hover:underline transition">
                                                             <Send size={12} /> Send Invoice
-                                                        </button>
+                                                        </a>
                                                     )}
                                                 </td>
                                             </tr>

@@ -3,8 +3,8 @@
 import { use } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, Package, Truck, MapPin, XCircle, RotateCcw, Clock, Send } from "lucide-react";
-import { useOrder, useOrderAction, useSendInvoiceWhatsApp } from "@/hooks/api-hooks";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { useOrder, useOrderAction } from "@/hooks/api-hooks";
+import { formatDate, formatDateTime, buildWhatsAppInvoiceLink } from "@/lib/utils";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
@@ -25,7 +25,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     const { id } = use(params);
     const { data: order, isLoading } = useOrder(id);
     const orderAction = useOrderAction();
-    const sendWhatsApp = useSendInvoiceWhatsApp();
 
     if (isLoading) return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-[var(--radius-md)]" />)}</div>;
     if (!order) return <div className="text-center py-20"><p className="text-[var(--text-muted)]">Order not found</p></div>;
@@ -45,11 +44,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <p className="text-sm text-[var(--text-muted)]">{formatDate(order.createdAt)}</p>
                 </div>
                 <div className="flex gap-2">
-                    {order.invoiceId && (
-                        <button onClick={() => sendWhatsApp.mutate(order.invoiceId)} disabled={sendWhatsApp.isPending}
-                            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--whatsapp)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 font-semibold transition disabled:opacity-50">
+                    {order.invoiceId && order.customer?.phone && (
+                        <a href={buildWhatsAppInvoiceLink({
+                            customerPhone: order.customer.phone,
+                            customerName: order.customer.name ?? "Customer",
+                            invoiceNumber: order.orderNumber,
+                            invoiceAmount: order.netAmount,
+                            invoiceId: order.invoiceId,
+                        })} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--whatsapp)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 font-semibold transition">
                             <Send size={14} /> Send Invoice
-                        </button>
+                        </a>
                     )}
                     {actions.map((a) => (
                         <button key={a.action} onClick={() => orderAction.mutate({ id, action: a.action })}

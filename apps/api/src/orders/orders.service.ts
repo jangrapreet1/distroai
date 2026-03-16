@@ -85,7 +85,7 @@ export class OrdersService {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          customer: { select: { name: true } },
+          customer: { select: { name: true, phone: true } },
           _count: { select: { items: true } },
         },
         orderBy: { createdAt: "desc" },

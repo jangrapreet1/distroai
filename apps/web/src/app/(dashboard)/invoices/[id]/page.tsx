@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, Send, Download, CreditCard, CheckCircle, X, Link as LinkIcon, Receipt } from "lucide-react";
 import { useInvoice, useRecordPayment } from "@/hooks/api-hooks";
-import { formatDate } from "@/lib/utils";
+import { formatDate, buildWhatsAppInvoiceLink } from "@/lib/utils";
 import apiClient from "@/lib/api-client";
 import toast from "react-hot-toast";
 
@@ -168,9 +168,18 @@ export default function InvoiceDetailPage() {
                     <button onClick={() => handleAction("Create Payment Link", `/api/v1/invoices/${id}/payment-link`)} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--purple)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
                         <LinkIcon size={14} /> {actionLoading === "Create Payment Link" ? "..." : "Payment Link"}
                     </button>
-                    <button onClick={() => handleSend("whatsapp")} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
-                        <Send size={14} /> {actionLoading === "whatsapp" ? "..." : "WhatsApp"}
-                    </button>
+                    {invoice.customer?.phone && (
+                        <a href={buildWhatsAppInvoiceLink({
+                            customerPhone: invoice.customer.phone,
+                            customerName: invoice.customer.name ?? "Customer",
+                            invoiceNumber: invoice.invoiceNumber,
+                            invoiceAmount: invoice.totalAmount,
+                            invoiceId: id,
+                        })} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--bg-card)] transition">
+                            <Send size={14} /> WhatsApp
+                        </a>
+                    )}
                     <button onClick={() => handleSend("email")} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
                         <Send size={14} /> {actionLoading === "email" ? "..." : "Email"}
                     </button>
