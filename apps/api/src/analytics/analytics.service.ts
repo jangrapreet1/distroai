@@ -23,7 +23,7 @@ export class AnalyticsService {
         const [
             todayOrders, todayRevenue, monthOrders, monthRevenue,
             newCustomers, collections, topProducts, topCustomers, recentOrders,
-            inventory,
+            inventory, recentLocationUpdates
         ] = await Promise.all([
             this.prisma.order.count({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' } } }),
             this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' } }, _sum: { netAmount: true } }),
@@ -35,6 +35,7 @@ export class AnalyticsService {
             this.prisma.customer.findMany({ where: { orgId }, orderBy: { outstandingAmount: 'desc' }, take: 5, select: { id: true, name: true, outstandingAmount: true, paymentScore: true } }),
             this.prisma.order.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' }, take: 10, include: { customer: { select: { name: true } } } }),
             this.prisma.inventory.findMany({ where: { orgId }, include: { product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
+            this.prisma.locationRequest.findMany({ where: { orgId, status: 'COMPLETED' }, orderBy: { updatedAt: 'desc' }, take: 5, include: { customer: { select: { name: true } } } }),
         ]);
 
         const lowStockCount = inventory.filter((i: any) => i.quantity <= i.product.minStockLevel).length;
@@ -64,6 +65,7 @@ export class AnalyticsService {
             topProducts: enrichedTopProducts,
             topCustomers,
             recentOrders,
+            recentLocationUpdates,
             alerts: [],
         };
 

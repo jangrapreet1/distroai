@@ -19,11 +19,11 @@ export class AiController {
 
     @Post('query/stream')
     @Sse()
-    async streamQuery(@Req() req: Request, @Body() body: { query: string }) {
+    async streamQuery(@Req() req: Request, @Body() body: { query: string; image?: string }) {
         const orgId = (req.user as any).orgId;
         const userId = (req.user as any).id;
         await this.aiService.checkAndIncrementAIUsage(orgId);
-        return this.aiService.queryStream(orgId, userId, body.query);
+        return this.aiService.queryStream(orgId, userId, body.query, body.image);
     }
 
     @Post('voice-query')

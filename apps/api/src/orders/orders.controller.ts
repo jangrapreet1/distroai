@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, ReturnOrderDto, DispatchOrderDto, ListOrdersQueryDto } from './dto/orders.dto';
+import { CreateOrderDto, UpdateDraftOrderDto, ReturnOrderDto, DispatchOrderDto, ListOrdersQueryDto } from './dto/orders.dto';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -14,6 +14,7 @@ export class OrdersController {
     @Get() findAll(@CurrentUser() u: JwtPayload, @Query() q: ListOrdersQueryDto) { return this.orders.findAll(u.orgId, q); }
     @Post() create(@CurrentUser() u: JwtPayload, @Body() dto: CreateOrderDto) { return this.orders.create(u.orgId, dto, u.sub); }
     @Get(':id') findOne(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.findOne(u.orgId, id); }
+    @Patch(':id') updateDraft(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: UpdateDraftOrderDto) { return this.orders.updateDraft(u.orgId, id, dto); }
     @Post(':id/confirm') confirm(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.confirm(u.orgId, id, u.sub); }
     @Post(':id/pack') pack(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.pack(u.orgId, id, u.sub); }
     @Post(':id/dispatch') dispatch(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: DispatchOrderDto) { return this.orders.dispatch(u.orgId, id, dto, u.sub); }

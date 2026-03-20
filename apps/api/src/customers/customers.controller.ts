@@ -38,6 +38,16 @@ export class CustomersController {
     @Get(':id/payments')
     getPayments(@CurrentUser() user: JwtPayload, @Param('id') id: string) { return this.customers.getPayments(user.orgId, id); }
 
+    @Get(':id/activity')
+    getActivity(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Query('page') page = 1, @Query('limit') limit = 20) {
+        return this.customers.getActivity(user.orgId, id, +page, +limit);
+    }
+
     @Get(':id/credit-score')
     getCreditScore(@CurrentUser() user: JwtPayload, @Param('id') id: string) { return this.customers.getCreditScore(user.orgId, id); }
+
+    @Post(':id/location-request')
+    createLocationRequest(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+        return this.customers.createLocationRequest(user.orgId, id);
+    }
 }

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Package, Warehouse, AlertTriangle, Clock, Search, List, Grid, Plus, ArrowRightLeft, ArrowUpRight, ArrowDownRight, ArrowRight, X } from "lucide-react";
+import { Package, Warehouse, AlertTriangle, Clock, Search, List, Grid, Plus, ArrowRightLeft, ArrowUpRight, ArrowDownRight, ArrowRight, X, Filter, FileText, Upload, SlidersHorizontal, ArrowLeft, MoreHorizontal, FileDown, Eye, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { useProducts, useInventoryValuation, useAdjustInventory, useTransferInventory, useInventoryTransactions, useCreateProduct, useWarehouses, useUploadFile } from "@/hooks/api-hooks";
-import { formatDate } from "@/lib/utils";
+import { formatDate, getPrimaryImageUrl } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
@@ -346,8 +346,8 @@ export default function InventoryPage() {
                                 return (
                                     <Link key={p.id as string} href={`/inventory/products/${p.id}`} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4 hover:border-[var(--border-accent)] transition group flex flex-col h-full">
                                         <div className="flex gap-3 mb-3">
-                                            {p.imageUrl ? (
-                                                <img src={p.imageUrl as string} alt={p.name as string} className="w-12 h-12 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
+                                            {getPrimaryImageUrl(p.imageUrl) ? (
+                                                <img src={getPrimaryImageUrl(p.imageUrl)} alt={p.name as string} className="w-12 h-12 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
                                             ) : (
                                                 <div className="w-12 h-12 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={20} /></div>
                                             )}
@@ -390,8 +390,8 @@ export default function InventoryPage() {
                                     {displayProducts.map((p: Record<string, unknown>) => (
                                         <tr key={p.id as string} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
                                             <td className="p-4 font-medium flex items-center gap-3">
-                                                {p.imageUrl ? (
-                                                    <img src={p.imageUrl as string} alt={p.name as string} className="w-8 h-8 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
+                                                {getPrimaryImageUrl(p.imageUrl) ? (
+                                                    <img src={getPrimaryImageUrl(p.imageUrl)} alt={p.name as string} className="w-8 h-8 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
                                                 ) : (
                                                     <div className="w-8 h-8 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={14} /></div>
                                                 )}

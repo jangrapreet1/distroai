@@ -232,21 +232,27 @@ export default function InvoiceDetailPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {(Array.isArray(items) ? items : []).map((item: Record<string, unknown>, i: number) => (
-                            <tr key={i} className="border-b border-[var(--border)]">
-                                <td className="p-4">
-                                    <p className="font-medium">{String((item.product as Record<string, unknown>)?.name ?? item.productId ?? "")}</p>
-                                    {((item.product as Record<string, unknown>)?.sku as string) && <p className="text-xs text-[var(--text-muted)]">SKU: {String((item.product as Record<string, unknown>).sku)}</p>}
-                                </td>
-                                <td className="p-4 text-center" style={{ fontFamily: "var(--font-mono)" }}>{item.quantity as number} {item.unit as string}</td>
-                                <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((item.price as number) ?? 0)}</td>
-                                <td className="p-4 text-right text-[var(--text-muted)]" style={{ fontFamily: "var(--font-mono)" }}>
-                                    {formatINR((item.taxAmount as number) ?? 0)}
-                                    <span className="text-[10px] ml-1">({(item.taxRate as number) ?? 0}%)</span>
-                                </td>
-                                <td className="p-4 text-right font-semibold" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((item.totalAmount as number) ?? 0)}</td>
-                            </tr>
-                        ))}
+                        {(Array.isArray(items) ? items : []).map((item: Record<string, unknown>, i: number) => {
+                            const taxAmt = ((item.cgstAmount as number) ?? 0) + ((item.sgstAmount as number) ?? 0) + ((item.igstAmount as number) ?? 0);
+                            return (
+                                <tr key={i} className="border-b border-[var(--border)]">
+                                    <td className="p-4">
+                                        <p className="font-medium">{String((item.product as Record<string, unknown>)?.name ?? item.productId ?? "")}</p>
+                                        {((item.product as Record<string, unknown>)?.sku as string) && <p className="text-xs text-[var(--text-muted)]">SKU: {String((item.product as Record<string, unknown>).sku)}</p>}
+                                    </td>
+                                    <td className="p-4 text-center" style={{ fontFamily: "var(--font-mono)" }}>{item.quantity as number} {item.unit as string}</td>
+                                    <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>
+                                        {formatINR((item.price as number) ?? 0)}
+                                        {((item.discount as number) ?? 0) > 0 && <span className="block text-[10px] text-[var(--green-bright)]">- {formatINR(item.discount as number)}</span>}
+                                    </td>
+                                    <td className="p-4 text-right text-[var(--text-muted)]" style={{ fontFamily: "var(--font-mono)" }}>
+                                        {formatINR(taxAmt)}
+                                        <span className="text-[10px] ml-1">({(item.gstRate as number) ?? 0}%)</span>
+                                    </td>
+                                    <td className="p-4 text-right font-semibold" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((item.totalAmount as number) ?? 0)}</td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
                 {/* Totals */}

@@ -15,6 +15,9 @@ import { createGetInventoryTool } from './tools/get-inventory';
 import { createGetPaymentsTool } from './tools/get-payments';
 import { createGetForecastTool, createGetCustomerTool, createGetSalesmanTool } from './tools/get-forecast-customer-salesman';
 import { createGetSuppliersTool, createRunReportTool } from './tools/get-suppliers-report';
+import { createGetProductDetailsTool } from './tools/product-actions';
+import { createCreateOrderTool, createCancelOrderTool } from './tools/order-actions';
+import { createUpdatePaymentTool, createGetCustomerBalanceTool } from './tools/finance-actions';
 import OpenAI from 'openai';
 import * as fs from 'fs';
 import { v4 as uuid } from 'uuid';
@@ -73,7 +76,7 @@ export class AiService {
         }
     }
 
-    private buildTools(orgId: string) {
+    private buildTools(orgId: string, userId?: string) {
         return [
             createQuerySalesTool(orgId, this.prisma),
             createGetInventoryTool(orgId, this.prisma),
@@ -83,6 +86,12 @@ export class AiService {
             createGetSalesmanTool(orgId, this.prisma),
             createGetSuppliersTool(orgId, this.prisma),
             createRunReportTool(orgId, this.prisma),
+            // Phase 15: Action-Oriented Tools
+            createGetProductDetailsTool(orgId, this.prisma),
+            createCreateOrderTool(orgId, userId || 'system', this.prisma),
+            createCancelOrderTool(orgId, userId || 'system', this.prisma),
+            createUpdatePaymentTool(orgId, userId || 'system', this.prisma),
+            createGetCustomerBalanceTool(orgId, this.prisma),
         ];
     }
 
@@ -119,7 +128,7 @@ Current date: ${new Date().toISOString().split('T')[0]}`],
             ["placeholder", "{agent_scratchpad}"],
         ]);
 
-        const tools = this.buildTools(orgId);
+        const tools = this.buildTools(orgId, userId);
         const agent = createToolCallingAgent({ llm, tools, prompt });
         const agentExecutor = new AgentExecutor({ agent, tools });
 
@@ -151,7 +160,7 @@ Current date: ${new Date().toISOString().split('T')[0]}`],
         }
     }
 
-    async * queryStream(orgId: string, userId: string, userQuery: string): AsyncIterable<{ data: string }> {
+    async * queryStream(orgId: string, userId: string, userQuery: string, imageBase64?: string): AsyncIterable<{ data: string }> {
         if (!llm) {
             yield { data: JSON.stringify({ token: "AI is not configured. Please add OPENAI_API_KEY.", done: true }) };
             return;
@@ -161,9 +170,40 @@ Current date: ${new Date().toISOString().split('T')[0]}`],
         const orgName = org?.name || 'your organization';
         const detectedLang = detectLanguage(userQuery);
 
+        // If image provided, first use vision to describe/identify the product
+        let imageContext = '';
+        if (imageBase64 && this.openaiClient) {
+            try {
+                const visionResponse = await this.openaiClient.chat.completions.create({
+                    model: 'gpt-4o',
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: 'Identify this product. Return the brand name, product name, variant/size, and any SKU/barcode visible. Be concise.' },
+                            { type: 'image_url', image_url: { url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` } },
+                        ],
+                    }],
+                    max_tokens: 300,
+                });
+                imageContext = `\n\n[The user uploaded a product image. Vision analysis: ${visionResponse.choices[0]?.message?.content || 'Could not identify'}]`;
+            } catch (err: any) {
+                this.logger.error('Vision analysis failed', err);
+                imageContext = '\n\n[User uploaded an image but vision analysis failed]';
+            }
+        }
+
         const prompt = ChatPromptTemplate.fromMessages([
             ["system", `You are DistroAI, an intelligent business assistant for ${orgName}, an Indian distribution business.
 You have access to their complete business data through tools. Always use tools to get real data before answering.
+
+You can also TAKE ACTIONS:
+- Create new orders for customers
+- Cancel existing orders
+- Record incoming payments
+- Look up product details (MRP, stock, price)
+- Check customer outstanding balances
+
+When the user asks you to perform an action, confirm what you did clearly.
 
 Language: Respond in ${detectedLang === 'hi' ? 'Hindi (Devanagari script mixed with business terms in English)' : 'English'}.
 
@@ -184,13 +224,13 @@ Current date: ${new Date().toISOString().split('T')[0]}`],
             ["placeholder", "{agent_scratchpad}"],
         ]);
 
-        const tools = this.buildTools(orgId);
+        const tools = this.buildTools(orgId, userId);
         const agent = createToolCallingAgent({ llm, tools, prompt });
         const agentExecutor = new AgentExecutor({ agent, tools });
 
         try {
             // Stream tokens
-            const stream = await agentExecutor.streamEvents({ input: userQuery }, { version: "v2" });
+            const stream = await agentExecutor.streamEvents({ input: userQuery + imageContext }, { version: "v2" });
 
             let finalOutput = "";
 

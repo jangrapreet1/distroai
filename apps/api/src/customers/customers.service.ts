@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
     CreateCustomerDto, UpdateCustomerDto,
@@ -7,7 +8,9 @@ import {
 
 @Injectable()
 export class CustomersService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+    ) { }
 
     async findAll(orgId: string, query: ListCustomersQueryDto) {
         const { page = 1, limit = 20, search, type, tier, salesmanId, routeId } = query;
@@ -37,7 +40,8 @@ export class CustomersService {
     }
 
     async create(orgId: string, dto: CreateCustomerDto) {
-        return this.prisma.customer.create({ data: { orgId, ...dto, type: dto.type as any } });
+        const customer = await this.prisma.customer.create({ data: { orgId, ...dto, type: dto.type as any } });
+        return customer;
     }
 
     async findOne(orgId: string, id: string) {
@@ -100,6 +104,118 @@ export class CustomersService {
         if (!customer) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Customer not found' });
         const payments = await this.prisma.payment.findMany({ where: { customerId: id, orgId }, orderBy: { createdAt: 'desc' } });
         return { customer: { id: customer.id, name: customer.name, outstandingAmount: customer.outstandingAmount }, payments };
+    }
+
+    async getActivity(orgId: string, id: string, page = 1, limit = 20) {
+        const customer = await this.prisma.customer.findFirst({ where: { id, orgId } });
+        if (!customer) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Customer not found' });
+
+        const skip = (page - 1) * limit;
+        const fetchLimit = skip + limit;
+
+        const [orders, payments, locationRequests] = await Promise.all([
+            this.prisma.order.findMany({ where: { customerId: id, orgId }, orderBy: { createdAt: 'desc' }, take: fetchLimit }),
+            this.prisma.payment.findMany({ where: { customerId: id, orgId }, orderBy: { createdAt: 'desc' }, take: fetchLimit }),
+            this.prisma.locationRequest.findMany({ where: { customerId: id, orgId, status: 'COMPLETED' }, orderBy: { updatedAt: 'desc' }, take: fetchLimit })
+        ]);
+
+        const activities: any[] = [
+            ...orders.map(o => ({
+                id: o.id,
+                type: o.status === 'RETURNED' ? 'ORDER_RETURNED' : o.status === 'DELIVERED' ? 'ORDER_DELIVERED' : 'ORDER_PLACED',
+                title: o.status === 'RETURNED' ? `Order Returned` : o.status === 'DELIVERED' ? `Order Delivered` : `Order Placed`,
+                description: `Order ${o.orderNumber}`,
+                amount: o.netAmount,
+                status: o.status,
+                createdAt: o.createdAt
+            })),
+            ...payments.map(p => ({
+                id: p.id,
+                type: 'PAYMENT_RECEIVED',
+                title: 'Payment Received',
+                description: `Received via ${p.method}`,
+                amount: p.amount,
+                status: p.status,
+                createdAt: p.createdAt
+            })),
+            ...locationRequests.map(lr => ({
+                id: lr.id,
+                type: 'LOCATION_SHARED',
+                title: 'Location Shared',
+                description: 'Customer shared their GPS coordinates',
+                amount: null,
+                status: lr.status,
+                createdAt: lr.updatedAt
+            }))
+        ];
+
+        activities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        const paginated = activities.slice(skip, skip + limit);
+
+        return {
+            data: paginated,
+            meta: { page, limit, hasMore: activities.length > skip + limit }
+        };
+    }
+
+    async createLocationRequest(orgId: string, customerId: string) {
+        const customer = await this.prisma.customer.findFirst({ where: { id: customerId, orgId } });
+        if (!customer) throw new NotFoundException('Customer not found');
+
+        const token = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours from now
+
+        const request = await this.prisma.locationRequest.create({
+            data: {
+                orgId,
+                customerId,
+                token,
+                expiresAt,
+            }
+        });
+
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        return {
+            url: `${baseUrl}/locate/${token}`,
+            expiresAt,
+        };
+    }
+
+    async publicGetLocationRequest(token: string) {
+        const request = await this.prisma.locationRequest.findUnique({
+            where: { token },
+            include: { customer: { select: { name: true, organization: { select: { name: true } } } } }
+        });
+
+        if (!request) return { valid: false, reason: 'Invalid link' };
+        if (request.status === 'COMPLETED') return { valid: false, reason: 'Location already shared' };
+        if (new Date() > request.expiresAt || request.status === 'EXPIRED') return { valid: false, reason: 'Link expired' };
+
+        return {
+            valid: true,
+            orgName: request.customer.organization.name,
+            customerName: request.customer.name,
+        };
+    }
+
+    async publicSubmitLocation(token: string, lat: number, lng: number) {
+        const request = await this.prisma.locationRequest.findUnique({ where: { token } });
+        if (!request || request.status !== 'PENDING' || new Date() > request.expiresAt) {
+            throw new Error('Invalid or expired request');
+        }
+
+        await this.prisma.$transaction([
+            this.prisma.customer.update({
+                where: { id: request.customerId },
+                data: { latitude: lat, longitude: lng }
+            }),
+            this.prisma.locationRequest.update({
+                where: { id: request.id },
+                data: { status: 'COMPLETED' }
+            })
+        ]);
+
+        return { success: true };
     }
 
     async getCreditScore(orgId: string, id: string) {

@@ -25,6 +25,14 @@ export function useOrderAction() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+export function useUpdateDraftOrder() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => apiClient.patch(`/api/v1/orders/${id}`, data).then((r) => r.data),
+        onSuccess: (_, v) => { qc.invalidateQueries({ queryKey: ["orders"] }); qc.invalidateQueries({ queryKey: ["orders", v.id] }); toast.success("Order updated"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
 
 // ===== INVOICES =====
 export function useInvoices(filters: Record<string, string | number | undefined>) {
@@ -247,5 +255,78 @@ export function useSendInvoiceWhatsApp() {
         mutationFn: (id: string) => apiClient.post(`/api/v1/invoices/${id}/send`, { channels: ["whatsapp"] }).then((r) => r.data),
         onSuccess: () => toast.success("Invoice sent via WhatsApp"),
         onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
+export function useCustomerActivity(customerId: string, page = 1, limit = 20) {
+    return useQuery({
+        queryKey: ["customers", "activity", customerId, page, limit],
+        queryFn: () => apiClient.get(`/api/v1/customers/${customerId}/activity?page=${page}&limit=${limit}`).then((r) => r.data),
+    });
+}
+export function useCreateLocationRequest(customerId: string) {
+    return useMutation({
+        mutationFn: () => apiClient.post(`/api/v1/customers/${customerId}/location-request`).then(r => r.data),
+    });
+}
+
+export function usePublicLocationRequest(token: string) {
+    return useQuery({
+        queryKey: ["public", "location-request", token],
+        queryFn: () => apiClient.get(`/api/v1/public/location-request/${token}`).then(r => r.data),
+        enabled: !!token,
+        retry: false,
+    });
+}
+
+export function useSubmitPublicLocation(token: string) {
+    return useMutation({
+        mutationFn: (data: { lat: number; lng: number }) => apiClient.post(`/api/v1/public/location-request/${token}`, data).then(r => r.data),
+    });
+}
+
+// ── Team Management ──
+export function useTeamOverview() {
+    return useQuery({
+        queryKey: ["users", "team"],
+        queryFn: () => apiClient.get("/api/v1/users/team").then(r => r.data),
+    });
+}
+
+export function useCreateTeamMember() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: { firstName: string; lastName?: string; phone?: string; email: string; role: string }) =>
+            apiClient.post("/api/v1/users", data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    });
+}
+
+export function useToggleUserActive() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (userId: string) => apiClient.patch(`/api/v1/users/${userId}/toggle-active`).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    });
+}
+
+export function useUpdateUserRole() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+            apiClient.patch(`/api/v1/users/${userId}/role`, { role }).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    });
+}
+
+// ── Reports ──
+export function useExportCaGst() {
+    return useMutation({
+        mutationFn: async ({ month, year }: { month: number; year: number }) => {
+            const response = await apiClient.get(`/api/v1/reports/ca-export?month=${month}&year=${year}`, {
+                responseType: 'blob', // crucial for file downloads
+            });
+            return response.data;
+        }
     });
 }

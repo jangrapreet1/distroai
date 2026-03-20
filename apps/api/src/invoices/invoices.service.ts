@@ -6,6 +6,7 @@ import { QueueService } from '../queue/queue.service';
 import { RazorpayService } from '../payments/razorpay.service';
 import { EInvoiceService } from './einvoice.service';
 import { RedisService } from '../common/services/redis.service';
+
 class InvoiceItemDto {
     @IsString() productId!: string;
     @IsNumber() @Min(1) quantity!: number;
@@ -21,6 +22,7 @@ export class CreateInvoiceDto {
     @IsOptional() @IsDateString() dueDate?: string;
     @IsArray() @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items!: InvoiceItemDto[];
     @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsString() orderId?: string;
 }
 
 export class SendInvoiceDto {
@@ -128,6 +130,14 @@ export class InvoicesService {
                 include: { items: true, customer: { select: { name: true } } },
             });
             await tx.customer.update({ where: { id: dto.customerId }, data: { outstandingAmount: { increment: totalAmount } } });
+
+            if (dto.orderId) {
+                await tx.order.update({
+                    where: { id: dto.orderId },
+                    data: { invoiceId: inv.id }
+                });
+            }
+
             return inv;
         });
 

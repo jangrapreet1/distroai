@@ -7,10 +7,14 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PLAN_LIMITS, PlanName } from '../common/config/plan-limits.config';
 import { CreateUserDto, UpdateUserDto, UpdateRoleDto, ListUsersQueryDto } from './dto/users.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class UsersService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly notifications: NotificationsService,
+    ) { }
 
     async findAll(orgId: string, query: ListUsersQueryDto) {
         const { page = 1, limit = 20, role, isActive } = query;
@@ -48,8 +52,61 @@ export class UsersService {
             select: { id: true, email: true, firstName: true, lastName: true, phone: true, role: true, createdAt: true },
         });
 
-        // TODO: send onboarding SMS/WhatsApp in Phase 4
-        return user;
+        // Trigger WhatsApp notification with credentials
+        try {
+            await this.notifications.notify(orgId, {
+                type: 'USER_INVITED',
+                orgId,
+                userId: user.id,
+                tempPassword,
+            });
+        } catch { /* non-critical */ }
+
+        return { ...user, tempPassword };
+    }
+
+    async toggleActive(orgId: string, id: string, currentUserId: string) {
+        if (id === currentUserId) throw new BadRequestException({ code: 'CONFLICT', message: 'Cannot toggle your own status' });
+        const user = await this.prisma.user.findFirst({ where: { id, orgId } });
+        if (!user) throw new NotFoundException({ code: 'NOT_FOUND', message: 'User not found' });
+        if (user.role === 'OWNER') throw new BadRequestException({ code: 'FORBIDDEN', message: 'Cannot deactivate the owner' });
+
+        const newStatus = !user.isActive;
+
+        await this.prisma.$transaction(async (tx: any) => {
+            await tx.user.update({ where: { id }, data: { isActive: newStatus } });
+            // If deactivating, kill all sessions instantly
+            if (!newStatus) {
+                await tx.refreshToken.deleteMany({ where: { userId: id } });
+            }
+        });
+
+        return { id, isActive: newStatus };
+    }
+
+    async getTeamOverview(orgId: string) {
+        const members = await this.prisma.user.findMany({
+            where: { orgId },
+            select: {
+                id: true, email: true, firstName: true, lastName: true,
+                phone: true, role: true, isActive: true, lastLoginAt: true, createdAt: true,
+                salesmanProfile: {
+                    select: {
+                        id: true, employeeCode: true, territory: true,
+                        routes: { select: { id: true, name: true, day: true }, where: { isActive: true } },
+                    },
+                },
+            },
+            orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+        });
+
+        const counts = {
+            total: members.length,
+            active: members.filter(m => m.isActive).length,
+            inactive: members.filter(m => !m.isActive).length,
+        };
+
+        return { members, counts };
     }
 
     async findOne(orgId: string, id: string) {

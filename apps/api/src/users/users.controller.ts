@@ -16,6 +16,12 @@ export class UsersController {
     constructor(private readonly users: UsersService) { }
 
     @Roles('OWNER', 'ADMIN')
+    @Get('team')
+    getTeamOverview(@CurrentUser() user: JwtPayload) {
+        return this.users.getTeamOverview(user.orgId);
+    }
+
+    @Roles('OWNER', 'ADMIN')
     @Get()
     findAll(@CurrentUser() user: JwtPayload, @Query() query: ListUsersQueryDto) {
         return this.users.findAll(user.orgId, query);
@@ -47,5 +53,11 @@ export class UsersController {
     @Patch(':id/role')
     updateRole(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: UpdateRoleDto) {
         return this.users.updateRole(user.orgId, id, dto, user.sub);
+    }
+
+    @Roles('OWNER', 'ADMIN')
+    @Patch(':id/toggle-active')
+    toggleActive(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+        return this.users.toggleActive(user.orgId, id, user.sub);
     }
 }

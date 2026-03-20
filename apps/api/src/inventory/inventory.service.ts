@@ -4,7 +4,9 @@ import { AdjustInventoryDto, TransferInventoryDto, ListTransactionsQueryDto, Inv
 
 @Injectable()
 export class InventoryService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+    ) { }
 
     async findAll(orgId: string, query: InventoryQueryDto) {
         const inventories = await this.prisma.inventory.findMany({
@@ -53,7 +55,7 @@ export class InventoryService {
         const newQty = inventory.quantity + dto.quantity;
         if (newQty < 0) throw new BadRequestException({ code: 'CONFLICT', message: 'Adjustment would result in negative stock' });
 
-        return this.prisma.$transaction([
+        const tx = await this.prisma.$transaction([
             this.prisma.inventory.update({
                 where: { id: inventory.id },
                 data: { quantity: newQty },
@@ -68,6 +70,8 @@ export class InventoryService {
                 },
             }),
         ]);
+
+        return tx;
     }
 
     async transfer(orgId: string, dto: TransferInventoryDto, userId: string) {

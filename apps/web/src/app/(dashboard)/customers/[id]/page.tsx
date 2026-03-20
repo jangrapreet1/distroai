@@ -1,10 +1,17 @@
 "use client";
 
-import { use } from "react";
-import { useCustomer, useCustomerCreditScore } from "@/hooks/api-hooks";
+import { use, useState } from "react";
+import { useCustomer, useCustomerCreditScore, useCustomerActivity, useCreateLocationRequest } from "@/hooks/api-hooks";
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, MapPin, TrendingUp, CreditCard, ShieldCheck, AlertTriangle, Clock, Package, Send, MessageCircle } from "lucide-react";
 import { formatDate, buildWhatsAppInvoiceLink } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
+import dynamic from "next/dynamic";
+
+const CustomerMap = dynamic(() => import("@/components/ui/customer-map"), {
+    ssr: false,
+    loading: () => <div className="h-64 w-full bg-[var(--bg-secondary)] animate-pulse rounded-[var(--radius-lg)]" />
+});
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
@@ -31,6 +38,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     const { id } = use(params);
     const { data: customerData, isLoading } = useCustomer(id);
     const { data: creditData } = useCustomerCreditScore(id);
+    const { data: activityData, isLoading: activityLoading } = useCustomerActivity(id, 1, 20);
+
+    const activities = activityData?.data ?? [];
 
     const customer = customerData?.customer;
     const stats = customerData?.stats;
@@ -39,10 +49,28 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     const paymentSummary = customerData?.paymentSummary;
     const creditScore = creditData?.data ?? creditData;
 
+    const [isRequestingLocation, setIsRequestingLocation] = useState(false);
+    const { mutate: requestLocation } = useCreateLocationRequest(id);
+
     if (isLoading) return <div className="p-8 text-center"><div className="w-8 h-8 border-4 border-[var(--gold)] border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
     if (!customer) return <div className="p-8 text-center text-red-500">Customer not found</div>;
 
     const tierColors: Record<string, string> = { GOLD: "var(--gold)", SILVER: "var(--text-muted)", BRONZE: "var(--orange)" };
+
+    const handleRequestLocation = () => {
+        if (!customer?.phone) return;
+        setIsRequestingLocation(true);
+        requestLocation(undefined, {
+            onSuccess: (data) => {
+                const message = encodeURIComponent(`Hi ${customer.name}, to ensure your deliveries are always fast and accurate, please click this link to share your exact shop location: ${data.url}`);
+                window.open(`https://wa.me/${customer.phone?.replace(/[^0-9]/g, "")}?text=${message}`, '_blank');
+                setIsRequestingLocation(false);
+            },
+            onError: () => {
+                setIsRequestingLocation(false);
+            }
+        });
+    };
 
     return (
         <div className="space-y-6">
@@ -51,18 +79,28 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             </Link>
 
             {/* Quick Actions Bar */}
-            {customer.phone && (
-                <div className="flex flex-wrap gap-2">
-                    <a href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 transition">
-                        <MessageCircle size={14} /> WhatsApp
-                    </a>
-                    <a href={`tel:${customer.phone}`}
-                        className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition">
-                        <Phone size={14} /> Call
-                    </a>
-                </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+                {customer.phone && (
+                    <>
+                        <a href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 transition">
+                            <MessageCircle size={14} /> WhatsApp
+                        </a>
+                        <a href={`tel:${customer.phone}`}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition">
+                            <Phone size={14} /> Call
+                        </a>
+                        <button
+                            onClick={handleRequestLocation}
+                            disabled={isRequestingLocation}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--gold)]/30 transition disabled:opacity-50"
+                        >
+                            <MapPin size={14} className="text-[var(--gold)]" />
+                            {isRequestingLocation ? "Generating..." : "Request Location"}
+                        </button>
+                    </>
+                )}
+            </div>
 
             <div className="flex flex-col lg:flex-row gap-6">
                 {/* LEFT SIDEBAR — Customer Info + Payment Score */}
@@ -129,118 +167,192 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                 </div>
 
-                {/* RIGHT MAIN CONTENT */}
-                <div className="w-full lg:w-2/3 space-y-6">
-                    {/* Payment Ageing */}
-                    {paymentSummary && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            {[
-                                { label: "Current", amount: paymentSummary.current, color: "var(--green-bright)" },
-                                { label: "30+ Days", amount: paymentSummary.overdue30, color: "var(--warning)" },
-                                { label: "60+ Days", amount: paymentSummary.overdue60, color: "var(--orange)" },
-                                { label: "90+ Days", amount: paymentSummary.overdue90, color: "var(--red)" },
-                            ].map((a) => (
-                                <div key={a.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4 text-center">
-                                    <p className="text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: a.color }}>{a.label}</p>
-                                    <p className="text-lg font-bold" style={{ fontFamily: "var(--font-mono)", color: a.amount > 0 ? a.color : "var(--text-muted)" }}>{formatINR(a.amount ?? 0)}</p>
+                {/* GPS Location Map */}
+                {customer.latitude && customer.longitude && (
+                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
+                        <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-4 font-semibold flex items-center justify-between">
+                            GPS Location
+                            <span className="text-[10px] bg-[var(--green-bright)]/10 text-[var(--green-bright)] px-2 py-0.5 rounded-full capitalize flex items-center gap-1"><MapPin size={10} /> Verified</span>
+                        </h3>
+                        <CustomerMap latitude={customer.latitude} longitude={customer.longitude} customerName={customer.name} />
+                    </div>
+                )}
+            </div>
+
+            {/* RIGHT MAIN CONTENT */}
+            <div className="w-full lg:w-2/3 space-y-6">
+                {/* Payment Ageing */}
+                {paymentSummary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {[
+                            { label: "Current", amount: paymentSummary.current, color: "var(--green-bright)" },
+                            { label: "30+ Days", amount: paymentSummary.overdue30, color: "var(--warning)" },
+                            { label: "60+ Days", amount: paymentSummary.overdue60, color: "var(--orange)" },
+                            { label: "90+ Days", amount: paymentSummary.overdue90, color: "var(--red)" },
+                        ].map((a) => (
+                            <div key={a.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4 text-center">
+                                <p className="text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: a.color }}>{a.label}</p>
+                                <p className="text-lg font-bold" style={{ fontFamily: "var(--font-mono)", color: a.amount > 0 ? a.color : "var(--text-muted)" }}>{formatINR(a.amount ?? 0)}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Recent Orders */}
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
+                    <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
+                        <h2 className="font-semibold" style={{ fontFamily: "var(--font-playfair)" }}>Recent Orders</h2>
+                        <Link href={`/orders/new?customer=${customer.id}`} className="px-3 py-1.5 bg-[var(--gold)] text-[var(--bg-primary)] text-xs font-semibold rounded hover:bg-[var(--gold-light)] transition">
+                            New Order
+                        </Link>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
+                                    <th className="text-left p-4">Order #</th>
+                                    <th className="text-left p-4">Date</th>
+                                    <th className="text-right p-4">Amount</th>
+                                    <th className="text-center p-4">Status</th>
+                                    <th className="text-right p-4">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {recentOrders.length === 0 ? (
+                                    <tr><td colSpan={5} className="p-8 text-center text-[var(--text-muted)]">
+                                        <Package size={32} className="mx-auto mb-2 opacity-30" />No orders yet
+                                    </td></tr>
+                                ) : (
+                                    recentOrders.map((order: any) => (
+                                        <tr key={order.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
+                                            <td className="p-4 font-medium"><Link href={`/orders/${order.id}`} className="text-[var(--gold)] hover:underline">{order.orderNumber}</Link></td>
+                                            <td className="p-4 text-[var(--text-secondary)]">{formatDate(order.createdAt)}</td>
+                                            <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.netAmount)}</td>
+                                            <td className="p-4 text-center">
+                                                <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase rounded-full tracking-wider ${order.status === 'DELIVERED' ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)]' :
+                                                    order.status === 'CANCELLED' ? 'bg-red-500/10 text-red-500' :
+                                                        order.status === 'DRAFT' ? 'bg-[var(--text-muted)]/10 text-[var(--text-secondary)]' :
+                                                            'bg-[var(--gold)]/10 text-[var(--gold)]'
+                                                    }`}>{order.status}</span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                {order.invoiceId && customer.phone && (
+                                                    <a href={buildWhatsAppInvoiceLink({
+                                                        customerPhone: customer.phone,
+                                                        customerName: customer.name,
+                                                        invoiceNumber: order.orderNumber,
+                                                        invoiceAmount: order.netAmount,
+                                                        invoiceId: order.invoiceId,
+                                                    })} target="_blank" rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1 text-xs text-[var(--whatsapp)] hover:underline transition">
+                                                        <Send size={12} /> Send Invoice
+                                                    </a>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Recent Payments */}
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
+                    <div className="p-4 border-b border-[var(--border)]">
+                        <h2 className="font-semibold" style={{ fontFamily: "var(--font-playfair)" }}>Recent Payments</h2>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
+                                    <th className="text-left p-4">Date</th>
+                                    <th className="text-left p-4">Method</th>
+                                    <th className="text-right p-4">Amount</th>
+                                    <th className="text-left p-4">Reference</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {recentPayments.length === 0 ? (
+                                    <tr><td colSpan={4} className="p-8 text-center text-[var(--text-muted)]">
+                                        <CreditCard size={32} className="mx-auto mb-2 opacity-30" />No payments recorded
+                                    </td></tr>
+                                ) : (
+                                    recentPayments.map((p: any) => (
+                                        <tr key={p.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
+                                            <td className="p-4 text-[var(--text-secondary)]">{formatDate(p.paidAt ?? p.createdAt)}</td>
+                                            <td className="p-4"><span className="px-2 py-0.5 rounded-full text-xs bg-[var(--gold)]/15 text-[var(--gold)]">{p.method?.replace("_", " ")}</span></td>
+                                            <td className="p-4 text-right text-[var(--green-bright)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(p.amount ?? 0)}</td>
+                                            <td className="p-4 text-[var(--text-muted)]">{p.referenceNumber ?? "—"}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* Customer Activity Feed */}
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 mt-6">
+                <h2 className="font-semibold mb-6 flex items-center gap-2" style={{ fontFamily: "var(--font-playfair)" }}>
+                    <Clock className="text-[var(--gold)]" size={18} />
+                    Activity Timeline
+                </h2>
+
+                <div className="space-y-6">
+                    {activityLoading ? (
+                        <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading activity...</p>
+                    ) : activities.length === 0 ? (
+                        <div className="text-center py-8 text-[var(--text-muted)]">
+                            <Clock size={32} className="mx-auto mb-3 opacity-30" />
+                            <p className="text-sm">No recent activity</p>
+                        </div>
+                    ) : (
+                        <div className="relative before:absolute before:inset-0 before:ml-[1.125rem] before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-[var(--border)] before:to-transparent">
+                            {activities.map((act: any) => (
+                                <div key={act.id} className="relative flex items-start gap-4 mb-6 last:mb-0">
+                                    <div className="relative z-10 flex shrink-0 items-center justify-center w-9 h-9 rounded-full border bg-[var(--bg-card)] shadow-sm font-semibold 
+                                            text-sm">
+                                        {act.type.includes('ORDER') ? (
+                                            <Package size={16} className={act.type === 'ORDER_RETURNED' ? 'text-[var(--orange)]' : 'text-[var(--gold)]'} />
+                                        ) : act.type === 'LOCATION_SHARED' ? (
+                                            <MapPin size={16} className="text-[var(--whatsapp)]" />
+                                        ) : (
+                                            <CreditCard size={16} className="text-[var(--green-bright)]" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 bg-[var(--bg-secondary)]/30 rounded-[var(--radius-md)] p-4 border border-[var(--border)]/50">
+                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                                            <h4 className="font-medium text-[var(--text-primary)] text-sm">{act.title}</h4>
+                                            <time className="text-xs text-[var(--text-muted)] font-medium">
+                                                {formatDistanceToNow(new Date(act.createdAt), { addSuffix: true })}
+                                            </time>
+                                        </div>
+                                        <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-2">
+                                            <p className="text-sm text-[var(--text-secondary)]">{act.description}</p>
+                                            {(act.amount !== null && act.amount > 0) ? (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-primary)]/50 border border-[var(--border)]">
+                                                        {act.status}
+                                                    </span>
+                                                    <span className={`text-sm font-bold ${act.type.includes('PAYMENT') ? 'text-[var(--green-bright)]' : ''}`} style={{ fontFamily: "var(--font-mono)" }}>
+                                                        {act.type.includes('PAYMENT') ? '+' : ''}{formatINR(act.amount)}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--green-bright)]/10 text-[var(--green-bright)] border border-[var(--green-bright)]/20">
+                                                        {act.status}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     )}
-
-                    {/* Recent Orders */}
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
-                        <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
-                            <h2 className="font-semibold" style={{ fontFamily: "var(--font-playfair)" }}>Recent Orders</h2>
-                            <Link href={`/orders/new?customer=${customer.id}`} className="px-3 py-1.5 bg-[var(--gold)] text-[var(--bg-primary)] text-xs font-semibold rounded hover:bg-[var(--gold-light)] transition">
-                                New Order
-                            </Link>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
-                                        <th className="text-left p-4">Order #</th>
-                                        <th className="text-left p-4">Date</th>
-                                        <th className="text-right p-4">Amount</th>
-                                        <th className="text-center p-4">Status</th>
-                                        <th className="text-right p-4">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {recentOrders.length === 0 ? (
-                                        <tr><td colSpan={5} className="p-8 text-center text-[var(--text-muted)]">
-                                            <Package size={32} className="mx-auto mb-2 opacity-30" />No orders yet
-                                        </td></tr>
-                                    ) : (
-                                        recentOrders.map((order: any) => (
-                                            <tr key={order.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
-                                                <td className="p-4 font-medium"><Link href={`/orders/${order.id}`} className="text-[var(--gold)] hover:underline">{order.orderNumber}</Link></td>
-                                                <td className="p-4 text-[var(--text-secondary)]">{formatDate(order.createdAt)}</td>
-                                                <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.netAmount)}</td>
-                                                <td className="p-4 text-center">
-                                                    <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase rounded-full tracking-wider ${order.status === 'DELIVERED' ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)]' :
-                                                        order.status === 'CANCELLED' ? 'bg-red-500/10 text-red-500' :
-                                                            order.status === 'DRAFT' ? 'bg-[var(--text-muted)]/10 text-[var(--text-secondary)]' :
-                                                                'bg-[var(--gold)]/10 text-[var(--gold)]'
-                                                        }`}>{order.status}</span>
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    {order.invoiceId && customer.phone && (
-                                                        <a href={buildWhatsAppInvoiceLink({
-                                                            customerPhone: customer.phone,
-                                                            customerName: customer.name,
-                                                            invoiceNumber: order.orderNumber,
-                                                            invoiceAmount: order.netAmount,
-                                                            invoiceId: order.invoiceId,
-                                                        })} target="_blank" rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1 text-xs text-[var(--whatsapp)] hover:underline transition">
-                                                            <Send size={12} /> Send Invoice
-                                                        </a>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* Recent Payments */}
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
-                        <div className="p-4 border-b border-[var(--border)]">
-                            <h2 className="font-semibold" style={{ fontFamily: "var(--font-playfair)" }}>Recent Payments</h2>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
-                                        <th className="text-left p-4">Date</th>
-                                        <th className="text-left p-4">Method</th>
-                                        <th className="text-right p-4">Amount</th>
-                                        <th className="text-left p-4">Reference</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {recentPayments.length === 0 ? (
-                                        <tr><td colSpan={4} className="p-8 text-center text-[var(--text-muted)]">
-                                            <CreditCard size={32} className="mx-auto mb-2 opacity-30" />No payments recorded
-                                        </td></tr>
-                                    ) : (
-                                        recentPayments.map((p: any) => (
-                                            <tr key={p.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
-                                                <td className="p-4 text-[var(--text-secondary)]">{formatDate(p.paidAt ?? p.createdAt)}</td>
-                                                <td className="p-4"><span className="px-2 py-0.5 rounded-full text-xs bg-[var(--gold)]/15 text-[var(--gold)]">{p.method?.replace("_", " ")}</span></td>
-                                                <td className="p-4 text-right text-[var(--green-bright)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(p.amount ?? 0)}</td>
-                                                <td className="p-4 text-[var(--text-muted)]">{p.referenceNumber ?? "—"}</td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

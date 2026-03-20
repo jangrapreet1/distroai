@@ -44,3 +44,9 @@ export class ListOrdersQueryDto {
     @ApiPropertyOptional() @IsOptional() @IsNumber() @Type(() => Number) @Min(1) page?: number = 1;
     @ApiPropertyOptional() @IsOptional() @IsNumber() @Type(() => Number) @Min(1) limit?: number = 20;
 }
+
+export class UpdateDraftOrderDto {
+    @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OrderItemDto) items?: OrderItemDto[];
+    @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsDateString() deliveryDate?: string;
+}

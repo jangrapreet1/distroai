@@ -1,9 +1,9 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Package, Truck, MapPin, XCircle, RotateCcw, Clock, Send } from "lucide-react";
-import { useOrder, useOrderAction } from "@/hooks/api-hooks";
+import { ArrowLeft, CheckCircle, Package, Truck, MapPin, XCircle, RotateCcw, Clock, Send, Edit, Plus, Trash2, Search } from "lucide-react";
+import { useOrder, useOrderAction, useUpdateDraftOrder, useProducts } from "@/hooks/api-hooks";
 import { formatDate, formatDateTime, buildWhatsAppInvoiceLink } from "@/lib/utils";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
@@ -21,10 +21,173 @@ const statusFlow: Record<string, { label: string; action: string; icon: React.El
     DELIVERED: [{ label: "Create Return", action: "return", icon: RotateCcw }],
 };
 
+interface EditItem {
+    productId: string;
+    productName: string;
+    quantity: number;
+    unit: string;
+    price: number;
+    discount: number;
+    taxRate: number;
+}
+
+/* ─── Edit Draft Order Modal ─── */
+function EditDraftModal({ order, open, onClose }: { order: any; open: boolean; onClose: () => void }) {
+    const updateDraft = useUpdateDraftOrder();
+    const [items, setItems] = useState<EditItem[]>([]);
+    const [notes, setNotes] = useState("");
+    const [productSearch, setProductSearch] = useState("");
+    const [showPicker, setShowPicker] = useState(false);
+
+    const { data: productsData } = useProducts({ search: productSearch || undefined, limit: 20, isActive: true });
+    const products = productsData?.data?.data ?? productsData?.data ?? [];
+
+    // Initialize state from order on open
+    useState(() => {
+        if (order) {
+            setItems((order.items ?? []).map((item: any) => ({
+                productId: item.productId,
+                productName: item.product?.name ?? item.productId,
+                quantity: item.quantity,
+                unit: item.unit,
+                price: item.price,
+                discount: item.discount ?? 0,
+                taxRate: item.taxRate ?? 0,
+            })));
+            setNotes(order.notes ?? "");
+        }
+    });
+
+    const addProduct = (p: any) => {
+        if (items.some((i) => i.productId === p.id)) return;
+        setItems([...items, {
+            productId: p.id, productName: p.name, quantity: 1,
+            unit: p.unit ?? "Pieces", price: p.sellingPrice ?? 0, discount: 0, taxRate: p.gstRate ?? 0,
+        }]);
+        setShowPicker(false);
+        setProductSearch("");
+    };
+
+    const updateItem = (idx: number, field: keyof EditItem, value: number | string) => {
+        setItems(items.map((it, i) => i === idx ? { ...it, [field]: value } : it));
+    };
+
+    const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
+
+    const subtotal = items.reduce((s, i) => s + i.price * i.quantity - i.discount, 0);
+    const totalDiscount = items.reduce((s, i) => s + i.discount, 0);
+    const totalTax = items.reduce((s, i) => s + ((i.price * i.quantity - i.discount) * i.taxRate / 100), 0);
+    const grandTotal = subtotal + totalTax;
+
+    const handleSave = () => {
+        if (items.length === 0) return;
+        updateDraft.mutate({
+            id: order.id,
+            data: {
+                items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, unit: i.unit, price: i.price, discount: i.discount })),
+                notes: notes || undefined,
+            },
+        }, { onSuccess: () => onClose() });
+    };
+
+    if (!open) return null;
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-card)] z-10">
+                    <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Edit Order {order.orderNumber}</h2>
+                    <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition text-xl">✕</button>
+                </div>
+
+                <div className="p-5 space-y-4">
+                    {/* Items Table */}
+                    <div className="border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-[var(--bg-secondary)] text-[var(--text-muted)] text-xs uppercase">
+                                    <th className="text-left p-3">Product</th>
+                                    <th className="text-right p-3 w-20">Qty</th>
+                                    <th className="text-right p-3 w-24">Price</th>
+                                    <th className="text-right p-3 w-20">Disc.</th>
+                                    <th className="text-right p-3 w-24">Total</th>
+                                    <th className="p-3 w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((item, idx) => {
+                                    const lineTotal = item.price * item.quantity - item.discount;
+                                    const lineTax = (lineTotal * item.taxRate) / 100;
+                                    return (
+                                        <tr key={idx} className="border-t border-[var(--border)]">
+                                            <td className="p-3 text-sm font-medium">{item.productName}</td>
+                                            <td className="p-3"><input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
+                                            <td className="p-3"><input type="number" min={0} step={0.01} value={item.price} onChange={(e) => updateItem(idx, "price", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
+                                            <td className="p-3"><input type="number" min={0} step={0.01} value={item.discount} onChange={(e) => updateItem(idx, "discount", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
+                                            <td className="p-3 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(lineTotal + lineTax)}</td>
+                                            <td className="p-3"><button onClick={() => removeItem(idx)} className="text-[var(--red)] hover:bg-[var(--red)]/10 rounded p-1 transition"><Trash2 size={14} /></button></td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Add Product */}
+                    <div className="relative">
+                        <button onClick={() => setShowPicker(!showPicker)} className="flex items-center gap-1.5 text-sm text-[var(--gold)] hover:underline">
+                            <Plus size={14} /> Add Product
+                        </button>
+                        {showPicker && (
+                            <div className="absolute left-0 top-8 z-20 w-80 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl p-3 space-y-2">
+                                <div className="relative">
+                                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                                    <input value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="Search products..." autoFocus className="w-full pl-8 pr-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] outline-none" />
+                                </div>
+                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                    {(Array.isArray(products) ? products : []).map((p: any) => (
+                                        <button key={p.id} type="button" onClick={() => addProduct(p)} className="w-full text-left px-3 py-2 text-sm rounded hover:bg-[var(--bg-secondary)] transition flex justify-between items-center">
+                                            <span>{p.name}</span>
+                                            <span className="text-xs text-[var(--text-muted)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(p.sellingPrice ?? 0)}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Totals */}
+                    <div className="text-sm text-right space-y-1 pt-2 border-t border-[var(--border)]">
+                        <p className="text-[var(--text-secondary)]">Subtotal: <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(subtotal)}</span></p>
+                        <p className="text-[var(--text-secondary)]">Discount: <span style={{ fontFamily: "var(--font-mono)" }}>-{formatINR(totalDiscount)}</span></p>
+                        <p className="text-[var(--text-secondary)]">GST: <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(totalTax)}</span></p>
+                        <p className="font-bold text-base">Total: <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(grandTotal)}</span></p>
+                    </div>
+
+                    {/* Notes */}
+                    <label>
+                        <span className="text-xs text-[var(--text-muted)] mb-1 block">Notes</span>
+                        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none resize-none" />
+                    </label>
+
+                    {/* Actions */}
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition">Cancel</button>
+                        <button onClick={handleSave} disabled={updateDraft.isPending || items.length === 0} className="px-6 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] hover:opacity-90 disabled:opacity-50 transition">
+                            {updateDraft.isPending ? "Saving..." : "Save Changes"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ─── Main Order Detail Page ─── */
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const { data: order, isLoading } = useOrder(id);
     const orderAction = useOrderAction();
+    const [showEdit, setShowEdit] = useState(false);
 
     if (isLoading) return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-[var(--radius-md)]" />)}</div>;
     if (!order) return <div className="text-center py-20"><p className="text-[var(--text-muted)]">Order not found</p></div>;
@@ -43,7 +206,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                     <p className="text-sm text-[var(--text-muted)]">{formatDate(order.createdAt)}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                    {order.status === "DRAFT" && (
+                        <button onClick={() => setShowEdit(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--gold)] text-[var(--gold)] hover:bg-[var(--gold)]/10 font-semibold transition">
+                            <Edit size={14} /> Edit Order
+                        </button>
+                    )}
                     {order.invoiceId && order.customer?.phone && (
                         <a href={buildWhatsAppInvoiceLink({
                             customerPhone: order.customer.phone,
@@ -136,6 +304,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                 </div>
             </div>
+
+            {/* Edit Draft Modal */}
+            <EditDraftModal order={order} open={showEdit} onClose={() => setShowEdit(false)} />
         </div>
     );
 }

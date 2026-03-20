@@ -1,6 +1,5 @@
 "use client";
-
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Package, Edit, X } from "lucide-react";
 import { useProduct, useUpdateProduct, useUploadFile } from "@/hooks/api-hooks";
@@ -16,8 +15,21 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
     const upload = useUploadFile();
 
     const [isEditing, setIsEditing] = useState(false);
+    const [editImages, setEditImages] = useState<string[]>([]);
+    const [mainImageIdx, setMainImageIdx] = useState(0);
+    const [fullScreenIdx, setFullScreenIdx] = useState<number | null>(null);
+    const parsedImages = useMemo(() => {
+        if (!product?.imageUrl) return [];
+        try {
+            const parsed = JSON.parse(product.imageUrl);
+            return Array.isArray(parsed) ? parsed : [product.imageUrl];
+        } catch {
+            return [product.imageUrl];
+        }
+    }, [product?.imageUrl]);
+
     const [editData, setEditData] = useState({
-        name: "", sku: "", brand: "", category: "", imageUrl: "",
+        name: "", sku: "", brand: "", category: "",
         purchasePrice: 0, sellingPrice: 0, mrp: 0, gstRate: 0,
         unit: "", secondaryUnit: "", conversionFactor: 1, minStockLevel: 0
     });
@@ -29,7 +41,6 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 sku: product.sku || "",
                 brand: product.brand || "",
                 category: product.category || "",
-                imageUrl: product.imageUrl || "",
                 purchasePrice: product.purchasePrice || 0,
                 sellingPrice: product.sellingPrice || 0,
                 mrp: product.mrp || 0,
@@ -39,13 +50,14 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 conversionFactor: product.conversionFactor || 1,
                 minStockLevel: product.minStockLevel || 0,
             });
+            setEditImages(parsedImages);
             setIsEditing(true);
         }
     };
 
     const handleEditSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        updateProduct.mutate({ id: product.id, data: editData }, {
+        updateProduct.mutate({ id: product.id, data: { ...editData, imageUrl: JSON.stringify(editImages) } }, {
             onSuccess: () => setIsEditing(false)
         });
     };
@@ -72,18 +84,34 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 </button>
             </div>
 
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 flex items-start gap-5">
-                {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} className="w-20 h-20 rounded-lg object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0 shadow-sm" />
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 flex flex-col md:flex-row items-start gap-6">
+                {parsedImages.length > 0 ? (
+                    <div className="flex flex-col gap-3 shrink-0 mx-auto md:mx-0">
+                        <img
+                            src={parsedImages[mainImageIdx] || parsedImages[0]}
+                            alt={product.name}
+                            onClick={() => setFullScreenIdx(mainImageIdx)}
+                            className="w-32 h-32 md:w-40 md:h-40 rounded-lg object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shadow-sm cursor-pointer hover:opacity-90 transition"
+                        />
+                        {parsedImages.length > 1 && (
+                            <div className="flex gap-2 w-32 md:w-40 overflow-x-auto pb-1 scrollbar-hide">
+                                {parsedImages.map((url: string, i: number) => (
+                                    <button key={i} type="button" onClick={() => setMainImageIdx(i)} className={`w-12 h-12 shrink-0 rounded-md border ${i === mainImageIdx ? 'border-[var(--gold)]' : 'border-[var(--border)] opacity-60 hover:opacity-100'} transition overflow-hidden`}>
+                                        <img src={url} className="w-full h-full object-cover bg-[var(--bg-secondary)]" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 ) : (
-                    <div className="w-20 h-20 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--gold)] shrink-0">
-                        <Package size={36} />
+                    <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 mx-auto md:mx-0 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] opacity-50">
+                        <Package size={48} />
                     </div>
                 )}
-                <div>
+                <div className="text-center md:text-left w-full mt-2 md:mt-0">
                     <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: "var(--font-playfair)" }}>{product.name}</h1>
                     <p className="text-sm text-[var(--text-muted)] mb-4">{product.sku} • {product.brand || "No Brand"}</p>
-                    <div className="flex gap-4">
+                    <div className="flex justify-center md:justify-start gap-3">
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${product.isActive ? 'bg-[var(--green)]/15 text-[var(--green-bright)]' : 'bg-[var(--red)]/15 text-[var(--red)]'}`}>
                             {product.isActive ? "Active" : "Inactive"}
                         </span>
@@ -150,13 +178,26 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                         </div>
                         <form onSubmit={handleEditSubmit} className="p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {/* Product Image */}
+                                {/* Product Images */}
                                 <div className="space-y-4 lg:col-span-3">
-                                    <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Product Image</h4>
-                                    <ImageUpload value={editData.imageUrl} onChange={(url) => setEditData({ ...editData, imageUrl: url })} onUpload={(file) => upload.mutateAsync(file)} disabled={updateProduct.isPending || upload.isPending} className="max-w-md" />
+                                    <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Product Images</h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                        {editImages.map((url, i) => (
+                                            <div key={i} className="relative group w-full aspect-square rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden bg-[var(--bg-secondary)]">
+                                                <img src={url} className="w-full h-full object-contain" />
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                                    <button type="button" onClick={() => setEditImages(editImages.filter((_, idx) => idx !== i))} className="p-2 bg-[var(--red)] text-white rounded-full hover:scale-110 transition shadow-lg">
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <ImageUpload onChange={(url) => setEditImages([...editImages, url])} onUpload={(file) => upload.mutateAsync(file)} disabled={updateProduct.isPending || upload.isPending} className="w-full aspect-square" />
+                                    </div>
                                 </div>
                                 {/* Basic Info */}
                                 <div className="space-y-4 lg:col-span-3">
+
                                     <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Basic Info</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <label className="block">
@@ -233,6 +274,45 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                             </div>
                         </form>
                     </div>
+                </div>
+            )}
+
+            {/* Full Screen Image Modal */}
+            {fullScreenIdx !== null && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+                    onClick={() => setFullScreenIdx(null)}
+                >
+                    <button
+                        onClick={() => setFullScreenIdx(null)}
+                        className="absolute top-4 right-4 text-white/70 hover:text-white transition bg-black/50 p-2 rounded-full"
+                    >
+                        <X size={24} />
+                    </button>
+
+                    {parsedImages.length > 1 && (
+                        <>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setFullScreenIdx(prev => prev! > 0 ? prev! - 1 : parsedImages.length - 1); }}
+                                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition bg-black/50 p-3 rounded-full"
+                            >
+                                <ArrowLeft size={24} />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setFullScreenIdx(prev => prev! < parsedImages.length - 1 ? prev! + 1 : 0); }}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition bg-black/50 p-3 rounded-full transform rotate-180"
+                            >
+                                <ArrowLeft size={24} />
+                            </button>
+                        </>
+                    )}
+
+                    <img
+                        src={parsedImages[fullScreenIdx]}
+                        alt="Full screen"
+                        className="max-w-full max-h-full object-contain"
+                        onClick={(e) => e.stopPropagation()}
+                    />
                 </div>
             )}
         </div>

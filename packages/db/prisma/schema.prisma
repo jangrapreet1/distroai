@@ -373,6 +373,7 @@ model Customer {
   fieldVisits      FieldVisit[]
   paymentScoreLogs PaymentScoreLog[]
   shelfAudits      ShelfAudit[]
+  locationRequests LocationRequest[]
 
   @@index([orgId])
   @@index([salesmanId])
@@ -897,4 +898,26 @@ model OrgSettings {
   updatedAt           DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model LocationRequest {
+  id         String   @id @default(cuid())
+  orgId      String
+  customerId String
+  token      String   @unique
+  status     RequestStatus @default(PENDING)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([orgId, customerId])
+}
+
+enum RequestStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
 }

@@ -158,7 +158,8 @@ export class ProductsService {
     async update(orgId: string, id: string, dto: UpdateProductDto) {
         const product = await this.prisma.product.findFirst({ where: { id, orgId } });
         if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Product not found' });
-        return this.prisma.product.update({ where: { id }, data: dto });
+        const updated = await this.prisma.product.update({ where: { id }, data: dto });
+        return updated;
     }
 
     async remove(orgId: string, id: string) {

@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Building2, FileText, Bell, Plug, Receipt, Check } from "lucide-react";
-import { useOrg, useSubscription, useOrgSettings, useUpdateOrg, useUpdateOrgSettings, useWarehouses } from "@/hooks/api-hooks";
+import { Building2, FileText, Bell, Plug, Receipt, Check, Users, UserPlus, X, Shield, MapPin, Truck, CheckCircle2, Download } from "lucide-react";
+import { useOrg, useSubscription, useOrgSettings, useUpdateOrg, useUpdateOrgSettings, useWarehouses, useTeamOverview, useCreateTeamMember, useToggleUserActive, useUpdateUserRole, useExportCaGst } from "@/hooks/api-hooks";
 import toast from "react-hot-toast";
+import { formatDistanceToNow } from "date-fns";
+import { parseGstin } from "@/lib/utils";
 
 const TABS = [
     { id: "general", label: "General", icon: Building2 },
+    { id: "team", label: "Team", icon: Users },
     { id: "gst", label: "GST & Invoicing", icon: FileText },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "integrations", label: "Integrations", icon: Plug },
@@ -55,9 +58,28 @@ function GeneralTab() {
     const warehouses = warehousesData?.data ?? warehousesData ?? [];
 
     const [form, setForm] = useState<Record<string, string>>({});
+    const [gstinMessage, setGstinMessage] = useState("");
+
+    // Detect GSTIN changes for Smart Auto-fill (State & PAN)
     useEffect(() => {
-        if (org?.name) setForm({ name: org.name ?? "", phone: org.phone ?? "", email: org.email ?? "", address: org.address ?? "", city: org.city ?? "", state: org.state ?? "", gstNumber: org.gstNumber ?? "", panNumber: org.panNumber ?? "", logoUrl: org.logoUrl ?? "" });
-    }, [org?.name]);
+        if (form.gstNumber && form.gstNumber.length === 15) {
+            const parsed = parseGstin(form.gstNumber);
+            if (parsed.valid && parsed.stateName && parsed.pan) {
+                setForm(f => ({ ...f, state: parsed.stateName!, panNumber: parsed.pan! }));
+                setGstinMessage(`✅ Detected: ${parsed.stateName} & PAN`);
+            } else {
+                setGstinMessage("⚠️ Invalid GSTIN format or State Code");
+            }
+        } else {
+            setGstinMessage("");
+        }
+    }, [form.gstNumber]);
+
+    useEffect(() => {
+        if (org?.name && Object.keys(form).length === 0) {
+            setForm({ name: org.name ?? "", phone: org.phone ?? "", email: org.email ?? "", address: org.address ?? "", city: org.city ?? "", state: org.state ?? "", gstNumber: org.gstNumber ?? "", panNumber: org.panNumber ?? "", logoUrl: org.logoUrl ?? "" });
+        }
+    }, [org?.name, form]);
 
     const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
     const handleSave = () => {
@@ -85,9 +107,20 @@ function GeneralTab() {
                     </select>
                 </label>
             </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-                <InputField label="GST Number" value={form.gstNumber} onChange={(v) => set("gstNumber", v)} placeholder="22AAAAA0000A1Z5" />
-                <InputField label="PAN Number" value={form.panNumber} onChange={(v) => set("panNumber", v)} placeholder="ABCDE1234F" />
+            <div className="bg-[var(--gold)]/5 border border-[var(--gold)]/20 p-4 rounded-[var(--radius-md)] flex flex-col gap-4">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h3 className="text-sm font-semibold flex items-center gap-2 mb-1"><CheckCircle2 size={16} className="text-[var(--gold)]" /> Smart GSTIN</h3>
+                        <p className="text-xs text-[var(--text-muted)]">Type a valid 15-character GSTIN to instantly auto-fill the State Code and PAN Number.</p>
+                    </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <InputField label="GST Number" value={form.gstNumber} onChange={(v) => set("gstNumber", v.toUpperCase())} placeholder="22AAAAA0000A1Z5" />
+                        {gstinMessage && <p className={`text-xs mt-1.5 font-medium ${gstinMessage.includes('✅') ? 'text-[var(--green-bright)]' : 'text-[var(--orange)]'}`}>{gstinMessage}</p>}
+                    </div>
+                    <InputField label="PAN Number" value={form.panNumber} onChange={(v) => set("panNumber", v.toUpperCase())} placeholder="ABCDE1234F" />
+                </div>
             </div>
             {warehouses.length > 0 && (
                 <div className="pt-2 border-t border-[var(--border)] mt-4">
@@ -122,18 +155,79 @@ function GstTab() {
     const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
     const handleSave = () => { updateSettings.mutate(form); };
 
+    // CA Export Logic
+    const exportGst = useExportCaGst();
+    const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
+    const [exportYear, setExportYear] = useState(new Date().getFullYear());
+
+    const handleExport = async () => {
+        try {
+            const blob = await exportGst.mutateAsync({ month: exportMonth, year: exportYear });
+            // Create a link to download the blob
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `GST_Export_${String(exportMonth).padStart(2, '0')}_${exportYear}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            toast.success("GST Export Downloaded", { icon: "📈" });
+        } catch (error: any) {
+            toast.error(error?.message || "Failed to download export");
+        }
+    };
+
     return (
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 space-y-4">
-            <h2 className="font-semibold mb-4">GST & Invoicing</h2>
-            <div className="grid sm:grid-cols-3 gap-4">
-                <InputField label="Invoice Prefix" value={form.invoicePrefix as string ?? ""} onChange={(v) => set("invoicePrefix", v)} />
-                <InputField label="Order Prefix" value={form.orderPrefix as string ?? ""} onChange={(v) => set("orderPrefix", v)} />
-                <InputField label="PO Prefix" value={form.poPrefix as string ?? ""} onChange={(v) => set("poPrefix", v)} />
+        <div className="space-y-6">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 space-y-4">
+                <h2 className="font-semibold mb-4">GST & Invoicing</h2>
+                <div className="grid sm:grid-cols-3 gap-4">
+                    <InputField label="Invoice Prefix" value={form.invoicePrefix as string ?? ""} onChange={(v) => set("invoicePrefix", v)} />
+                    <InputField label="Order Prefix" value={form.orderPrefix as string ?? ""} onChange={(v) => set("orderPrefix", v)} />
+                    <InputField label="PO Prefix" value={form.poPrefix as string ?? ""} onChange={(v) => set("poPrefix", v)} />
+                </div>
+                <Toggle label="Auto-invoice on dispatch" description="Automatically generate invoice when order is dispatched" enabled={form.autoInvoice as boolean ?? false} onToggle={() => set("autoInvoice", !(form.autoInvoice as boolean))} />
+                <button onClick={handleSave} disabled={updateSettings.isPending} className="px-6 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] disabled:opacity-50 transition">
+                    {updateSettings.isPending ? "Saving..." : "Save Settings"}
+                </button>
             </div>
-            <Toggle label="Auto-invoice on dispatch" description="Automatically generate invoice when order is dispatched" enabled={form.autoInvoice as boolean ?? false} onToggle={() => set("autoInvoice", !(form.autoInvoice as boolean))} />
-            <button onClick={handleSave} disabled={updateSettings.isPending} className="px-6 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] disabled:opacity-50 transition">
-                {updateSettings.isPending ? "Saving..." : "Save Settings"}
-            </button>
+
+            {/* CA GST Export Card */}
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 space-y-4">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h2 className="font-semibold flex items-center gap-2 mb-1"><FileText size={18} className="text-[var(--gold)]" /> CA GST Export</h2>
+                        <p className="text-sm text-[var(--text-muted)]">Download a complete, itemized CSV of all sales for your Chartered Accountant.</p>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-end gap-4 bg-[var(--bg-secondary)] p-4 rounded-[var(--radius-md)] border border-[var(--border)]">
+                    <label className="flex-1 min-w-[150px]">
+                        <span className="block text-xs text-[var(--text-muted)] mb-1">Target Month</span>
+                        <select value={exportMonth} onChange={(e) => setExportMonth(Number(e.target.value))} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition">
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                <option key={m} value={m}>{new Date(0, m - 1).toLocaleString('default', { month: 'long' })}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="flex-1 min-w-[150px]">
+                        <span className="block text-xs text-[var(--text-muted)] mb-1">Target Year</span>
+                        <select value={exportYear} onChange={(e) => setExportYear(Number(e.target.value))} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition">
+                            {[0, 1, 2].map(offset => {
+                                const y = new Date().getFullYear() - offset;
+                                return <option key={y} value={y}>{y}</option>;
+                            })}
+                        </select>
+                    </label>
+                    <button onClick={handleExport} disabled={exportGst.isPending} className="flex-1 min-w-[200px] flex items-center justify-center gap-2 px-6 py-2 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] disabled:opacity-50 transition">
+                        {exportGst.isPending ? "Generating..." : <><Download size={16} /> Download CSV</>}
+                    </button>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-2">
+                    Note: The export precisely calculates CGST, SGST, IGST, and CESS on a per-item basis natively resolving Place of Supply regulations.
+                </p>
+            </div>
         </div>
     );
 }
@@ -290,6 +384,176 @@ function BillingTab() {
     );
 }
 
+const ROLE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+    OWNER: { label: 'Owner', color: 'var(--gold)', icon: Shield },
+    ADMIN: { label: 'Admin', color: 'var(--gold)', icon: Shield },
+    MANAGER: { label: 'Manager', color: 'var(--blue, #3b82f6)', icon: Users },
+    SALESMAN: { label: 'Field Agent', color: 'var(--green-bright)', icon: Truck },
+    ACCOUNTANT: { label: 'Accountant', color: 'var(--orange)', icon: Receipt },
+    VIEWER: { label: 'Viewer', color: 'var(--text-muted)', icon: Users },
+};
+
+/* ─── Team Tab ─── */
+function TeamTab() {
+    const { data, isLoading } = useTeamOverview();
+    const createMember = useCreateTeamMember();
+    const toggleActive = useToggleUserActive();
+    const updateRole = useUpdateUserRole();
+    const [showAdd, setShowAdd] = useState(false);
+    const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '', role: 'SALESMAN' });
+
+    const teamData = data?.data ?? data ?? {};
+    const members = teamData?.members ?? [];
+    const counts = teamData?.counts ?? { total: 0, active: 0, inactive: 0 };
+
+    const handleAdd = () => {
+        if (!form.firstName || !form.email) { toast.error('Name and email are required'); return; }
+        createMember.mutate(form, {
+            onSuccess: (res: any) => {
+                const tp = res?.tempPassword;
+                toast.success(tp ? `Member added! Temp password: ${tp}` : 'Member added successfully!');
+                setShowAdd(false);
+                setForm({ firstName: '', lastName: '', phone: '', email: '', role: 'SALESMAN' });
+            },
+            onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to add member'),
+        });
+    };
+
+    const handleToggle = (userId: string, name: string, currentlyActive: boolean) => {
+        toggleActive.mutate(userId, {
+            onSuccess: () => toast.success(`${name} is now ${currentlyActive ? 'inactive' : 'active'}`),
+            onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed'),
+        });
+    };
+
+    if (isLoading) return <div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-[var(--gold)] border-t-transparent rounded-full animate-spin" /></div>;
+
+    return (
+        <div className="space-y-6">
+            {/* Stats Bar */}
+            <div className="grid grid-cols-3 gap-3">
+                {[{ label: 'Total Members', value: counts.total, color: 'var(--text-primary)' },
+                { label: 'Active', value: counts.active, color: 'var(--green-bright)' },
+                { label: 'Inactive', value: counts.inactive, color: 'var(--red)' }].map(s => (
+                    <div key={s.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4 text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">{s.label}</p>
+                        <p className="text-2xl font-bold" style={{ color: s.color, fontFamily: 'var(--font-mono)' }}>{s.value}</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Header + Add Button */}
+            <div className="flex items-center justify-between">
+                <h2 className="font-semibold" style={{ fontFamily: 'var(--font-playfair)' }}>Team Members</h2>
+                <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold rounded-[var(--radius-md)] hover:bg-[var(--gold-light)] transition">
+                    <UserPlus size={16} /> Add Member
+                </button>
+            </div>
+
+            {/* Members Table */}
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
+                            <th className="text-left p-4">Member</th>
+                            <th className="text-left p-4 hidden md:table-cell">Phone</th>
+                            <th className="text-center p-4">Role</th>
+                            <th className="text-center p-4 hidden sm:table-cell">Last Login</th>
+                            <th className="text-center p-4">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {members.length === 0 ? (
+                            <tr><td colSpan={5} className="p-8 text-center text-[var(--text-muted)]">
+                                <Users size={32} className="mx-auto mb-2 opacity-30" />No team members yet
+                            </td></tr>
+                        ) : members.map((m: any) => {
+                            const rc = ROLE_CONFIG[m.role] ?? ROLE_CONFIG.VIEWER;
+                            const RoleIcon = rc.icon;
+                            return (
+                                <tr key={m.id} className={`border-b border-[var(--border)] transition ${m.isActive ? 'hover:bg-[var(--bg-card-hover)]' : 'opacity-50'}`}>
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: `${rc.color}15`, color: rc.color }}>
+                                                {m.firstName?.[0]}{m.lastName?.[0]}
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">{m.firstName} {m.lastName}</p>
+                                                <p className="text-xs text-[var(--text-muted)]">{m.email}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="p-4 text-[var(--text-secondary)] hidden md:table-cell">{m.phone ?? '—'}</td>
+                                    <td className="p-4 text-center">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider" style={{ backgroundColor: `${rc.color}12`, color: rc.color }}>
+                                            <RoleIcon size={10} /> {rc.label}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 text-center text-xs text-[var(--text-muted)] hidden sm:table-cell">
+                                        {m.lastLoginAt ? formatDistanceToNow(new Date(m.lastLoginAt), { addSuffix: true }) : 'Never'}
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        {m.role === 'OWNER' ? (
+                                            <span className="text-xs text-[var(--gold)] font-medium">Owner</span>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleToggle(m.id, m.firstName, m.isActive)}
+                                                disabled={toggleActive.isPending}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${m.isActive ? 'bg-[var(--green-bright)]' : 'bg-[var(--text-muted)]/30'}`}
+                                            >
+                                                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-md transition-transform ${m.isActive ? 'translate-x-6' : 'translate-x-1'}`} />
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Add Member Modal */}
+            {showAdd && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowAdd(false)}>
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
+                            <h3 className="text-lg font-bold" style={{ fontFamily: 'var(--font-playfair)' }}>Add Team Member</h3>
+                            <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <InputField label="First Name *" value={form.firstName} onChange={v => setForm(f => ({ ...f, firstName: v }))} placeholder="Ramesh" />
+                                <InputField label="Last Name" value={form.lastName} onChange={v => setForm(f => ({ ...f, lastName: v }))} placeholder="Kumar" />
+                            </div>
+                            <InputField label="Email *" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} type="email" placeholder="ramesh@company.com" />
+                            <InputField label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="9876543210" />
+                            <label>
+                                <span className="block text-sm text-[var(--text-secondary)] mb-1">Role</span>
+                                <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className="w-full px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition text-sm">
+                                    <option value="MANAGER">Manager</option>
+                                    <option value="SALESMAN">Field Agent / Salesman</option>
+                                    <option value="ACCOUNTANT">Accountant</option>
+                                    <option value="VIEWER">Viewer (Read-only)</option>
+                                </select>
+                            </label>
+                            <p className="text-xs text-[var(--text-muted)] bg-[var(--bg-card)] p-3 rounded-[var(--radius-md)] border border-[var(--border)]">
+                                A temporary password will be generated and sent via WhatsApp. The user will be asked to change it on first login.
+                            </p>
+                        </div>
+                        <div className="p-5 border-t border-[var(--border)] flex gap-3 justify-end">
+                            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] hover:bg-[var(--bg-card)] transition">Cancel</button>
+                            <button onClick={handleAdd} disabled={createMember.isPending} className="px-6 py-2 text-sm font-semibold bg-[var(--gold)] text-[var(--bg-primary)] rounded-[var(--radius-md)] hover:bg-[var(--gold-light)] disabled:opacity-50 transition flex items-center gap-2">
+                                {createMember.isPending ? <div className="w-4 h-4 border-2 border-[var(--bg-primary)] border-t-transparent rounded-full animate-spin" /> : <UserPlus size={14} />}
+                                {createMember.isPending ? 'Adding...' : 'Add Member'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 /* ─── Main Settings Page ─── */
 export default function SettingsPage() {
     const [tab, setTab] = useState("general");
@@ -320,6 +584,7 @@ export default function SettingsPage() {
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                     {tab === "general" && <GeneralTab />}
+                    {tab === "team" && <TeamTab />}
                     {tab === "gst" && <GstTab />}
                     {tab === "notifications" && <NotificationsTab />}
                     {tab === "integrations" && <IntegrationsTab />}

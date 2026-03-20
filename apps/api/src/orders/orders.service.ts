@@ -234,6 +234,62 @@ export class OrdersService {
     return order;
   }
 
+  async updateDraft(orgId: string, id: string, dto: import('./dto/orders.dto').UpdateDraftOrderDto) {
+    const order = await this.prisma.order.findFirst({ where: { id, orgId } });
+    if (!order) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Order not found' });
+    if (order.status !== 'DRAFT') throw new BadRequestException({ code: 'INVALID_STATUS', message: 'Only DRAFT orders can be edited' });
+
+    return this.prisma.$transaction(async (tx: any) => {
+      const updateData: Record<string, unknown> = {};
+      if (dto.notes !== undefined) updateData.notes = dto.notes;
+      if (dto.deliveryDate !== undefined) updateData.deliveryDate = dto.deliveryDate ? new Date(dto.deliveryDate) : null;
+
+      if (dto.items && dto.items.length > 0) {
+        // Recalculate totals
+        let totalAmount = 0, discountAmount = 0, taxAmount = 0;
+        const itemsWithTax = await Promise.all(
+          dto.items.map(async (item: any) => {
+            const product = await tx.product.findFirst({ where: { id: item.productId, orgId } });
+            if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: `Product ${item.productId} not found` });
+            const lineTotal = item.price * item.quantity;
+            const disc = item.discount ?? 0;
+            const taxable = lineTotal - disc;
+            const tax = (taxable * product.gstRate) / 100;
+            totalAmount += lineTotal;
+            discountAmount += disc;
+            taxAmount += tax;
+            return { ...item, taxRate: product.gstRate, taxAmount: tax, totalAmount: taxable + tax };
+          }),
+        );
+        const netAmount = totalAmount - discountAmount + taxAmount;
+
+        // Delete old items and create new
+        await tx.orderItem.deleteMany({ where: { orderId: id } });
+        await tx.orderItem.createMany({
+          data: itemsWithTax.map((i: any) => ({
+            orderId: id, productId: i.productId, quantity: i.quantity, unit: i.unit,
+            price: i.price, discount: i.discount ?? 0, taxRate: i.taxRate, taxAmount: i.taxAmount, totalAmount: i.totalAmount,
+          })),
+        });
+
+        updateData.totalAmount = totalAmount;
+        updateData.discountAmount = discountAmount;
+        updateData.taxAmount = taxAmount;
+        updateData.netAmount = netAmount;
+        updateData.balanceAmount = netAmount;
+      }
+
+      const updated = await tx.order.update({
+        where: { id },
+        data: updateData,
+        include: { items: { include: { product: { select: { name: true, sku: true, unit: true } } } }, customer: { select: { id: true, name: true, phone: true, outstandingAmount: true, paymentScore: true } }, statusHistory: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      await this.invalidateAnalytics(orgId);
+      return updated;
+    });
+  }
+
   async confirm(orgId: string, id: string, userId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id, orgId },
@@ -373,12 +429,14 @@ export class OrdersService {
     // Generate an invoice
     await this.invoices.create(orgId, {
       customerId: order.customerId,
+      orderId: order.id,
       invoiceDate: new Date().toISOString(),
       items: order.items.map((item: any) => ({
         productId: item.productId,
         quantity: item.quantity,
         unit: item.unit,
         price: item.price,
+        discount: item.discount,
       })),
       notes: `Auto-generated for Order ${order.orderNumber}`,
     });

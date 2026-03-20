@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Mic, MicOff, Bot, Sparkles, BarChart3, Users, Package, Clock, Square } from "lucide-react";
+import { Send, Mic, MicOff, Bot, Sparkles, BarChart3, Users, Package, Clock, Square, ImagePlus, X } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -109,6 +109,9 @@ export default function AIPage() {
     const scrollRef = useRef<HTMLDivElement>(null);
     const mediaRecorder = useRef<MediaRecorder | null>(null);
     const audioChunks = useRef<Blob[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [imageBase64, setImageBase64] = useState<string | null>(null);
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -129,8 +132,12 @@ export default function AIPage() {
             const res = await fetch(`${API_BASE}/ai/query/stream`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-                body: JSON.stringify({ query: text }),
+                body: JSON.stringify({ query: text, ...(imageBase64 ? { image: imageBase64 } : {}) }),
             });
+
+            // Clear image after sending
+            setImagePreview(null);
+            setImageBase64(null);
 
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -169,7 +176,24 @@ export default function AIPage() {
         } finally {
             setIsStreaming(false);
         }
-    }, [isStreaming, accessToken]);
+    }, [isStreaming, accessToken, imageBase64]);
+
+    const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
+        if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10MB.'); return; }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64 = reader.result as string;
+            setImagePreview(URL.createObjectURL(file));
+            setImageBase64(base64);
+        };
+        reader.readAsDataURL(file);
+        // Reset input so same file can be re-selected
+        e.target.value = '';
+    }, []);
 
     const toggleRecording = useCallback(async () => {
         if (isRecording) {
@@ -303,13 +327,28 @@ export default function AIPage() {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-                                placeholder="Ask DistroAI anything..."
+                                placeholder={imageBase64 ? "Describe what you need or ask about this product..." : "Ask DistroAI anything..."}
                                 rows={1}
                                 disabled={isStreaming}
                                 className="w-full px-4 py-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--purple)] focus:outline-none transition resize-none text-sm disabled:opacity-50"
                                 style={{ maxHeight: 120 }}
                             />
+                            {imagePreview && (
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                    <img src={imagePreview} alt="Attached" className="h-8 w-8 rounded object-cover border border-[var(--border)]" />
+                                    <button onClick={() => { setImagePreview(null); setImageBase64(null); }} className="text-[var(--text-muted)] hover:text-red-400 transition"><X size={14} /></button>
+                                </div>
+                            )}
                         </div>
+                        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isStreaming}
+                            className={`p-3 rounded-[var(--radius-md)] transition ${imageBase64 ? 'bg-[var(--purple)]/20 text-[var(--purple)] border border-[var(--purple)]/30' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                            title="Attach product image"
+                        >
+                            <ImagePlus size={18} />
+                        </button>
                         <button
                             onClick={toggleRecording}
                             disabled={isStreaming && !isRecording}

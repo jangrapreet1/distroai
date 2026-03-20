@@ -8,6 +8,7 @@ import Link from "next/link";
 import apiClient from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { greeting } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
 
 function formatINR(n: number): string {
     return "₹" + n.toLocaleString("en-IN");

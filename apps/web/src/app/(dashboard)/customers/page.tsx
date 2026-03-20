@@ -11,12 +11,6 @@ function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN")
 
 const TABS = ["All", "GOLD", "SILVER", "BRONZE", "High Risk", "Dormant"];
 const CUSTOMER_TYPES = ["RETAILER", "WHOLESALER", "INSTITUTION"];
-const INDIAN_STATES = [
-    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
-    "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
-    "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Delhi",
-];
 
 function ScoreRing({ score, size = 28 }: { score: number; size?: number }) {
     const color = score >= 80 ? "var(--green-bright)" : score >= 60 ? "var(--gold)" : score >= 40 ? "var(--orange)" : "var(--red)";

@@ -13,8 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 import apiClient from "@/lib/api-client";
 import clsx from "clsx";
 
-interface NavItem { label: string; href: string; icon: React.ElementType }
-interface NavGroup { title: string; items: NavItem[] }
+interface NavItem { label: string; href: string; icon: React.ElementType; roles?: string[] }
+interface NavGroup { title: string; items: NavItem[]; roles?: string[] }
 
 const NAV_GROUPS: NavGroup[] = [
     {
@@ -23,16 +23,17 @@ const NAV_GROUPS: NavGroup[] = [
             { label: "Dashboard", href: "/", icon: LayoutDashboard },
             { label: "Orders", href: "/orders", icon: ShoppingCart },
             { label: "Invoices", href: "/invoices", icon: FileText },
-            { label: "Inventory", href: "/inventory", icon: Package },
+            { label: "Inventory", href: "/inventory", icon: Package, roles: ['OWNER', 'ADMIN', 'MANAGER', 'ACCOUNTANT'] },
             { label: "Customers", href: "/customers", icon: Users },
-            { label: "Suppliers", href: "/suppliers", icon: Truck },
+            { label: "Suppliers", href: "/suppliers", icon: Truck, roles: ['OWNER', 'ADMIN', 'MANAGER'] },
         ],
     },
     {
         title: "FINANCE",
+        roles: ['OWNER', 'ADMIN', 'MANAGER', 'ACCOUNTANT'],
         items: [
             { label: "Payments", href: "/payments", icon: CreditCard },
-            { label: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList },
+            { label: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList, roles: ['OWNER', 'ADMIN', 'MANAGER'] },
         ],
     },
     {
@@ -45,6 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
     },
     {
         title: "INTELLIGENCE",
+        roles: ['OWNER', 'ADMIN', 'MANAGER'],
         items: [
             { label: "Analytics", href: "/analytics", icon: BarChart3 },
             { label: "DistroAI Chat", href: "/ai", icon: Bot },
@@ -52,12 +54,22 @@ const NAV_GROUPS: NavGroup[] = [
     },
     {
         title: "SETTINGS",
+        roles: ['OWNER', 'ADMIN'],
         items: [
             { label: "Settings", href: "/settings", icon: Settings },
-            { label: "Billing", href: "/settings/billing", icon: Receipt },
         ],
     },
 ];
+
+function getFilteredNav(role: string): NavGroup[] {
+    return NAV_GROUPS
+        .filter(g => !g.roles || g.roles.includes(role))
+        .map(g => ({
+            ...g,
+            items: g.items.filter(i => !i.roles || i.roles.includes(role)),
+        }))
+        .filter(g => g.items.length > 0);
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -86,6 +98,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             const ago = Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000);
             const t = ago < 60 ? `${ago}m ago` : ago < 1440 ? `${Math.round(ago / 60)}h ago` : `${Math.round(ago / 1440)}d ago`;
             items.push({ msg: `Order ${o.orderNumber} from ${o.customer?.name ?? 'Unknown'} — ₹${(o.netAmount ?? 0).toLocaleString('en-IN')}`, t, color: 'var(--gold)' });
+        });
+        const locs = dd?.recentLocationUpdates ?? [];
+        locs.slice(0, 3).forEach((l: any) => {
+            const ago = Math.round((Date.now() - new Date(l.updatedAt).getTime()) / 60000);
+            const t = ago < 60 ? `${ago}m ago` : ago < 1440 ? `${Math.round(ago / 60)}h ago` : `${Math.round(ago / 1440)}d ago`;
+            items.push({ msg: `📍 Location shared by ${l.customer?.name ?? 'Unknown'}`, t, color: 'var(--whatsapp)' });
         });
         return items;
     }, [dd]);
@@ -124,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Navigation */}
             <nav className="flex-1 overflow-y-auto py-4 px-3">
-                {NAV_GROUPS.map((group) => (
+                {getFilteredNav(user?.role ?? 'VIEWER').map((group) => (
                     <div key={group.title} className="mb-5">
                         <p className="text-[10px] font-semibold text-[var(--text-muted)] tracking-wider px-3 mb-2">{group.title}</p>
                         {group.items.map((item) => {
@@ -224,7 +242,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 )}
                             </button>
                             {notifOpen && (
-                                <div className="absolute right-0 mt-2 w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl z-50">
+                                <div className="absolute right-0 mt-2 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl z-50">
                                     <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
                                         <span className="text-sm font-semibold">Notifications</span>
                                         <button onClick={() => setNotifOpen(false)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>

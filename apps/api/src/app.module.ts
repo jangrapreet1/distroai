@@ -28,6 +28,8 @@ import { TallyModule } from './tally/tally.module';
 import { AiModule } from './ai/ai.module';
 import { PaymentProcessor } from './queue/payment.processor';
 import { MetricsModule } from './metrics/metrics.module';
+import { PublicModule } from './public/public.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
     imports: [
@@ -75,6 +77,8 @@ import { MetricsModule } from './metrics/metrics.module';
         TallyModule,
         AiModule,
         MetricsModule,
+        PublicModule,
+        ReportsModule,
     ],
     controllers: [AppController],
     providers: [AppService, PaymentProcessor],
