@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Mic, MicOff, Bot, Sparkles, BarChart3, Users, Package, Clock, Square, ImagePlus, X } from "lucide-react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Send, Mic, MicOff, Bot, Sparkles, BarChart3, Users, Package, Clock, Square, ImagePlus, X, ScanLine, MessageSquare } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
+import { OfflineScanner } from "@/components/Scanner/OfflineScanner";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface Message {
     role: "user" | "assistant";
     content: string;
+    image?: string | null;
     streaming?: boolean;
     charts?: ChartSpec[];
     tables?: TableSpec[];
@@ -15,6 +17,12 @@ interface Message {
 }
 interface ChartSpec { type: "bar" | "line" | "pie"; title: string; data: any[] }
 interface TableSpec { headers: string[]; rows: any[][] }
+
+interface ChatSession {
+    id: string;
+    title: string;
+    messages: Message[];
+}
 
 const EXAMPLE_PROMPTS = [
     { icon: Package, text: "Which products will stock out this week?" },
@@ -102,7 +110,11 @@ function InlineTable({ spec }: { spec: TableSpec }) {
 
 export default function AIPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
-    const [messages, setMessages] = useState<Message[]>([]);
+
+    // Chat Session State
+    const [sessions, setSessions] = useState<ChatSession[]>([]);
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
     const [input, setInput] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
@@ -112,27 +124,124 @@ export default function AIPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [imageBase64, setImageBase64] = useState<string | null>(null);
+    const [showScanner, setShowScanner] = useState(false);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+    const activeSession = useMemo(() => sessions.find(s => s.id === activeSessionId), [sessions, activeSessionId]);
+    const messages = activeSession?.messages || [];
 
     useEffect(() => {
-        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+        const fetchHistory = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/ai/history`, {
+                    headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                if (res.ok) {
+                    const json = await res.json();
+                    const dataObj = json.data || json;
+                    if (dataObj && Array.isArray(dataObj) && dataObj.length > 0) {
+                        // Group by sessionId
+                        const sessionMap = new Map<string, ChatSession>();
+
+                        for (const q of dataObj) {
+                            // If no sessionId, assign a generic one based on date or just 'default' to fix legacy data
+                            const sid = q.sessionId || `legacy-${new Date(q.createdAt).toISOString().split('T')[0]}`;
+                            if (!sessionMap.has(sid)) {
+                                sessionMap.set(sid, {
+                                    id: sid,
+                                    title: q.query.substring(0, 30) + (q.query.length > 30 ? "..." : ""),
+                                    messages: []
+                                });
+                            }
+
+                            const s = sessionMap.get(sid)!;
+                            s.messages.push({
+                                role: 'user',
+                                content: q.query,
+                                timestamp: new Date(q.createdAt)
+                            });
+
+                            if (!q.response) {
+                                s.messages.push({
+                                    role: 'assistant',
+                                    content: 'Processing in background...',
+                                    charts: [], tables: [],
+                                    timestamp: new Date(q.createdAt),
+                                    streaming: false
+                                });
+                            } else {
+                                const parsed = parseAIResponse(q.response);
+                                s.messages.push({
+                                    role: 'assistant',
+                                    content: parsed.cleanText,
+                                    charts: parsed.charts, tables: parsed.tables,
+                                    timestamp: new Date(q.createdAt)
+                                });
+                            }
+                        }
+
+                        const sessionsArray = Array.from(sessionMap.values()).reverse(); // newest first
+                        setSessions(sessionsArray);
+                        if (sessionsArray.length > 0 && !activeSessionId) {
+                            setActiveSessionId(sessionsArray[0].id);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch AI history', err);
+            } finally {
+                setIsLoadingHistory(false);
+            }
+        };
+
+        if (accessToken) {
+            fetchHistory();
+        } else {
+            setIsLoadingHistory(false);
+        }
+    }, [accessToken]);
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+        }
     }, [messages]);
 
-    const sendMessage = useCallback(async (text: string) => {
-        if (!text.trim() || isStreaming) return;
+    const handleNewChat = () => {
+        const newId = `session-${Date.now()}`;
+        setSessions([{ id: newId, title: "New Conversation", messages: [] }, ...sessions]);
+        setActiveSessionId(newId);
+    };
 
-        const userMsg: Message = { role: "user", content: text.trim(), timestamp: new Date() };
-        setMessages((m) => [...m, userMsg]);
+    const sendMessage = useCallback(async (text: string) => {
+        if ((!text.trim() && !imageBase64) || isStreaming) return;
+
+        const finalQuery = text.trim() || 'Look up this product';
+        const currentSessionId = activeSessionId || `session-${Date.now()}`;
+
+        if (!activeSessionId) {
+            setActiveSessionId(currentSessionId);
+            setSessions(prev => [{ id: currentSessionId, title: finalQuery.substring(0, 30), messages: [] }, ...prev]);
+        } else {
+            // Update title if it was a new chat
+            setSessions(prev => prev.map(s => s.id === currentSessionId && s.title === "New Conversation" ? { ...s, title: finalQuery.substring(0, 30) } : s));
+        }
+
+        const userMsg: Message = { role: "user", content: finalQuery, image: imageBase64, timestamp: new Date() };
+
+        setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, userMsg] } : s));
         setInput("");
         setIsStreaming(true);
 
         // Add placeholder AI message
-        setMessages((m) => [...m, { role: "assistant", content: "", streaming: true, charts: [], tables: [], timestamp: new Date() }]);
+        const placeholder: Message = { role: "assistant", content: "", streaming: true, charts: [], tables: [], timestamp: new Date() };
+        setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, placeholder] } : s));
 
         try {
             const res = await fetch(`${API_BASE}/ai/query/stream`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-                body: JSON.stringify({ query: text, ...(imageBase64 ? { image: imageBase64 } : {}) }),
+                body: JSON.stringify({ query: text, sessionId: currentSessionId, ...(imageBase64 ? { image: imageBase64 } : {}) }),
             });
 
             // Clear image after sending
@@ -158,9 +267,13 @@ export default function AIPage() {
                         if (data.token) {
                             fullResponse += data.token;
                             const parsed = parseAIResponse(fullResponse);
-                            setMessages((m) => m.map((msg, i) =>
-                                i === m.length - 1 ? { ...msg, content: parsed.cleanText, charts: parsed.charts, tables: parsed.tables } : msg
-                            ));
+
+                            setSessions(prev => prev.map(s => {
+                                if (s.id !== currentSessionId) return s;
+                                const newMsgs = [...s.messages];
+                                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: parsed.cleanText, charts: parsed.charts, tables: parsed.tables };
+                                return { ...s, messages: newMsgs };
+                            }));
                         }
                         if (data.done) break;
                     } catch { }
@@ -168,15 +281,24 @@ export default function AIPage() {
             }
 
             // Finalize message
-            setMessages((m) => m.map((msg, i) => i === m.length - 1 ? { ...msg, streaming: false } : msg));
+            setSessions(prev => prev.map(s => {
+                if (s.id !== currentSessionId) return s;
+                const newMsgs = [...s.messages];
+                newMsgs[newMsgs.length - 1].streaming = false;
+                return { ...s, messages: newMsgs };
+            }));
+
         } catch (err: any) {
-            setMessages((m) => m.map((msg, i) => i === m.length - 1
-                ? { ...msg, content: `Error: ${err.message}. Please try again.`, streaming: false } : msg
-            ));
+            setSessions(prev => prev.map(s => {
+                if (s.id !== currentSessionId) return s;
+                const newMsgs = [...s.messages];
+                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: `Error: ${err.message}. Please try again.`, streaming: false };
+                return { ...s, messages: newMsgs };
+            }));
         } finally {
             setIsStreaming(false);
         }
-    }, [isStreaming, accessToken, imageBase64]);
+    }, [isStreaming, accessToken, imageBase64, activeSessionId]);
 
     const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -212,12 +334,22 @@ export default function AIPage() {
                 const audioBlob = new Blob(audioChunks.current, { type: "audio/webm" });
                 stream.getTracks().forEach((t) => t.stop());
 
+                const currentSessionId = activeSessionId || `session-${Date.now()}`;
+                if (!activeSessionId) {
+                    setActiveSessionId(currentSessionId);
+                    setSessions(prev => [{ id: currentSessionId, title: "Voice Note", messages: [] }, ...prev]);
+                }
+
                 const formData = new FormData();
                 formData.append("audio", audioBlob, "voice.webm");
+                formData.append("sessionId", currentSessionId);
 
                 setIsStreaming(true);
-                setMessages((m) => [...m, { role: "user", content: "🎤 Voice message...", timestamp: new Date() }]);
-                setMessages((m) => [...m, { role: "assistant", content: "", streaming: true, charts: [], tables: [], timestamp: new Date() }]);
+
+                const userMsg: Message = { role: "user", content: "🎤 Voice message...", timestamp: new Date() };
+                const aiMsg: Message = { role: "assistant", content: "", streaming: true, charts: [], tables: [], timestamp: new Date() };
+
+                setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, userMsg, aiMsg] } : s));
 
                 try {
                     const res = await fetch(`${API_BASE}/ai/voice-query`, {
@@ -226,15 +358,24 @@ export default function AIPage() {
                         body: formData,
                     });
                     const data = await res.json();
-                    setMessages((m) => m.map((msg, i) => i === m.length - 2 ? { ...msg, content: `🎤 "${data.transcription}"` } : msg));
+
                     const parsed = parseAIResponse(data.response || "");
-                    setMessages((m) => m.map((msg, i) => i === m.length - 1
-                        ? { ...msg, content: parsed.cleanText, charts: parsed.charts, tables: parsed.tables, streaming: false } : msg
-                    ));
+
+                    setSessions(prev => prev.map(s => {
+                        if (s.id !== currentSessionId) return s;
+                        const newMsgs = [...s.messages];
+                        newMsgs[newMsgs.length - 2].content = `🎤 "${data.transcription}"`;
+                        newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: parsed.cleanText, charts: parsed.charts, tables: parsed.tables, streaming: false };
+                        return { ...s, messages: newMsgs };
+                    }));
+
                 } catch (e) {
-                    setMessages((m) => m.map((msg, i) => i === m.length - 1
-                        ? { ...msg, content: "Unable to process voice query.", streaming: false } : msg
-                    ));
+                    setSessions(prev => prev.map(s => {
+                        if (s.id !== currentSessionId) return s;
+                        const newMsgs = [...s.messages];
+                        newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: "Unable to process voice query.", streaming: false };
+                        return { ...s, messages: newMsgs };
+                    }));
                 } finally {
                     setIsStreaming(false);
                 }
@@ -246,15 +387,12 @@ export default function AIPage() {
         } catch {
             alert("Microphone permission denied.");
         }
-    }, [isRecording, accessToken]);
+    }, [isRecording, accessToken, activeSessionId]);
 
-    const pastConversations = [
-        "Yesterday's sales summary", "Stockout predictions for March",
-        "Customer payment analysis", "Best selling products Q4", "Route optimization suggestions",
-    ];
 
     return (
         <div className="flex h-[calc(100vh-3.5rem-3rem)] gap-0 -m-4 lg:-m-6">
+            {showScanner && <OfflineScanner onClose={() => setShowScanner(false)} />}
             {/* Left Panel */}
             <div className="hidden lg:flex flex-col w-72 border-r border-[var(--border)] bg-[var(--bg-secondary)] shrink-0">
                 <div className="p-4 border-b border-[var(--border)]">
@@ -262,24 +400,40 @@ export default function AIPage() {
                         <Bot size={20} className="text-[var(--purple)]" />
                         <h2 className="font-bold">DistroAI</h2>
                     </div>
-                    <button onClick={() => setMessages([])} className="w-full py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition">New Chat</button>
+                    <button onClick={handleNewChat} className="flex items-center justify-center gap-2 w-full py-2.5 text-sm rounded-[var(--radius-md)] bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 transition font-medium border border-[var(--gold)]/20">
+                        <MessageSquare size={16} /> New Chat
+                    </button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                    {pastConversations.map((c, i) => (
-                        <button key={i} className="w-full text-left px-3 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-card)] rounded-lg transition truncate">{c}</button>
-                    ))}
-                </div>
-                <div className="p-3 border-t border-[var(--border)]">
-                    <p className="text-[10px] text-[var(--text-muted)] mb-2">TRY ASKING</p>
-                    {EXAMPLE_PROMPTS.slice(0, 2).map((p, i) => (
-                        <button key={i} onClick={() => sendMessage(p.text)} className="w-full text-left px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition">&quot;{p.text}&quot;</button>
-                    ))}
+                    {sessions.length === 0 ? (
+                        <p className="text-xs text-[var(--text-muted)] px-3 py-4 text-center">Your chat history will appear here.</p>
+                    ) : (
+                        sessions.map((s) => (
+                            <button
+                                key={s.id}
+                                onClick={() => setActiveSessionId(s.id)}
+                                className={`w-full text-left px-3 py-2.5 text-sm rounded-[var(--radius-md)] transition truncate block ${activeSessionId === s.id ? 'bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] font-medium shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-card)]/50 border border-transparent'}`}
+                                title={s.title}
+                            >
+                                {s.title}
+                            </button>
+                        ))
+                    )}
                 </div>
             </div>
 
             {/* Right Panel — Chat */}
-            <div className="flex-1 flex flex-col min-w-0">
-                {messages.length === 0 ? (
+            <div className="flex-1 flex flex-col min-w-0 bg-[#050505]">
+                {isLoadingHistory ? (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8">
+                        <div className="flex gap-1 mt-1 mb-4">
+                            <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "0ms" }} />
+                            <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "150ms" }} />
+                            <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                        <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading conversation history...</p>
+                    </div>
+                ) : messages.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center p-8">
                         <div className="text-center max-w-md">
                             <div className="w-16 h-16 rounded-2xl bg-[var(--purple)]/15 flex items-center justify-center mx-auto mb-6">
@@ -289,7 +443,7 @@ export default function AIPage() {
                             <p className="text-sm text-[var(--text-secondary)] mb-8">I can analyze sales, predict stockouts, score customers, and generate reports.</p>
                             <div className="grid grid-cols-2 gap-3">
                                 {EXAMPLE_PROMPTS.map((p, i) => (
-                                    <button key={i} onClick={() => sendMessage(p.text)} className="flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-left text-sm text-[var(--text-secondary)] hover:border-[var(--purple)]/30 transition">
+                                    <button key={i} onClick={() => sendMessage(p.text)} className="flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-left text-sm text-[var(--text-secondary)] hover:border-[var(--purple)]/30 transition shadow-sm">
                                         <p.icon size={16} className="text-[var(--purple)] mt-0.5 shrink-0" />
                                         {p.text}
                                     </button>
@@ -298,19 +452,20 @@ export default function AIPage() {
                         </div>
                     </div>
                 ) : (
-                    <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
                         {messages.map((m, i) => (
                             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                                <div className={`max-w-[75%] rounded-xl px-4 py-3 text-sm ${m.role === "user" ? "bg-[var(--gold)]/15 text-[var(--text-primary)] border border-[var(--gold)]/20" : "bg-[var(--bg-card)] border border-[var(--border)]"}`}>
+                                <div className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm ${m.role === "user" ? "bg-[var(--gold)]/10 text-[var(--text-primary)] border border-[var(--gold)]/20 rounded-tr-sm" : "bg-[var(--bg-card)] border border-[var(--border)] rounded-tl-sm"}`}>
+                                    {m.image && <img src={m.image} alt="Upload" className="max-w-[150px] md:max-w-[200px] rounded-lg mb-3 object-cover border border-[var(--border)] shadow-sm" />}
                                     <div className="whitespace-pre-wrap">{m.content}</div>
                                     {m.streaming && !m.content && (
-                                        <div className="flex gap-1 mt-1">
+                                        <div className="flex gap-1.5 mt-2">
                                             <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "0ms" }} />
                                             <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "150ms" }} />
                                             <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "300ms" }} />
                                         </div>
                                     )}
-                                    {m.streaming && m.content && <span className="inline-block w-1 h-4 bg-[var(--purple)] animate-pulse ml-0.5 align-middle" />}
+                                    {m.streaming && m.content && <span className="inline-block w-1 h-4 bg-[var(--purple)] animate-pulse ml-1 align-middle" />}
                                     {(m.charts || []).map((c, ci) => <InlineChart key={ci} spec={c} />)}
                                     {(m.tables || []).map((t, ti) => <InlineTable key={ti} spec={t} />)}
                                 </div>
@@ -319,53 +474,70 @@ export default function AIPage() {
                     </div>
                 )}
 
-                {/* Input */}
-                <div className="p-4 border-t border-[var(--border)]">
-                    <div className="flex items-end gap-2">
+                {/* Input Area */}
+                <div className="p-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
+                    <div className="max-w-4xl mx-auto relative flex items-end gap-2">
                         <div className="flex-1 relative">
+                            {/* Attached Image Preview */}
+                            {imagePreview && (
+                                <div className="absolute left-3 bottom-full mb-2 bg-[#111] border border-[var(--border)] rounded-lg p-1.5 shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2">
+                                    <img src={imagePreview} alt="Attached" className="h-12 w-12 rounded object-cover border border-[#222]" />
+                                    <button onClick={() => { setImagePreview(null); setImageBase64(null); }} className="p-1 text-[var(--text-muted)] hover:text-red-400 bg-white/5 hover:bg-white/10 rounded transition">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            )}
+
                             <textarea
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-                                placeholder={imageBase64 ? "Describe what you need or ask about this product..." : "Ask DistroAI anything..."}
+                                placeholder={imageBase64 ? "Ask anything about this image..." : activeSessionId ? "Reply..." : "Start a new conversation..."}
                                 rows={1}
                                 disabled={isStreaming}
-                                className="w-full px-4 py-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--purple)] focus:outline-none transition resize-none text-sm disabled:opacity-50"
-                                style={{ maxHeight: 120 }}
+                                className="w-full pl-12 pr-4 py-3.5 rounded-[var(--radius-lg)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--purple)] focus:ring-1 focus:ring-[var(--purple)] focus:outline-none transition resize-none text-sm disabled:opacity-50 shadow-sm"
+                                style={{ maxHeight: 150 }}
                             />
-                            {imagePreview && (
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                    <img src={imagePreview} alt="Attached" className="h-8 w-8 rounded object-cover border border-[var(--border)]" />
-                                    <button onClick={() => { setImagePreview(null); setImageBase64(null); }} className="text-[var(--text-muted)] hover:text-red-400 transition"><X size={14} /></button>
-                                </div>
-                            )}
+
+                            {/* Image Attachment Button inside the input */}
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isStreaming}
+                                className={`absolute left-2.5 bottom-2 p-2 rounded-md transition ${imageBase64 ? 'text-[var(--purple)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                                title="Attach Image"
+                            >
+                                <ImagePlus size={18} />
+                            </button>
                         </div>
+
                         <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
+
                         <button
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={() => setShowScanner(true)}
                             disabled={isStreaming}
-                            className={`p-3 rounded-[var(--radius-md)] transition ${imageBase64 ? 'bg-[var(--purple)]/20 text-[var(--purple)] border border-[var(--purple)]/30' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
-                            title="Attach product image"
+                            className="p-3.5 rounded-[var(--radius-lg)] transition text-[var(--gold)] bg-[var(--bg-card)] border border-[var(--border)] hover:bg-[var(--gold)]/10 hover:border-[var(--gold)]/30 shadow-sm shrink-0"
+                            title="Offline AR Scanner"
                         >
-                            <ImagePlus size={18} />
+                            <ScanLine size={18} />
                         </button>
+
                         <button
                             onClick={toggleRecording}
                             disabled={isStreaming && !isRecording}
-                            className={`p-3 rounded-[var(--radius-md)] transition ${isRecording ? "bg-red-500/20 text-red-400 border border-red-500/30" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}
+                            className={`p-3.5 rounded-[var(--radius-lg)] transition shadow-sm shrink-0 ${isRecording ? "bg-red-500 text-white animate-pulse" : "bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
                             title={isRecording ? "Stop recording" : "Voice query"}
                         >
-                            {isRecording ? <Square size={18} /> : <Mic size={18} />}
+                            {isRecording ? <Square size={18} fill="currentColor" className="opacity-90" /> : <Mic size={18} />}
                         </button>
-                        <button onClick={() => sendMessage(input)} disabled={!input.trim() || isStreaming} className="p-3 rounded-[var(--radius-md)] bg-[var(--purple)] text-white hover:bg-[var(--purple)]/80 transition disabled:opacity-30">
-                            <Send size={18} />
+
+                        <button
+                            onClick={() => sendMessage(input)}
+                            disabled={(!input.trim() && !imageBase64) || isStreaming}
+                            className="p-3.5 rounded-[var(--radius-lg)] bg-[var(--purple)] text-white hover:bg-[var(--purple)]/90 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center min-w-[3rem]"
+                        >
+                            <Send size={18} className={input.trim() || imageBase64 ? "translate-x-0.5 -translate-y-0.5 transition-transform" : ""} />
                         </button>
                     </div>
-                    {isRecording && (
-                        <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" /> Recording... tap Stop when done
-                        </p>
-                    )}
                 </div>
             </div>
         </div>

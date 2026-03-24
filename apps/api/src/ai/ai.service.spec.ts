@@ -7,14 +7,27 @@ import { ForbiddenException } from '@nestjs/common';
 // Mock ESM modules that Jest cannot parse
 jest.mock('uuid', () => ({ v4: () => 'test-uuid-1234' }));
 jest.mock('ioredis', () => jest.fn());
-jest.mock('@langchain/openai', () => ({ ChatOpenAI: jest.fn() }));
-jest.mock('@langchain/anthropic', () => ({ ChatAnthropic: jest.fn() }));
-jest.mock('@langchain/core/prompts', () => ({ ChatPromptTemplate: { fromMessages: jest.fn() } }));
-jest.mock('@langchain/langgraph/prebuilt', () => ({
-    createToolCallingAgent: jest.fn(),
-    AgentExecutor: jest.fn().mockImplementation(() => ({ invoke: jest.fn() })),
+jest.mock('@langchain/openai', () => ({
+    ChatOpenAI: jest.fn().mockImplementation(() => ({
+        bindTools: jest.fn().mockReturnValue({
+            invoke: jest.fn().mockResolvedValue({ content: 'Mock response', tool_calls: [] }),
+            stream: jest.fn().mockImplementation(async function* () {
+                yield { content: 'Mock response' };
+            })
+        }),
+        invoke: jest.fn().mockResolvedValue({ content: 'Mock response' }),
+        stream: jest.fn().mockImplementation(async function* () {
+            yield { content: 'Mock response' };
+        })
+    }))
 }));
-jest.mock('openai', () => ({ default: jest.fn() }));
+jest.mock('@langchain/core/prompts', () => ({ ChatPromptTemplate: { fromMessages: jest.fn() } }));
+jest.mock('@langchain/core/messages', () => ({
+    HumanMessage: jest.fn(),
+    SystemMessage: jest.fn(),
+    ToolMessage: jest.fn(),
+    AIMessage: jest.fn(),
+}));
 
 // Mock the LangChain tool factories
 jest.mock('./tools/query-sales', () => ({ createQuerySalesTool: jest.fn() }));
@@ -49,8 +62,7 @@ describe('AiService', () => {
 
     beforeEach(async () => {
         // Clear env so LLM = null (graceful fallback)
-        delete process.env.OPENAI_API_KEY;
-        delete process.env.ANTHROPIC_API_KEY;
+        delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
         delete process.env.REDIS_URL;
 
         const module: TestingModule = await Test.createTestingModule({
@@ -69,8 +81,20 @@ describe('AiService', () => {
         it('should return fallback message when LLM is not configured', async () => {
             const result = await service.query('org-1', 'user-1', 'Show me top customers');
             expect(result).toEqual({
-                response: 'AI is not configured. Please add OPENAI_API_KEY to environment variables.',
+                response: 'AI is not configured. Please add OPENROUTER_API_KEY to environment variables.',
             });
+        });
+    });
+
+    describe('queryStream', () => {
+        it('should yield fallback message when LLM is not configured', async () => {
+            const stream = service.queryStream('org-1', 'user-1', 'Show me top customers');
+            const results: any[] = [];
+            for await (const chunk of stream) {
+                results.push(chunk);
+            }
+            expect(results[0].data).toContain('AI is not configured');
+            expect(results[0].data).toContain('OPENROUTER_API_KEY');
         });
     });
 
@@ -97,7 +121,7 @@ describe('AiService', () => {
     describe('getSalesInsights', () => {
         it('should return fallback when LLM is not configured', async () => {
             const result = await service.getSalesInsights('org-1');
-            expect(result).toEqual({ insights: ['AI not configured. Add OPENAI_API_KEY.'] });
+            expect(result).toEqual({ insights: ['AI not configured. Add OPENROUTER_API_KEY.'] });
         });
     });
 
@@ -109,10 +133,10 @@ describe('AiService', () => {
     });
 
     describe('processShelfAudit', () => {
-        it('should return fallback when OpenAI client is not configured', async () => {
+        it('should return fallback when LLM is not configured', async () => {
             const result = await service.processShelfAudit('org-1', Buffer.from('fake-image'), 'image/jpeg', 'test notes');
             expect(result).toEqual({
-                analysis: 'AI is not configured. Add OPENAI_API_KEY.',
+                analysis: 'AI is not configured. Add OPENROUTER_API_KEY.',
                 detectedProducts: [],
                 competitorPresence: false,
                 estimatedShareOfShelf: 0,

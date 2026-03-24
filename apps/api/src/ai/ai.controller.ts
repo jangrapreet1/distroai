@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, Sse, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AiService } from './ai.service';
@@ -10,30 +10,51 @@ export class AiController {
     constructor(private readonly aiService: AiService) { }
 
     @Post('query')
-    async handleQuery(@Req() req: Request, @Body() body: { query: string }) {
+    async handleQuery(@Req() req: Request, @Body() body: { query: string; sessionId?: string }) {
         const orgId = (req.user as any).orgId;
-        const userId = (req.user as any).id;
+        const userId = (req.user as any).sub;
         await this.aiService.checkAndIncrementAIUsage(orgId);
-        return this.aiService.query(orgId, userId, body.query);
+        return this.aiService.query(orgId, userId, body.query, body.sessionId);
+    }
+
+    @Get('history')
+    async getHistory(@Req() req: Request) {
+        const orgId = (req.user as any).orgId;
+        const userId = (req.user as any).sub;
+        return this.aiService.getHistory(orgId, userId);
     }
 
     @Post('query/stream')
-    @Sse()
-    async streamQuery(@Req() req: Request, @Body() body: { query: string; image?: string }) {
+    async streamQuery(@Req() req: Request, @Res() res: any, @Body() body: { query: string; image?: string }) {
         const orgId = (req.user as any).orgId;
-        const userId = (req.user as any).id;
+        const userId = (req.user as any).sub;
         await this.aiService.checkAndIncrementAIUsage(orgId);
-        return this.aiService.queryStream(orgId, userId, body.query, body.image);
+
+        // Set SSE headers manually
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+
+        try {
+            for await (const chunk of this.aiService.queryStream(orgId, userId, body.query, body.image)) {
+                res.write(`data:${chunk.data}\n\n`);
+            }
+        } catch (err: any) {
+            res.write(`data:${JSON.stringify({ token: '\n[Error processing query]', done: true })}\n\n`);
+        } finally {
+            res.end();
+        }
     }
 
     @Post('voice-query')
     @UseInterceptors(FileInterceptor('audio'))
-    async handleVoiceQuery(@Req() req: Request, @UploadedFile() file: any) {
+    async handleVoiceQuery(@Req() req: Request, @Body('sessionId') sessionId: string, @UploadedFile() file: any) {
         if (!file) throw new Error("Audio file required");
         const orgId = (req.user as any).orgId;
-        const userId = (req.user as any).id;
+        const userId = (req.user as any).sub;
         await this.aiService.checkAndIncrementAIUsage(orgId);
-        return this.aiService.voiceQuery(orgId, userId, file.buffer, file.mimetype);
+        return this.aiService.voiceQuery(orgId, userId, file.buffer, file.mimetype, sessionId || undefined);
     }
 
     @Get('insights/customer/:id')

@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Req, Res } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -67,5 +68,24 @@ export class AuthController {
     @Get('me')
     getMe(@CurrentUser() user: JwtPayload) {
         return this.auth.getMe(user.sub);
+    }
+
+    @Public()
+    @Get('google')
+    @UseGuards(AuthGuard('google'))
+    async googleAuth() {
+        // Redirects to Google
+    }
+
+    @Public()
+    @Get('google/callback')
+    @UseGuards(AuthGuard('google'))
+    async googleAuthRedirect(@Req() req: any, @Res() res: any) {
+        // req.user contains the output of validateGoogleUser
+        const authData = req.user;
+
+        // Pass tokens to frontend, usually via cookie or redirect params
+        // For simplicity, redirecting with token in query params (frontend should extract and store)
+        return res.redirect(`http://localhost:3000/login?accessToken=${authData.accessToken}&refreshToken=${authData.refreshToken}`);
     }
 }

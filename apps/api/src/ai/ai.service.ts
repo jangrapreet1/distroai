@@ -2,11 +2,9 @@ import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service as StorageService } from '../storage/s3.service';
 import { ChatOpenAI } from '@langchain/openai';
-import { ChatAnthropic } from '@langchain/anthropic';
 import { detectLanguage } from './utils/language-detector';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { createToolCallingAgent, AgentExecutor } = require('@langchain/langgraph/prebuilt') as any;
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { HumanMessage, SystemMessage, ToolMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 import Redis from 'ioredis';
 
 // Tools
@@ -18,15 +16,28 @@ import { createGetSuppliersTool, createRunReportTool } from './tools/get-supplie
 import { createGetProductDetailsTool } from './tools/product-actions';
 import { createCreateOrderTool, createCancelOrderTool } from './tools/order-actions';
 import { createUpdatePaymentTool, createGetCustomerBalanceTool } from './tools/finance-actions';
-import OpenAI from 'openai';
-import * as fs from 'fs';
 import { v4 as uuid } from 'uuid';
 
-export const llm = process.env.OPENAI_API_KEY
-    ? new ChatOpenAI({ model: 'gpt-4o', temperature: 0 })
-    : process.env.ANTHROPIC_API_KEY
-        ? new ChatAnthropic({ model: 'claude-3-5-sonnet-20241022', temperature: 0 })
-        : null;
+let _llm: ChatOpenAI | null = null;
+let _llmInitialized = false;
+
+export function getLlm(): ChatOpenAI | null {
+    if (!_llmInitialized) {
+        _llmInitialized = true;
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        if (apiKey) {
+            _llm = new ChatOpenAI({
+                modelName: 'nvidia/nemotron-3-super-120b-a12b:free',
+                apiKey: apiKey,
+                temperature: 0,
+                configuration: {
+                    baseURL: "https://openrouter.ai/api/v1",
+                }
+            });
+        }
+    }
+    return _llm;
+}
 
 const PLAN_LIMITS = {
     FREE: { maxAiQueriesPerMonth: 0 },
@@ -40,7 +51,9 @@ export class AiService {
     private readonly logger = new Logger(AiService.name);
     private redis: Redis | null = null;
 
-    private openaiClient = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+    private openaiClient = process.env.OPENROUTER_API_KEY
+        ? null // Vision handled directly through LangChain
+        : null;
 
     constructor(
         private prisma: PrismaService,
@@ -95,62 +108,58 @@ export class AiService {
         ];
     }
 
-    async query(orgId: string, userId: string, userQuery: string) {
-        if (!llm) {
-            return { response: "AI is not configured. Please add OPENAI_API_KEY to environment variables." };
+    async query(orgId: string, userId: string, userQuery: string, sessionId?: string) {
+        if (!getLlm()) {
+            return { response: "AI is not configured. Please add OPENROUTER_API_KEY to environment variables." };
         }
 
         const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
         const orgName = org?.name || 'your organization';
-
         const detectedLang = detectLanguage(userQuery);
 
-        const prompt = ChatPromptTemplate.fromMessages([
-            ["system", `You are DistroAI, an intelligent business assistant for ${orgName}, an Indian distribution business.
-You have access to their complete business data through tools. Always use tools to get real data before answering.
-
+        const systemMsg = `You are DistroAI, an intelligent business assistant for ${orgName}, an Indian distribution business.
+You have access to business data tools. Use them when the user asks about real business data.
 Language: Respond in ${detectedLang === 'hi' ? 'Hindi (Devanagari script mixed with business terms in English)' : 'English'}.
-
-Data format rules:
-- All monetary values: Indian format with ₹ symbol
-- Dates: DD MMM YYYY format
-- Numbers: Indian system (1 lakh = 1,00,000; 1 crore = 1,00,00,000)
-
-When you have data that would benefit from visualization, wrap it in XML tags:
-- For charts: <chart type="bar|line|pie" title="...">JSON data array</chart>
-- For tables: <table headers="col1,col2,...">JSON rows array</table>
-
-Always be direct and actionable. End with a specific recommendation when relevant.
-Never make up data. If a tool returns no data, say so clearly.
-Current date: ${new Date().toISOString().split('T')[0]}`],
-            ["placeholder", "{chat_history}"],
-            ["user", "{input}"],
-            ["placeholder", "{agent_scratchpad}"],
-        ]);
+Data format: All monetary values in Indian format with ₹ symbol. Dates: DD MMM YYYY. Numbers: Indian system.
+Always be direct and actionable. Never make up data.
+Current date: ${new Date().toISOString().split('T')[0]}`;
 
         const tools = this.buildTools(orgId, userId);
-        const agent = createToolCallingAgent({ llm, tools, prompt });
-        const agentExecutor = new AgentExecutor({ agent, tools });
-
+        const toolMap = new Map(tools.map(t => [t.name, t]));
+        const llmWithTools = getLlm()!.bindTools(tools);
+        const messages: BaseMessage[] = [new SystemMessage(systemMsg), new HumanMessage(userQuery)];
         const timeoutMs = 30000;
 
         try {
-            const result: any = await Promise.race([
-                agentExecutor.invoke({ input: userQuery }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
-            ]);
+            const result: string = await Promise.race([
+                (async () => {
+                    for (let round = 0; round <= 5; round++) {
+                        const response = await llmWithTools.invoke(messages);
+                        const toolCalls = (response as any).tool_calls ?? [];
+                        if (toolCalls.length === 0) {
+                            return typeof response.content === 'string' ? response.content : '';
+                        }
+                        messages.push(new AIMessage({ content: response.content || '', tool_calls: toolCalls }));
+                        for (const tc of toolCalls) {
+                            const tool = toolMap.get(tc.name);
+                            try {
+                                const res = tool ? await tool.invoke(tc.args) : `Tool '${tc.name}' not found.`;
+                                messages.push(new ToolMessage({ tool_call_id: tc.id, content: typeof res === 'string' ? res : JSON.stringify(res) }));
+                            } catch (e: any) {
+                                messages.push(new ToolMessage({ tool_call_id: tc.id, content: `Error: ${e.message}` }));
+                            }
+                        }
+                    }
+                    return '';
+                })(),
+                new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+            ]) as string;
 
             await this.prisma.aIQuery.create({
-                data: {
-                    orgId,
-                    userId,
-                    query: userQuery,
-                    response: result.output,
-                    latencyMs: 1500, // mock latency tracking for now
-                }
+                data: { orgId, userId, sessionId, query: userQuery, response: result, latencyMs: 0 }
             });
 
-            return { response: result.output };
+            return { response: result };
         } catch (error: any) {
             if (error.message === 'timeout') {
                 return { response: "I'm sorry, that query took too long to process. Try a simpler question." };
@@ -160,9 +169,17 @@ Current date: ${new Date().toISOString().split('T')[0]}`],
         }
     }
 
-    async * queryStream(orgId: string, userId: string, userQuery: string, imageBase64?: string): AsyncIterable<{ data: string }> {
-        if (!llm) {
-            yield { data: JSON.stringify({ token: "AI is not configured. Please add OPENAI_API_KEY.", done: true }) };
+    async getHistory(orgId: string, userId: string) {
+        return this.prisma.aIQuery.findMany({
+            where: { orgId, userId },
+            orderBy: { createdAt: 'asc' },
+            take: 50
+        });
+    }
+
+    async * queryStream(orgId: string, userId: string, userQuery: string, imageBase64?: string, sessionId?: string): AsyncIterable<{ data: string }> {
+        if (!getLlm()) {
+            yield { data: JSON.stringify({ token: "AI is not configured. Please add OPENROUTER_API_KEY.", done: true }) };
             return;
         }
 
@@ -170,115 +187,219 @@ Current date: ${new Date().toISOString().split('T')[0]}`],
         const orgName = org?.name || 'your organization';
         const detectedLang = detectLanguage(userQuery);
 
-        // If image provided, first use vision to describe/identify the product
+        // Immediate persistence for background generation
+        const aiQueryRecord = await this.prisma.aIQuery.create({
+            data: { orgId, userId, query: userQuery, response: "", latencyMs: 0 }
+        });
+        const aiQueryRecordId = aiQueryRecord.id;
+        let finalOutput = '';
+
+        // If image provided, use Gemini Vision
         let imageContext = '';
-        if (imageBase64 && this.openaiClient) {
+        if (imageBase64) {
             try {
-                const visionResponse = await this.openaiClient.chat.completions.create({
-                    model: 'gpt-4o',
-                    messages: [{
-                        role: 'user',
-                        content: [
-                            { type: 'text', text: 'Identify this product. Return the brand name, product name, variant/size, and any SKU/barcode visible. Be concise.' },
-                            { type: 'image_url', image_url: { url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` } },
-                        ],
-                    }],
-                    max_tokens: 300,
+                const visionLlm = new ChatOpenAI({
+                    modelName: 'google/gemini-2.5-flash',
+                    apiKey: process.env.OPENROUTER_API_KEY!,
+                    temperature: 0,
+                    configuration: {
+                        baseURL: "https://openrouter.ai/api/v1",
+                    }
                 });
-                imageContext = `\n\n[The user uploaded a product image. Vision analysis: ${visionResponse.choices[0]?.message?.content || 'Could not identify'}]`;
+                const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
+                const visionResponse = await visionLlm.invoke([
+                    new HumanMessage({
+                        content: [
+                            { type: 'text', text: 'Identify the product in this image. First describe it briefly, then provide a short clean 1-3 word search query to find this product in a database by name or sku. Format: "Search: <query>" at the end.' },
+                            { type: 'image_url', image_url: { url: imageUrl } },
+                        ],
+                    })
+                ]);
+
+                const visionText = typeof visionResponse.content === 'string' ? visionResponse.content : '';
+                imageContext = `\n\n[The user uploaded a product image. Vision analysis: ${visionText}]\n`;
+
+                // Extract 'Search: ...' and lookup in DB
+                const searchMatch = visionText.match(/Search:\s*(.+)/i);
+                if (searchMatch && searchMatch[1]) {
+                    const query = searchMatch[1].trim().replace(/['"]/g, '');
+                    // Split query into terms (e.g. "Parle G 800g" -> ["Parle", "G", "800g"])
+                    const terms = query.split(/\s+/).filter(t => t.length > 2).slice(0, 3);
+
+                    if (terms.length > 0) {
+                        const products = await this.prisma.product.findMany({
+                            where: {
+                                orgId,
+                                AND: terms.map(term => ({
+                                    OR: [
+                                        { name: { contains: term, mode: 'insensitive' } },
+                                        { sku: { contains: term, mode: 'insensitive' } },
+                                        { brand: { contains: term, mode: 'insensitive' } }
+                                    ]
+                                }))
+                            },
+                            include: { inventories: { select: { quantity: true, warehouse: { select: { name: true } } } } },
+                            take: 3
+                        });
+
+                        if (products.length > 0) {
+                            imageContext += `[Database Search Results for "${query}":\n`;
+                            products.forEach(p => {
+                                const stockInfo = p.inventories.map(i => `${i.quantity} at ${i.warehouse.name}`).join(', ') || 'Out of stock, 0 total';
+                                imageContext += `- ${p.name} (brand: ${p.brand || 'N/A'}, sku: ${p.sku}) | Price: ₹${p.sellingPrice} | MRP: ₹${p.mrp} | Stock: ${stockInfo}\n`;
+                            });
+                            imageContext += `]`;
+                        } else {
+                            imageContext += `[No exact products found in database for "${query}".]`;
+                        }
+                    }
+                }
             } catch (err: any) {
                 this.logger.error('Vision analysis failed', err);
                 imageContext = '\n\n[User uploaded an image but vision analysis failed]';
             }
         }
 
-        const prompt = ChatPromptTemplate.fromMessages([
-            ["system", `You are DistroAI, an intelligent business assistant for ${orgName}, an Indian distribution business.
-You have access to their complete business data through tools. Always use tools to get real data before answering.
+        const systemPrompt = `You are DistroAI, an intelligent business assistant for ${orgName}, an Indian distribution business.
+You have access to business data tools. Use them ONLY when the user asks about real business data (sales, inventory, orders, customers, payments, etc.).
+For greetings, general questions, or conversations that don't need data, respond directly without using any tools.
 
-You can also TAKE ACTIONS:
-- Create new orders for customers
-- Cancel existing orders
-- Record incoming payments
-- Look up product details (MRP, stock, price)
-- Check customer outstanding balances
-
-When the user asks you to perform an action, confirm what you did clearly.
+You can also TAKE ACTIONS when asked:
+- Create/cancel orders, record payments, look up product details, check customer balances
+- When performing actions, confirm what you did clearly.
 
 Language: Respond in ${detectedLang === 'hi' ? 'Hindi (Devanagari script mixed with business terms in English)' : 'English'}.
-
-Data format rules:
-- All monetary values: Indian format with ₹ symbol
-- Dates: DD MMM YYYY format
-- Numbers: Indian system (1 lakh = 1,00,000)
-
-When you have data that would benefit from visualization, wrap it in XML tags:
-- For charts: <chart type="bar|line|pie" title="...">JSON data array</chart>
-- For tables: <table headers="col1,col2,...">JSON rows array</table>
-
-Always be direct and actionable. End with a specific recommendation when relevant.
-Never make up data.
-Current date: ${new Date().toISOString().split('T')[0]}`],
-            ["placeholder", "{chat_history}"],
-            ["user", "{input}"],
-            ["placeholder", "{agent_scratchpad}"],
-        ]);
+Data format: All monetary values in Indian format with ₹ symbol. Dates: DD MMM YYYY. Numbers: Indian system (lakh/crore).
+When data suits visualization, use XML tags:
+- <chart type="bar|line|pie" title="...">JSON data array</chart>
+- <table headers="col1,col2,...">JSON rows array</table>
+Always be direct and actionable. Never make up data. If a tool returns no data, say so clearly.
+Current date: ${new Date().toISOString().split('T')[0]}`;
 
         const tools = this.buildTools(orgId, userId);
-        const agent = createToolCallingAgent({ llm, tools, prompt });
-        const agentExecutor = new AgentExecutor({ agent, tools });
+        const toolMap = new Map(tools.map(t => [t.name, t]));
+
+        // Bind tools to LLM — the LLM decides whether to use them (like ChatGPT/Claude)
+        const llmWithTools = getLlm()!.bindTools(tools);
+
+        const messages: BaseMessage[] = [
+            new SystemMessage(systemPrompt),
+            new HumanMessage(userQuery + imageContext),
+        ];
 
         try {
-            // Stream tokens
-            const stream = await agentExecutor.streamEvents({ input: userQuery + imageContext }, { version: "v2" });
+            const MAX_TOOL_ROUNDS = 5; // Safety limit to prevent infinite loops
 
-            let finalOutput = "";
+            for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+                // Stream the LLM response
+                const stream = await llmWithTools.stream(messages);
+                let chunks: any[] = [];
 
-            for await (const event of stream) {
-                if (event.event === "on_chat_model_stream") {
-                    const chunk = event.data?.chunk?.content || "";
-                    if (chunk) {
-                        finalOutput += chunk;
-                        yield { data: JSON.stringify({ token: chunk, done: false }) };
+                for await (const chunk of stream) {
+                    chunks.push(chunk);
+                    // Stream text content to the client immediately
+                    const text = typeof chunk.content === 'string' ? chunk.content : '';
+                    if (text) {
+                        finalOutput += text;
+                        yield { data: JSON.stringify({ token: text, done: false }) };
                     }
                 }
-            }
 
-            await this.prisma.aIQuery.create({
-                data: { orgId, userId, query: userQuery, response: finalOutput, latencyMs: 1500 }
-            });
+                // Reconstruct the full AI message from chunks
+                if (chunks.length === 0) break;
+                let fullMessage = chunks[0];
+                for (let i = 1; i < chunks.length; i++) {
+                    fullMessage = fullMessage.concat(chunks[i]);
+                }
+
+                // Check if the LLM wants to call tools
+                const toolCalls = fullMessage.tool_calls ?? [];
+                if (toolCalls.length === 0) {
+                    // No tool calls — LLM responded directly, we're done
+                    break;
+                }
+
+                // Execute each tool call and collect results
+                this.logger.log(`LLM requested ${toolCalls.length} tool call(s): ${toolCalls.map((tc: any) => tc.name).join(', ')}`);
+                messages.push(new AIMessage({ content: fullMessage.content || '', tool_calls: toolCalls }));
+
+                for (const toolCall of toolCalls) {
+                    const tool = toolMap.get(toolCall.name);
+                    if (tool) {
+                        try {
+                            const result = await tool.invoke(toolCall.args);
+                            messages.push(new ToolMessage({
+                                tool_call_id: toolCall.id,
+                                content: typeof result === 'string' ? result : JSON.stringify(result),
+                            }));
+                        } catch (toolErr: any) {
+                            this.logger.error(`Tool ${toolCall.name} failed`, toolErr);
+                            messages.push(new ToolMessage({
+                                tool_call_id: toolCall.id,
+                                content: `Error: ${toolErr.message}`,
+                            }));
+                        }
+                    } else {
+                        messages.push(new ToolMessage({
+                            tool_call_id: toolCall.id,
+                            content: `Tool '${toolCall.name}' not found.`,
+                        }));
+                    }
+                }
+                // Loop back: send tool results to LLM for the final response
+            }
 
             yield { data: JSON.stringify({ done: true }) };
         } catch (error: any) {
-            this.logger.error("AI Stream Error", error);
-            yield { data: JSON.stringify({ token: "\n[Error processing query]", done: true }) };
+            this.logger.error('AI Stream Error', error);
+            yield { data: JSON.stringify({ token: '\n[Error processing query]', done: true }) };
+        } finally {
+            if (aiQueryRecordId) {
+                await this.prisma.aIQuery.update({
+                    where: { id: aiQueryRecordId },
+                    data: { response: finalOutput }
+                }).catch(e => this.logger.error('Failed to update AI query history', e));
+            }
         }
     }
 
-    async voiceQuery(orgId: string, userId: string, audioBuffer: Buffer, mimeType: string) {
-        if (!this.openaiClient) {
-            return { transcription: "AI is not configured.", response: "Please add OPENAI_API_KEY" };
+    async voiceQuery(orgId: string, userId: string, audioBuffer: Buffer, mimeType: string, sessionId?: string) {
+        if (!getLlm()) {
+            return { transcription: 'AI is not configured.', response: 'Please add OPENROUTER_API_KEY' };
         }
 
-        // Temp save buffer to pass to OpenAI (Whisper requires a file stream, not just buffer natively easily without tricks)
-        const tempPath = `/tmp/${uuid()}.webm`;
-        fs.writeFileSync(tempPath, audioBuffer);
+        // Gemini 2.0 Flash supports audio directly via inline data
+        const base64Audio = audioBuffer.toString('base64');
 
         try {
-            const transcription = await this.openaiClient.audio.transcriptions.create({
-                file: fs.createReadStream(tempPath),
-                model: 'whisper-1',
-                response_format: 'text',
+            const visionLlm = new ChatOpenAI({
+                modelName: 'google/gemini-2.5-flash',
+                apiKey: process.env.OPENROUTER_API_KEY!,
+                temperature: 0,
+                configuration: {
+                    baseURL: "https://openrouter.ai/api/v1",
+                }
             });
+
+            const transcriptionResponse = await visionLlm.invoke([
+                new HumanMessage({
+                    content: [
+                        { type: 'text', text: 'Transcribe this audio accurately. Return only the transcribed text, nothing else.' },
+                        { type: 'media', data: base64Audio, mimeType: mimeType as any },
+                    ],
+                })
+            ]);
+
+            const transcription = transcriptionResponse.content.toString();
 
             // Upload to S3 for history
             await this.storageService.upload(`voice/${orgId}/${uuid()}.webm`, audioBuffer, mimeType);
 
-            // Now run standard query on transcription
-            const aiResponse = await this.query(orgId, userId, transcription as unknown as string);
+            const aiResponse = await this.query(orgId, userId, transcription, sessionId);
             return { transcription, response: aiResponse.response };
-        } finally {
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (err: any) {
+            this.logger.error('Voice query failed', err);
+            return { transcription: 'Could not transcribe audio', response: 'Voice processing failed. Please try typing your query.' };
         }
     }
 
@@ -293,7 +414,7 @@ Current date: ${new Date().toISOString().split('T')[0]}`],
 
         if (!customer) throw new Error("Customer not found");
 
-        if (!llm) return { summary: "AI not configured.", churnRisk: "Unknown", recommendAction: "Configure OPENAI_API_KEY" };
+        if (!getLlm()) return { summary: "AI not configured.", churnRisk: "Unknown", recommendAction: "Configure OPENROUTER_API_KEY" };
 
         const prompt = `Analyze this distribution customer data and provide insights:
 ${JSON.stringify(customer)}
@@ -305,7 +426,7 @@ Return ONLY a JSON response in this exact schema:
   "recommendAction": "Specific 1 sentence recommendation for the salesman"
 }`;
 
-        const res = await llm.invoke(prompt);
+        const res = await getLlm()!.invoke(prompt);
 
         try {
             const text = res.content.toString();
@@ -317,7 +438,7 @@ Return ONLY a JSON response in this exact schema:
     }
 
     async getSalesInsights(orgId: string) {
-        if (!llm) return { insights: ["AI not configured. Add OPENAI_API_KEY."] };
+        if (!getLlm()) return { insights: ["AI not configured. Add OPENROUTER_API_KEY."] };
 
         const topProducts = await this.prisma.orderItem.groupBy({
             by: ['productId'],
@@ -340,7 +461,7 @@ Top Products (IDs mapping to revenue/qty): ${JSON.stringify(topProducts)}
 Return a JSON array of 3 distinct, actionable insights strings (max 150 chars each). Example:
 ["Insight 1", "Insight 2", "Insight 3"]`;
 
-        const res = await llm.invoke(prompt);
+        const res = await getLlm()!.invoke(prompt);
         try {
             const text = res.content.toString();
             const match = text.match(/\[[\s\S]*\]/);
@@ -351,7 +472,7 @@ Return a JSON array of 3 distinct, actionable insights strings (max 150 chars ea
     }
 
     async getSchemeRecommendations(orgId: string) {
-        if (!llm) return { recommendations: [] };
+        if (!getLlm()) return { recommendations: [] };
 
         const inventory = await this.prisma.inventory.findMany({
             where: { orgId, quantity: { gt: 50 } },
@@ -367,7 +488,7 @@ Return ONLY JSON array:
   { "title": "Scheme Title", "description": "How it works", "targetProduct": "Product Name" }
 ]`;
 
-        const res = await llm.invoke(prompt);
+        const res = await getLlm()!.invoke(prompt);
         try {
             const text = res.content.toString();
             const match = text.match(/\[[\s\S]*\]/);
@@ -378,9 +499,9 @@ Return ONLY JSON array:
     }
 
     async processShelfAudit(orgId: string, imageBuffer: Buffer, mimeType: string, notes?: string) {
-        if (!this.openaiClient) {
+        if (!getLlm()) {
             return {
-                analysis: "AI is not configured. Add OPENAI_API_KEY.",
+                analysis: 'AI is not configured. Add OPENROUTER_API_KEY.',
                 detectedProducts: [],
                 competitorPresence: false,
                 estimatedShareOfShelf: 0
@@ -397,106 +518,73 @@ Return ONLY a JSON object exactly matching this schema:
 {
   "analysis": "1 paragraph summary of shelf condition (facings, out of stock, compliance)",
   "detectedProducts": ["Brand A 500g", "Brand B 1kg"],
-  "competitorPresence": true/false,
-  "estimatedShareOfShelf": 45 (as integer percentage)
+  "competitorPresence": true,
+  "estimatedShareOfShelf": 45
 }`;
 
         try {
-            const response = await this.openaiClient.chat.completions.create({
-                model: "gpt-4o",
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            { type: "text", text: prompt },
-                            { type: "image_url", image_url: { url: dataUri } }
-                        ]
-                    }
-                ],
-                max_tokens: 500,
+            const visionLlm = new ChatOpenAI({
+                modelName: 'google/gemini-2.5-flash',
+                apiKey: process.env.OPENROUTER_API_KEY!,
+                temperature: 0,
+                configuration: {
+                    baseURL: "https://openrouter.ai/api/v1",
+                }
             });
 
-            const text = response.choices[0]?.message?.content || "";
+            const response = await visionLlm.invoke([
+                new HumanMessage({
+                    content: [
+                        { type: 'text', text: prompt },
+                        { type: 'image_url', image_url: { url: dataUri } },
+                    ],
+                })
+            ]);
+
+            const text = response.content.toString();
             const match = text.match(/\{[\s\S]*\}/);
 
             // Upload audit image to S3 for history
             const tempPath = `audits/${orgId}/${uuid()}.jpg`;
             await this.storageService.upload(tempPath, imageBuffer, mimeType);
 
-            return match ? JSON.parse(match[0]) : { error: "Failed to parse analysis" };
+            return match ? JSON.parse(match[0]) : { error: 'Failed to parse analysis' };
         } catch (err: any) {
-            this.logger.error("Vision Analysis Error", err);
-            return { error: "Vision processing failed." };
+            this.logger.error('Vision Analysis Error', err);
+            return { error: 'Vision processing failed.' };
         }
     }
 
     async generateAndSaveEmbedding(productId: string) {
-        if (!this.openaiClient) return;
-
-        const product = await this.prisma.product.findUnique({
-            where: { id: productId }
-        });
-
-        if (!product) return;
-
-        const textToEmbed = `${product.name} ${product.description || ''} ${product.category || ''} ${product.brand || ''}`.trim();
-
-        try {
-            const response = await this.openaiClient.embeddings.create({
-                model: 'text-embedding-3-small',
-                input: textToEmbed,
-            });
-            const embedding = response.data[0].embedding;
-
-            await this.prisma.$executeRaw`
-                UPDATE "Product" 
-                SET embedding = ${embedding}::vector 
-                WHERE id = ${productId}
-            `;
-        } catch (error) {
-            this.logger.error(`Failed to generate embedding for ${productId}`, error);
-        }
+        // Gemini embeddings not wired yet — skip gracefully
+        return;
     }
 
     async semanticProductSearch(orgId: string, query: string, limit = 10) {
-        if (!this.openaiClient) return [];
-
+        // Simple text search (Gemini embeddings not yet wired)
         try {
-            const response = await this.openaiClient.embeddings.create({
-                model: 'text-embedding-3-small',
-                input: query,
+            const products = await this.prisma.product.findMany({
+                where: {
+                    orgId,
+                    isActive: true,
+                    OR: [
+                        { name: { contains: query, mode: 'insensitive' } },
+                        { sku: { contains: query, mode: 'insensitive' } },
+                        { category: { contains: query, mode: 'insensitive' } },
+                        { brand: { contains: query, mode: 'insensitive' } },
+                    ],
+                },
+                take: limit,
+                select: { id: true, name: true, sku: true, category: true, brand: true, mrp: true, sellingPrice: true },
             });
-            const embedding = response.data[0].embedding;
-
-            const products = await this.prisma.$queryRaw`
-                SELECT id, name, sku, category, brand, mrp, selling_price as "sellingPrice", 1 - (embedding <=> ${embedding}::vector) as similarity
-                FROM "Product"
-                WHERE org_id = ${orgId} AND is_active = true
-                ORDER BY similarity DESC
-                LIMIT ${limit}
-            `;
-
             return products;
         } catch (error) {
-            this.logger.error("Semantic search failed", error);
+            this.logger.error('Semantic search failed', error);
             return [];
         }
     }
 
     async backfillEmbeddings(orgId: string) {
-        if (!this.openaiClient) return { message: "AI not configured" };
-
-        const products = await this.prisma.product.findMany({
-            where: { orgId, isActive: true }
-        });
-
-        let count = 0;
-        for (const product of products) {
-            // Simplified batched backfill check (in full prod we'd queue these or check if embedding is null)
-            await this.generateAndSaveEmbedding(product.id);
-            count++;
-        }
-
-        return { message: `Queued/processed embeddings for ${count} products.` };
+        return { message: 'Embeddings not configured (using Gemini). Skipped.' };
     }
 }

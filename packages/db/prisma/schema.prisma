@@ -171,6 +171,7 @@ model Organization {
   subscription    Subscription?
   settings        OrgSettings?
   purchaseOrders  PurchaseOrder[]
+  expenses        Expense[]
 }
 
 model User {
@@ -178,7 +179,9 @@ model User {
   orgId         String
   email         String
   phone         String?
-  passwordHash  String
+  passwordHash  String?
+  authProvider  String   @default("local") // local, google
+  googleId      String?  @unique
   firstName     String
   lastName      String
   role          Role     @default(VIEWER)
@@ -755,6 +758,7 @@ model AIQuery {
   id         String   @id @default(cuid())
   orgId      String
   userId     String
+  sessionId  String?
   query      String
   response   String   @db.Text
   queryType  String?
@@ -920,4 +924,24 @@ enum RequestStatus {
   PENDING
   COMPLETED
   EXPIRED
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  orgId       String
+  vendorName  String
+  amount      Float
+  taxAmount   Float?
+  date        DateTime
+  category    String?
+  receiptUrl  String?
+  notes       String?
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED, PAID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([date])
 }

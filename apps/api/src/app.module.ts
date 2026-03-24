@@ -30,6 +30,10 @@ import { PaymentProcessor } from './queue/payment.processor';
 import { MetricsModule } from './metrics/metrics.module';
 import { PublicModule } from './public/public.module';
 import { ReportsModule } from './reports/reports.module';
+import { SyncModule } from './sync/sync.module';
+import { BillingModule } from './billing/billing.module';
+import { ExpensesModule } from './expenses/expenses.module';
+import { PortalModule } from './portal/portal.module';
 
 @Module({
     imports: [
@@ -79,6 +83,10 @@ import { ReportsModule } from './reports/reports.module';
         MetricsModule,
         PublicModule,
         ReportsModule,
+        SyncModule,
+        BillingModule,
+        ExpensesModule,
+        PortalModule,
     ],
     controllers: [AppController],
     providers: [AppService, PaymentProcessor],

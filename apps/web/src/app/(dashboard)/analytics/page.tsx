@@ -7,7 +7,7 @@ import { useSalesAnalytics, useInventory } from "@/hooks/api-hooks";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
-const salesByDay = Array.from({ length: 30 }, (_, i) => ({ day: `${i + 1}`, revenue: Math.floor(Math.random() * 80000) + 20000, orders: Math.floor(Math.random() * 15) + 3 }));
+
 const categoryColors: Record<string, string> = {
     FMCG: "var(--gold)",
     Dairy: "var(--green-bright)",
@@ -82,7 +82,7 @@ export default function AnalyticsPage() {
                                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#5A5040" }} axisLine={false} tickLine={false} />
                                             <YAxis domain={[0, 'auto']} tick={{ fontSize: 10, fill: "#5A5040" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                                             <Tooltip contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }} />
-                                            <Bar dataKey="revenue" fill="var(--gold)" radius={[4, 4, 0, 0]} opacity={0.8} />
+                                            <Bar dataKey="revenue" fill="var(--gold)" radius={[4, 4, 0, 0]} opacity={0.8} maxBarSize={60} />
                                         </BarChart>
                                     </ResponsiveContainer>}
                         </div>

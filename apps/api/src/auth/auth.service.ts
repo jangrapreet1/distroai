@@ -237,6 +237,95 @@ export class AuthService {
         });
     }
 
+    async validateGoogleUser(profile: any) {
+        let user: any = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { googleId: profile.googleId },
+                    { email: profile.email }
+                ]
+            },
+            include: { organization: true }
+        });
+
+        if (!user) {
+            // Auto-create user and generic organization for Google Sign-ups
+            const now = new Date();
+            const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+            const result = await this.prisma.$transaction(async (tx: any) => {
+                const org = await tx.organization.create({
+                    data: {
+                        name: `${profile.firstName}'s Workspace`,
+                        email: profile.email,
+                        plan: 'GROWTH',
+                        businessType: 'RETAIL',
+                    },
+                });
+
+                const newUser = await tx.user.create({
+                    data: {
+                        orgId: org.id,
+                        email: profile.email,
+                        firstName: profile.firstName,
+                        lastName: profile.lastName,
+                        avatarUrl: profile.avatarUrl,
+                        authProvider: 'google',
+                        googleId: profile.googleId,
+                        role: 'OWNER',
+                    },
+                });
+
+                await tx.warehouse.create({
+                    data: { orgId: org.id, name: 'Main Godown', code: 'WH-MAIN', isDefault: true },
+                });
+
+                await tx.orgSettings.create({
+                    data: {
+                        orgId: org.id,
+                        invoicePrefix: 'INV',
+                        orderPrefix: 'ORD',
+                        poPrefix: 'PO',
+                        financialYearStart: 4,
+                        language: 'en',
+                    },
+                });
+
+                await tx.subscription.create({
+                    data: {
+                        orgId: org.id,
+                        plan: 'GROWTH',
+                        status: 'TRIAL',
+                        currentPeriodStart: now,
+                        currentPeriodEnd: trialEnd,
+                    },
+                });
+
+                return { org, user: newUser };
+            });
+
+            user = { ...result.user, organization: result.org } as any;
+        } else {
+            // Ensure googleId is linked if signing in via Google for an existing account
+            if (!user.googleId) {
+                user = await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { googleId: profile.googleId, authProvider: 'google', avatarUrl: user.avatarUrl || profile.avatarUrl },
+                    include: { organization: true }
+                });
+            }
+        }
+
+        await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
+        const tokens = await this.generateTokens(user.id, user.orgId, user.role, user.email);
+        return {
+            ...tokens,
+            user: { id: user.id, email: user.email, firstName: user.firstName, role: user.role, avatarUrl: user.avatarUrl },
+            org: { id: user.orgId, name: user.organization?.name || '', plan: user.organization?.plan || '' },
+        };
+    }
+
     private async generateTokens(userId: string, orgId: string, role: string, email: string) {
         const payload = { sub: userId, orgId, role, email };
 

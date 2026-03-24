@@ -35,7 +35,14 @@ echo "✅ Docker Compose: $(docker compose version --short)"
 echo "👤 Creating distroai user..."
 if ! id "distroai" &>/dev/null; then
     useradd -m -s /bin/bash -G docker distroai
-    echo "✅ User 'distroai' created"
+    mkdir -p /home/distroai/.ssh
+    if [ -f /root/.ssh/authorized_keys ]; then
+        cp /root/.ssh/authorized_keys /home/distroai/.ssh/
+    fi
+    chown -R distroai:distroai /home/distroai/.ssh
+    chmod 700 /home/distroai/.ssh
+    chmod 600 /home/distroai/.ssh/authorized_keys 2>/dev/null || true
+    echo "✅ User 'distroai' created with SSH keys copied"
 else
     echo "✅ User 'distroai' already exists"
 fi

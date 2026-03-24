@@ -31,7 +31,7 @@ function KPICard({ title, value, change, changeLabel, icon: Icon, accentColor, s
     return (
         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5 hover:border-opacity-30 transition group" style={{ "--accent": accentColor } as React.CSSProperties}>
             <div className="flex items-start justify-between mb-3">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${accentColor}15` }}>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 duration-300" style={{ background: `${accentColor}15` }}>
                     <Icon size={18} style={{ color: accentColor }} />
                 </div>
                 <div className={`flex items-center gap-1 text-xs font-medium ${isUp ? "text-[var(--green-bright)]" : "text-[var(--red)]"}`}>
@@ -160,7 +160,7 @@ export default function DashboardPage() {
     const ordersChange = monthOrders > 0 && todayOrders > 0 ? Math.round((todayOrders / (monthOrders / daysElapsed)) * 100 - 100) : 0;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
             {/* AI Briefing Card */}
             <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-gradient-to-r from-[var(--bg-secondary)] via-[var(--bg-card)] to-[var(--bg-secondary)] p-6">
                 <div className="absolute inset-0 bg-gradient-to-r from-[var(--gold)]/3 via-transparent to-[var(--purple)]/3 animate-pulse" style={{ animationDuration: "4s" }} />
@@ -196,7 +196,7 @@ export default function DashboardPage() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-500 delay-150 fill-mode-both">
                 <KPICard title="Revenue" value={formatINR(todayRevenue)} change={revenueChange} changeLabel="vs monthly avg" icon={IndianRupee} accentColor="var(--green-bright)" sparkData={sparkRevenue} />
                 <KPICard title="Orders" value={String(todayOrders)} change={ordersChange} changeLabel="today" icon={ShoppingCart} accentColor="var(--gold)" sparkData={sparkOrders} />
                 <KPICard title="Outstanding" value={formatINR(outstanding)} change={0} changeLabel="total due" icon={AlertTriangle} accentColor="var(--red)" sparkData={sparkOutstanding} />

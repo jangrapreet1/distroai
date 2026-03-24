@@ -73,14 +73,34 @@ export function useAuth() {
         router.push("/login");
     }, [clearAuth, router]);
 
+    const handleGoogleCallbackMutation = useMutation({
+        mutationFn: async (tokens: { accessToken: string; refreshToken: string }) => {
+            // Temporary token set to authenticate /me request
+            useAuthStore.getState().setTokens(tokens);
+            document.cookie = `accessToken=${tokens.accessToken};path=/;max-age=900;SameSite=Lax`;
+            const res = await apiClient.get<any>("/api/v1/auth/me");
+            return { user: res.data, org: res.data.organization, tokens };
+        },
+        onSuccess: (data) => {
+            setAuth(data.user, data.org, data.tokens);
+            toast.success(`Welcome, ${data.user.firstName}!`);
+            router.push("/");
+        },
+        onError: () => {
+            logout();
+            toast.error("Google sign-in failed");
+        }
+    });
+
     return {
         user,
         org,
         isAuthenticated,
         login: loginMutation.mutate,
         register: registerMutation.mutate,
+        handleGoogleCallback: handleGoogleCallbackMutation.mutate,
         logout,
-        isLoggingIn: loginMutation.isPending,
+        isLoggingIn: loginMutation.isPending || handleGoogleCallbackMutation.isPending,
         isRegistering: registerMutation.isPending,
     };
 }
