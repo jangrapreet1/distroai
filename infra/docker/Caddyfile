@@ -11,12 +11,20 @@
 # to serve over HTTP on port 80 (no SSL).
 # ─────────────────────────────────────────────────────────
 
-# Frontend — serves the Next.js app
+# Main domain — routes /api/* to API, everything else to Next.js
 {$DOMAIN:localhost} {
-	reverse_proxy web:3001
+	# API routes — proxy /api/* to the NestJS backend
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# Everything else — proxy to the Next.js frontend
+	handle {
+		reverse_proxy web:3001
+	}
 }
 
-# API — serves the NestJS backend
+# API subdomain — also serves the NestJS backend
 api.{$DOMAIN:localhost} {
 	reverse_proxy api:3000
 }

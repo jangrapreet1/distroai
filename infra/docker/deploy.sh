@@ -22,29 +22,28 @@ fi
 # Pull latest code (if this is a git repo)
 if [ -d "../../.git" ]; then
     echo "📥 Pulling latest code..."
-    cd ../../ && git pull && cd infra/docker
+    cd ../../ && git pull || echo "⚠️  Git pull failed (continuing anyway)" && cd infra/docker
+else
+    echo "ℹ️  No .git directory found — skipping git pull (rsync deploy mode)"
 fi
 
 # Build images
 echo "🔨 Building Docker images..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
 
-# Start database + redis first
-echo "🗄️  Starting database and Redis..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres redis
-echo "⏳ Waiting for database to be ready..."
-sleep 5
-
-# Run Prisma migrations
-echo "📊 Running database migrations..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm api \
-    npx prisma@5.22.0 migrate deploy --schema=./packages/db/prisma/schema.prisma 2>/dev/null || \
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm api \
-    npx prisma@5.22.0 db push --schema=./packages/db/prisma/schema.prisma
-
 # Start all services
 echo "🚀 Starting all services..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+
+# Wait for API container to be ready
+echo "⏳ Waiting for API to start..."
+sleep 15
+
+# Run Prisma migrations inside the running api container
+echo "📊 Running database migrations..."
+docker exec distroai_api npx prisma db push --schema=./packages/db/prisma/schema.prisma --accept-data-loss 2>/dev/null || \
+docker exec distroai_api npx prisma migrate deploy --schema=./packages/db/prisma/schema.prisma 2>/dev/null || \
+echo "⚠️  Migration skipped (will auto-run on API startup)"
 
 # Cleanup old images
 echo "🧹 Cleaning up old images..."

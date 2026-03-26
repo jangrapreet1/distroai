@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -55,7 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['OWNER', 'ADMIN', 'MANAGER'],
         items: [
             { label: "analytics", href: "/analytics", icon: BarChart3 },
-            { label: "ai_assistant", href: "/ai", icon: Bot },
+            { label: "AI Chat", href: "/ai", icon: Bot },
         ],
     },
     {
@@ -84,6 +84,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [searchOpen, setSearchOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
     const router = useRouter();
+    const notifRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+                setNotifOpen(false);
+            }
+        };
+        if (notifOpen) document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [notifOpen]);
 
     // Start background offline sync
     useSyncOfflineData();
@@ -245,7 +256,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <div className="relative">
+                            <div className="relative" ref={notifRef}>
                                 <button onClick={() => setNotifOpen(!notifOpen)} className="relative text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
                                     <Bell size={18} />
                                     {notifications.length > 0 && (

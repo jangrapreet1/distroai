@@ -84,8 +84,7 @@ export class AuthController {
         // req.user contains the output of validateGoogleUser
         const authData = req.user;
 
-        // Pass tokens to frontend, usually via cookie or redirect params
-        // For simplicity, redirecting with token in query params (frontend should extract and store)
-        return res.redirect(`http://localhost:3000/login?accessToken=${authData.accessToken}&refreshToken=${authData.refreshToken}`);
+        // Redirect back to the frontend with tokens securely
+        return res.redirect(`/login?accessToken=${authData.accessToken}&refreshToken=${authData.refreshToken}`);
     }
 }

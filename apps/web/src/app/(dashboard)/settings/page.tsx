@@ -575,6 +575,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; icon: React.El
 
 /* ─── Team Tab ─── */
 function TeamTab() {
+    const { data: subData } = useSubscription();
     const { data, isLoading } = useTeamOverview();
     const createMember = useCreateTeamMember();
     const toggleActive = useToggleUserActive();
@@ -585,6 +586,10 @@ function TeamTab() {
     const teamData = data?.data ?? data ?? {};
     const members = teamData?.members ?? [];
     const counts = teamData?.counts ?? { total: 0, active: 0, inactive: 0 };
+
+    const sub = subData?.data ?? subData ?? {};
+    const maxUsers = sub?.limits?.users?.max ?? 999999;
+    const isLimitReached = counts.total >= maxUsers;
 
     const handleAdd = () => {
         if (!form.firstName || !form.email) { toast.error('Name and email are required'); return; }
@@ -625,7 +630,12 @@ function TeamTab() {
             {/* Header + Add Button */}
             <div className="flex items-center justify-between">
                 <h2 className="font-semibold" style={{ fontFamily: 'var(--font-playfair)' }}>Team Members</h2>
-                <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold rounded-[var(--radius-md)] hover:bg-[var(--gold-light)] transition">
+                <button
+                    onClick={() => setShowAdd(true)}
+                    disabled={isLimitReached}
+                    title={isLimitReached ? "Plan user limit reached" : ""}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] transition ${isLimitReached ? 'bg-[var(--border)] text-[var(--text-muted)] cursor-not-allowed hidden' : 'bg-[var(--gold)] text-[var(--bg-primary)] hover:bg-[var(--gold-light)]'}`}
+                >
                     <UserPlus size={16} /> Add Member
                 </button>
             </div>

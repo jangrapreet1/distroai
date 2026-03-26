@@ -30,7 +30,7 @@ export class UsersController {
     @Roles('OWNER', 'ADMIN')
     @Post()
     create(@CurrentUser() user: JwtPayload, @Body() dto: CreateUserDto) {
-        return this.users.create(user.orgId, dto, 'GROWTH'); // plan from guard in real impl
+        return this.users.create(user.orgId, dto);
     }
 
     @Get(':id')

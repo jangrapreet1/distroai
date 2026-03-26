@@ -26,6 +26,7 @@ export class CreateProductDto {
     @IsOptional() @IsString() imageUrl?: string;
     @IsOptional() @IsString() description?: string;
     @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
+    @IsOptional() @IsNumber() initialQuantity?: number;
 }
 
 export class UpdateProductDto {

@@ -94,20 +94,22 @@ async function bootstrap() {
     // Global interceptors
     app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
 
-    // Swagger
-    const swaggerConfig = new DocumentBuilder()
-        .setTitle('DistroAI API')
-        .setDescription('Production-grade backend for Indian distributors and traders')
-        .setVersion('1.0')
-        .addBearerAuth()
-        .build();
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('api/docs', app, document);
-
+    // Swagger — disable in production to prevent information disclosure
     const port = config.get<number>('PORT', 3000);
+    if (process.env.NODE_ENV !== 'production') {
+        const swaggerConfig = new DocumentBuilder()
+            .setTitle('DistroAI API')
+            .setDescription('Production-grade backend for Indian distributors and traders')
+            .setVersion('1.0')
+            .addBearerAuth()
+            .build();
+        const document = SwaggerModule.createDocument(app, swaggerConfig);
+        SwaggerModule.setup('api/docs', app, document);
+        console.log(`Swagger docs at http://localhost:${port}/api/docs`);
+    }
+
     await app.listen(port);
     console.log(`DistroAI API running on http://localhost:${port}`);
-    console.log(`Swagger docs at http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

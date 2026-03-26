@@ -172,7 +172,7 @@ export default function RegisterPage() {
                         </div>
 
                         <a
-                            href="http://localhost:3001/api/v1/auth/google"
+                            href="/api/v1/auth/google"
                             className="w-full flex items-center justify-center gap-2 py-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] font-medium hover:bg-[var(--bg-card-hover)] transition disabled:opacity-50"
                         >
                             <svg className="w-5 h-5" viewBox="0 0 24 24">

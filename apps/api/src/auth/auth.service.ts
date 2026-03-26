@@ -49,7 +49,7 @@ export class AuthService {
                     gstNumber: dto.gstNumber,
                     phone: dto.phone,
                     email: dto.email,
-                    plan: 'GROWTH',
+                    plan: 'FREE',
                     businessType: dto.businessType,
                     sector: dto.sector,
                 },
@@ -85,8 +85,8 @@ export class AuthService {
             await tx.subscription.create({
                 data: {
                     orgId: org.id,
-                    plan: 'GROWTH',
-                    status: 'TRIAL',
+                    plan: 'FREE',
+                    status: 'ACTIVE',
                     currentPeriodStart: now,
                     currentPeriodEnd: trialEnd,
                 },
@@ -126,6 +126,9 @@ export class AuthService {
             throw new UnauthorizedException({ code: 'AUTH_INVALID_CREDENTIALS', message: 'Invalid credentials' });
         }
 
+        if (!user.passwordHash) {
+            throw new UnauthorizedException({ code: 'AUTH_GOOGLE_ACCOUNT', message: 'This account uses Google Sign-In. Please log in with Google.' });
+        }
         const valid = await bcrypt.compare(dto.password, user.passwordHash);
         if (!valid) {
             throw new UnauthorizedException({ code: 'AUTH_INVALID_CREDENTIALS', message: 'Invalid credentials' });

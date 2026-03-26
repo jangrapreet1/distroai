@@ -30,7 +30,10 @@ export class UsersService {
         return { data, meta: { total, page, limit, pages: Math.ceil(total / limit) } };
     }
 
-    async create(orgId: string, dto: CreateUserDto, currentOrgPlan: PlanName) {
+    async create(orgId: string, dto: CreateUserDto) {
+        const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
+        const currentOrgPlan = (org?.plan as PlanName) || 'FREE';
+
         // Check plan user limit
         const userCount = await this.prisma.user.count({ where: { orgId, isActive: true } });
         const limit = PLAN_LIMITS[currentOrgPlan].maxUsers;
@@ -52,15 +55,13 @@ export class UsersService {
             select: { id: true, email: true, firstName: true, lastName: true, phone: true, role: true, createdAt: true },
         });
 
-        // Trigger WhatsApp notification with credentials
-        try {
-            await this.notifications.notify(orgId, {
-                type: 'USER_INVITED',
-                orgId,
-                userId: user.id,
-                tempPassword,
-            });
-        } catch { /* non-critical */ }
+        // Trigger WhatsApp/Email notification with credentials non-blockingly
+        this.notifications.notify(orgId, {
+            type: 'USER_INVITED',
+            orgId,
+            userId: user.id,
+            tempPassword,
+        }).catch(err => console.error('Failed to notify invited user: ' + err.message));
 
         return { ...user, tempPassword };
     }

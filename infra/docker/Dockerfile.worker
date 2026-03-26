@@ -29,13 +29,12 @@ RUN apk add --no-cache openssl && \
     adduser --system --uid 1001 nestjs
 
 # Copy compiled output
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package.json ./package.json
+COPY --chown=nestjs:nodejs --from=builder /app/apps/api/dist ./dist
+COPY --chown=nestjs:nodejs --from=builder /app/apps/api/package.json ./package.json
 
 # Copy hoisted (flat) node_modules from root — no broken symlinks
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/packages/ ./packages/
+COPY --chown=nestjs:nodejs --from=builder /app/node_modules ./node_modules
+COPY --chown=nestjs:nodejs --from=builder /app/packages/ ./packages/
 
 USER nestjs
 

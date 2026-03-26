@@ -18,10 +18,10 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         const { id, emails, name, photos } = profile;
         const user = {
             googleId: id,
-            email: emails[0].value,
-            firstName: name.givenName || 'User',
-            lastName: name.familyName || '',
-            avatarUrl: photos[0].value,
+            email: emails?.[0]?.value || '',
+            firstName: name?.givenName || 'User',
+            lastName: name?.familyName || '',
+            avatarUrl: photos?.[0]?.value || '',
         };
 
         const validatedUser = await this.authService.validateGoogleUser(user);

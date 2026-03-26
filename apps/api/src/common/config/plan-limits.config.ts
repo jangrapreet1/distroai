@@ -16,7 +16,7 @@ export const PLAN_LIMITS = {
     },
     STARTER: {
         maxUsers: 3,
-        maxMonthlyInvoices: Infinity,
+        maxMonthlyInvoices: 999999,
         maxProducts: 500,
         maxCustomers: 1000,
         maxAiQueriesPerMonth: 100,
@@ -31,9 +31,9 @@ export const PLAN_LIMITS = {
     },
     GROWTH: {
         maxUsers: 10,
-        maxMonthlyInvoices: Infinity,
-        maxProducts: Infinity,
-        maxCustomers: Infinity,
+        maxMonthlyInvoices: 999999,
+        maxProducts: 999999,
+        maxCustomers: 999999,
         maxAiQueriesPerMonth: 500,
         features: {
             whatsappBot: true,
@@ -45,11 +45,11 @@ export const PLAN_LIMITS = {
         },
     },
     ENTERPRISE: {
-        maxUsers: Infinity,
-        maxMonthlyInvoices: Infinity,
-        maxProducts: Infinity,
-        maxCustomers: Infinity,
-        maxAiQueriesPerMonth: Infinity,
+        maxUsers: 999999,
+        maxMonthlyInvoices: 999999,
+        maxProducts: 999999,
+        maxCustomers: 999999,
+        maxAiQueriesPerMonth: 999999,
         features: {
             whatsappBot: true,
             salesmanApp: true,

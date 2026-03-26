@@ -70,7 +70,7 @@ export class ProductsService {
             data: {
                 orgId, ...dto, sku,
                 ...(defaultWarehouse && {
-                    inventories: { create: { orgId, warehouseId: defaultWarehouse.id, quantity: 0 } },
+                    inventories: { create: { orgId, warehouseId: defaultWarehouse.id, quantity: dto.initialQuantity ?? 0 } },
                 }),
             },
         });
