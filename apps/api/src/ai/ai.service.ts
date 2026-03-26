@@ -25,13 +25,18 @@ export function getLlm(): ChatOpenAI | null {
     if (!_llmInitialized) {
         _llmInitialized = true;
         const apiKey = process.env.OPENROUTER_API_KEY;
+        console.log("DEBUG: OPENROUTER_API_KEY length is", apiKey?.length, "starts with", apiKey?.substring(0, 10));
         if (apiKey) {
             _llm = new ChatOpenAI({
                 modelName: 'nvidia/nemotron-3-super-120b-a12b:free',
-                apiKey: apiKey,
                 temperature: 0,
                 configuration: {
+                    apiKey: process.env.OPENROUTER_API_KEY,
                     baseURL: "https://openrouter.ai/api/v1",
+                    defaultHeaders: {
+                        "HTTP-Referer": "https://distroai.in",
+                        "X-Title": "DistroAI",
+                    }
                 }
             });
         }
@@ -40,7 +45,7 @@ export function getLlm(): ChatOpenAI | null {
 }
 
 const PLAN_LIMITS = {
-    FREE: { maxAiQueriesPerMonth: 0 },
+    FREE: { maxAiQueriesPerMonth: 25 },
     STARTER: { maxAiQueriesPerMonth: 100 },
     GROWTH: { maxAiQueriesPerMonth: 1000 },
     ENTERPRISE: { maxAiQueriesPerMonth: 10000 },
@@ -287,10 +292,14 @@ export class AiService {
             try {
                 const visionLlm = new ChatOpenAI({
                     modelName: 'google/gemini-2.5-flash',
-                    apiKey: process.env.OPENROUTER_API_KEY!,
                     temperature: 0,
                     configuration: {
+                        apiKey: process.env.OPENROUTER_API_KEY!,
                         baseURL: "https://openrouter.ai/api/v1",
+                        defaultHeaders: {
+                            "HTTP-Referer": "https://distroai.in",
+                            "X-Title": "DistroAI",
+                        }
                     }
                 });
                 const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
@@ -447,10 +456,14 @@ export class AiService {
         try {
             const visionLlm = new ChatOpenAI({
                 modelName: 'google/gemini-2.5-flash',
-                apiKey: process.env.OPENROUTER_API_KEY!,
                 temperature: 0,
                 configuration: {
+                    apiKey: process.env.OPENROUTER_API_KEY!,
                     baseURL: "https://openrouter.ai/api/v1",
+                    defaultHeaders: {
+                        "HTTP-Referer": "https://distroai.in",
+                        "X-Title": "DistroAI",
+                    }
                 }
             });
 
@@ -598,10 +611,14 @@ Return ONLY a JSON object exactly matching this schema:
         try {
             const visionLlm = new ChatOpenAI({
                 modelName: 'google/gemini-2.5-flash',
-                apiKey: process.env.OPENROUTER_API_KEY!,
                 temperature: 0,
                 configuration: {
+                    apiKey: process.env.OPENROUTER_API_KEY!,
                     baseURL: "https://openrouter.ai/api/v1",
+                    defaultHeaders: {
+                        "HTTP-Referer": "https://distroai.in",
+                        "X-Title": "DistroAI",
+                    }
                 }
             });
 

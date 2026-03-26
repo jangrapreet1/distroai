@@ -15,7 +15,7 @@ export class CreateProductDto {
     @IsString() unit!: string;
     @IsOptional() @IsString() secondaryUnit?: string;
     @IsOptional() @IsNumber() conversionFactor?: number;
-    @IsNumber() @Min(0) purchasePrice!: number;
+    @IsOptional() @IsNumber() @Min(0) purchasePrice?: number;
     @IsNumber() @Min(0) sellingPrice!: number;
     @IsNumber() @Min(0) mrp!: number;
     @IsNumber() @Min(0) gstRate!: number;
