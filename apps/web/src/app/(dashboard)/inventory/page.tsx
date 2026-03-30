@@ -6,6 +6,8 @@ import { Package, Warehouse, AlertTriangle, Clock, Search, List, Grid, Plus, Arr
 import { useProducts, useInventoryValuation, useAdjustInventory, useTransferInventory, useInventoryTransactions, useCreateProduct, useWarehouses, useUploadFile } from "@/hooks/api-hooks";
 import { formatDate, getPrimaryImageUrl } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { MultiImageUpload } from "@/components/ui/multi-image-upload";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
@@ -15,7 +17,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
     const upload = useUploadFile();
     const [name, setName] = useState("");
     const [sku, setSku] = useState("");
-    const [imageUrl, setImageUrl] = useState("");
+    const [imageUrls, setImageUrls] = useState<string[]>([]);
     const [unit, setUnit] = useState("Pieces");
     const [sellingPrice, setSellingPrice] = useState("");
     const [mrp, setMrp] = useState("");
@@ -28,7 +30,9 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
         e.preventDefault();
         if (!name || !sku || !sellingPrice || !gstRate) return;
         create.mutate({
-            name, sku, unit, imageUrl,
+            name, sku, unit,
+            imageUrl: imageUrls[0] || "",
+            imageUrls,
             sellingPrice: Number(sellingPrice),
             mrp: Number(mrp),
             purchasePrice: Number(purchasePrice),
@@ -38,7 +42,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
         }, {
             onSuccess: () => {
                 onClose();
-                setName(""); setSku(""); setImageUrl(""); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18"); setInitialQuantity("0");
+                setName(""); setSku(""); setImageUrls([]); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18"); setInitialQuantity("0");
             }
         });
     };
@@ -54,8 +58,8 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 <form onSubmit={handleSubmit} className="p-4 space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                         <div className="col-span-2">
-                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Image</span>
-                            <ImageUpload value={imageUrl} onChange={setImageUrl} onUpload={(file) => upload.mutateAsync(file)} disabled={create.isPending || upload.isPending} />
+                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Images</span>
+                            <MultiImageUpload value={imageUrls} onChange={setImageUrls} onUpload={(file) => upload.mutateAsync(file)} disabled={create.isPending || upload.isPending} />
                         </div>
                         <label className="col-span-2">
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Name *</span>
@@ -254,6 +258,7 @@ export default function InventoryPage() {
     const [showAdd, setShowAdd] = useState(false);
     const [showAdjust, setShowAdjust] = useState(false);
     const [showTransfer, setShowTransfer] = useState(false);
+    const { t } = useLanguage();
 
     const { data, isLoading } = useProducts({ search, page, limit: 20, isActive: true });
     const products = data?.data?.data ?? data?.data ?? [];
@@ -274,20 +279,20 @@ export default function InventoryPage() {
     }) : [];
 
     const summary = [
-        { label: "Total Products", value: meta.total ?? 0, icon: Package, color: "var(--gold)" },
-        { label: "Total Value", value: formatINR(val.grandTotal ?? 0), icon: Warehouse, color: "var(--green-bright)" },
-        { label: "Low Stock", value: lowStockCount, icon: AlertTriangle, color: "var(--red)" },
-        { label: "Total Units", value: val.totalUnits ?? 0, icon: Clock, color: "var(--orange)" },
+        { label: t('total_products'), value: meta.total ?? 0, icon: Package, color: "var(--gold)" },
+        { label: t('total_value'), value: formatINR(val.grandTotal ?? 0), icon: Warehouse, color: "var(--green-bright)" },
+        { label: t('low_stock'), value: lowStockCount, icon: AlertTriangle, color: "var(--red)" },
+        { label: t('total_units'), value: val.totalUnits ?? 0, icon: Clock, color: "var(--orange)" },
     ];
 
     return (
         <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Inventory</h1>
+                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{t('inventory')}</h1>
                 <div className="flex gap-2">
-                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] hover:bg-[var(--gold-light)] transition whitespace-nowrap"><Plus size={14} /> <span className="hidden sm:inline">Add Product</span><span className="sm:hidden">Add</span></button>
-                    <button onClick={() => setShowAdjust(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><Plus size={14} /> Adjust</button>
-                    <button onClick={() => setShowTransfer(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><ArrowRightLeft size={14} /> <span className="hidden sm:inline">Transfer</span></button>
+                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] hover:bg-[var(--gold-light)] transition whitespace-nowrap"><Plus size={14} /> <span className="hidden sm:inline">{t('add_product')}</span><span className="sm:hidden">{t('add_product').split(' ')[0]}</span></button>
+                    <button onClick={() => setShowAdjust(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><Plus size={14} /> {t('adjust')}</button>
+                    <button onClick={() => setShowTransfer(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><ArrowRightLeft size={14} /> <span className="hidden sm:inline">{t('transfer')}</span></button>
                 </div>
             </div>
 
@@ -306,8 +311,8 @@ export default function InventoryPage() {
 
             {/* Main Tabs */}
             <div className="flex gap-2 mb-4">
-                <button onClick={() => setMainTab("products")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "products" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>Products</button>
-                <button onClick={() => setMainTab("transactions")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "transactions" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>Transactions</button>
+                <button onClick={() => setMainTab("products")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "products" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>{t('products_tab')}</button>
+                <button onClick={() => setMainTab("transactions")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "transactions" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>{t('transactions_tab')}</button>
             </div>
 
             {mainTab === "products" ? (
@@ -315,15 +320,15 @@ export default function InventoryPage() {
                     {/* Filters */}
                     <div className="flex items-center gap-3 mb-4">
                         <div className="flex gap-1">
-                            {(["all", "low", "expiring"] as const).map((t) => (
-                                <button key={t} onClick={() => setTab(t)} className={`px-3 py-1.5 text-xs rounded-full transition capitalize ${tab === t ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>
-                                    {t === "all" ? "All" : t === "low" ? "Low Stock" : "Expiring"}
+                            {(["all", "low", "expiring"] as const).map((f) => (
+                                <button key={f} onClick={() => setTab(f)} className={`px-3 py-1.5 text-xs rounded-full transition capitalize ${tab === f ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>
+                                    {f === "all" ? t('all') : f === "low" ? t('low_stock_tab') : t('expiring_tab')}
                                 </button>
                             ))}
                         </div>
                         <div className="relative flex-1 max-w-sm">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products..." className="w-full pl-9 pr-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
+                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search_products')} className="w-full pl-9 pr-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
                         </div>
                         <div className="flex border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden">
                             <button onClick={() => setViewMode("grid")} className={`p-2 ${viewMode === "grid" ? "bg-[var(--gold)]/15 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}><Grid size={16} /></button>

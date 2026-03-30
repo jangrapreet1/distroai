@@ -1,6 +1,21 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, UnauthorizedException, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Request, UnauthorizedException, Headers, BadRequestException } from '@nestjs/common';
 import { PortalService } from './portal.service';
 import { JwtService } from '@nestjs/jwt';
+import { z } from 'zod';
+
+const PlaceOrderSchema = z.object({
+    paymentMethod: z.enum(['LEDGER', 'RAZORPAY']),
+    guestName: z.string().optional(),
+    guestPhone: z.string().optional(),
+    guestAddress: z.string().optional(),
+    items: z.array(
+        z.object({
+            productId: z.string(),
+            quantity: z.number().int().positive(),
+            price: z.number().nonnegative()
+        })
+    ).min(1, "Order must contain at least one item")
+});
 
 @Controller('portal/:orgId')
 export class PortalController {
@@ -55,9 +70,19 @@ export class PortalController {
     placeOrder(
         @Param('orgId') orgId: string,
         @Headers('authorization') auth: string,
-        @Body() body: any
+        @Body() rawBody: any
     ) {
         const customerId = this.extractCustomerId(auth);
+
+        // Zod Validation
+        const result = PlaceOrderSchema.safeParse(rawBody);
+        if (!result.success) {
+            throw new BadRequestException({
+                message: "Invalid order data",
+                errors: result.error.issues
+            });
+        }
+        const body = result.data;
 
         // If B2B (Ledger payment), they MUST be logged in
         if (body.paymentMethod === 'LEDGER' && !customerId) {
@@ -75,5 +100,37 @@ export class PortalController {
         const customerId = this.extractCustomerId(auth);
         if (!customerId) throw new UnauthorizedException('You must be logged in to view your ledger');
         return this.portalService.getLedger(orgId, customerId);
+    }
+
+    @Get('orders')
+    getOrders(
+        @Param('orgId') orgId: string,
+        @Headers('authorization') auth: string
+    ) {
+        const customerId = this.extractCustomerId(auth);
+        if (!customerId) throw new UnauthorizedException('You must be logged in to view orders');
+        return this.portalService.getOrders(orgId, customerId);
+    }
+
+    @Get('orders/:orderId')
+    getOrderDetail(
+        @Param('orgId') orgId: string,
+        @Param('orderId') orderId: string,
+        @Headers('authorization') auth: string
+    ) {
+        const customerId = this.extractCustomerId(auth);
+        if (!customerId) throw new UnauthorizedException('You must be logged in to view order details');
+        return this.portalService.getOrderDetail(orgId, customerId, orderId);
+    }
+
+    @Get('reorder/:orderId')
+    getReorderItems(
+        @Param('orgId') orgId: string,
+        @Param('orderId') orderId: string,
+        @Headers('authorization') auth: string
+    ) {
+        const customerId = this.extractCustomerId(auth);
+        if (!customerId) throw new UnauthorizedException('You must be logged in to reorder');
+        return this.portalService.getReorderItems(orgId, customerId, orderId);
     }
 }

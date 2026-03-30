@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Send, Mic, MicOff, Bot, Sparkles, BarChart3, Users, Package, Clock, Square, ImagePlus, X, ScanLine, MessageSquare, ShoppingCart, CreditCard, UserCheck, FileText, Bell, Search, Command, ChevronRight, PenLine, Plus } from "lucide-react";
+import { Send, Mic, MicOff, Bot, Sparkles, BarChart3, Users, Package, Clock, Square, ImagePlus, X, ScanLine, MessageSquare, ShoppingCart, CreditCard, UserCheck, FileText, Bell, Search, Command, ChevronRight, PenLine, Plus, RefreshCw } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 import { OfflineScanner } from "@/components/Scanner/OfflineScanner";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
     role: "user" | "assistant";
@@ -15,6 +17,8 @@ interface Message {
     tables?: TableSpec[];
     askInputs?: AskInputSpec[];
     timestamp: Date;
+    failed?: boolean;
+    originalQuery?: string;
 }
 interface AskInputSpec { step: string; title: string; options: string[] }
 interface ChartSpec { type: "bar" | "line" | "pie"; title: string; data: any[] }
@@ -322,10 +326,12 @@ export default function AIPage() {
                             if (!q.response) {
                                 s.messages.push({
                                     role: 'assistant',
-                                    content: 'Processing in background...',
+                                    content: 'This query didn\'t receive a response.',
                                     charts: [], tables: [],
                                     timestamp: new Date(q.createdAt),
-                                    streaming: false
+                                    streaming: false,
+                                    failed: true,
+                                    originalQuery: q.query,
                                 });
                             } else {
                                 const parsed = parseAIResponse(q.response);
@@ -396,10 +402,14 @@ export default function AIPage() {
         setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, messages: [...s.messages, placeholder] } : s));
 
         try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
             const res = await fetch(`${API_BASE}/ai/query/stream`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
                 body: JSON.stringify({ query: text, sessionId: currentSessionId, ...(imageBase64 ? { image: imageBase64 } : {}) }),
+                signal: controller.signal,
             });
 
             // Clear image after sending
@@ -438,6 +448,8 @@ export default function AIPage() {
                 }
             }
 
+            clearTimeout(timeout);
+
             // Finalize message
             setSessions(prev => prev.map(s => {
                 if (s.id !== currentSessionId) return s;
@@ -447,10 +459,17 @@ export default function AIPage() {
             }));
 
         } catch (err: any) {
+            const isTimeout = err.name === 'AbortError';
             setSessions(prev => prev.map(s => {
                 if (s.id !== currentSessionId) return s;
                 const newMsgs = [...s.messages];
-                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: `Error: ${err.message}. Please try again.`, streaming: false };
+                newMsgs[newMsgs.length - 1] = {
+                    ...newMsgs[newMsgs.length - 1],
+                    content: isTimeout ? 'Request timed out. Please try again.' : `Error: ${err.message}. Please try again.`,
+                    streaming: false,
+                    failed: true,
+                    originalQuery: text,
+                };
                 return { ...s, messages: newMsgs };
             }));
         } finally {
@@ -636,7 +655,13 @@ export default function AIPage() {
                             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                                 <div className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm ${m.role === "user" ? "bg-[var(--gold)]/10 text-[var(--text-primary)] border border-[var(--gold)]/20 rounded-tr-sm" : "bg-[var(--bg-card)] border border-[var(--border)] rounded-tl-sm"}`}>
                                     {m.image && <img src={m.image} alt="Upload" className="max-w-[150px] md:max-w-[200px] rounded-lg mb-3 object-cover border border-[var(--border)] shadow-sm" />}
-                                    <div className="whitespace-pre-wrap">{m.content}</div>
+                                    {m.role === "assistant" ? (
+                                        <div className="ai-markdown-content">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                                        </div>
+                                    ) : (
+                                        <div className="whitespace-pre-wrap">{m.content}</div>
+                                    )}
                                     {m.streaming && !m.content && (
                                         <div className="flex gap-1.5 mt-2">
                                             <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -645,6 +670,12 @@ export default function AIPage() {
                                         </div>
                                     )}
                                     {m.streaming && m.content && <span className="inline-block w-1 h-4 bg-[var(--purple)] animate-pulse ml-1 align-middle" />}
+                                    {m.failed && (
+                                        <button onClick={() => { if (m.originalQuery) sendMessage(m.originalQuery); }}
+                                            className="flex items-center gap-1.5 mt-3 px-3 py-1.5 text-xs rounded-lg bg-[var(--purple)]/10 text-[var(--purple)] hover:bg-[var(--purple)]/20 transition font-medium">
+                                            <RefreshCw size={12} /> Retry
+                                        </button>
+                                    )}
                                     {(m.charts || []).map((c, ci) => <InlineChart key={ci} spec={c} />)}
                                     {(m.tables || []).map((t, ti) => <InlineTable key={ti} spec={t} />)}
                                     {(m.askInputs || []).map((ask, ai) => <InteractiveInputCard key={ai} spec={ask} onSelect={(opt) => sendMessage(opt)} />)}

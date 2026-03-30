@@ -261,7 +261,7 @@ export class AuthService {
                     data: {
                         name: `${profile.firstName}'s Workspace`,
                         email: profile.email,
-                        plan: 'GROWTH',
+                        plan: 'FREE',
                         businessType: 'RETAIL',
                     },
                 });
@@ -297,8 +297,8 @@ export class AuthService {
                 await tx.subscription.create({
                     data: {
                         orgId: org.id,
-                        plan: 'GROWTH',
-                        status: 'TRIAL',
+                        plan: 'FREE',
+                        status: 'ACTIVE',
                         currentPeriodStart: now,
                         currentPeriodEnd: trialEnd,
                     },

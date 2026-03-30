@@ -43,7 +43,8 @@ export class AnalyticsService {
             const factor = i.product.conversionFactor || 1;
             return s + ((i.quantity / factor) * i.product.purchasePrice);
         }, 0);
-        const totalOutstanding = await this.prisma.customer.aggregate({ where: { orgId }, _sum: { outstandingAmount: true } });
+        const totalOutstanding = await this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { gt: 0 } }, _sum: { outstandingAmount: true } });
+        const totalCredit = await this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { lt: 0 } }, _sum: { outstandingAmount: true } });
 
         // Enrich topProducts with product names
         const productIds = topProducts.map((p: any) => p.productId);
@@ -61,7 +62,7 @@ export class AnalyticsService {
             today: { revenue: todayRevenue._sum.netAmount ?? 0, orders: todayOrders, collections: collections._sum.amount ?? 0, newCustomers: 0 },
             thisMonth: { revenue: monthRevenue._sum.netAmount ?? 0, orders: monthOrders, collections: 0, avgOrderValue: monthOrders > 0 ? (monthRevenue._sum.netAmount ?? 0) / monthOrders : 0, newCustomers },
             inventory: { lowStockCount, expiringCount: 0, totalValue: totalInventoryValue },
-            collections: { totalOutstanding: totalOutstanding._sum.outstandingAmount ?? 0, overdueCount: 0, collectionRate: 0 },
+            collections: { totalOutstanding: totalOutstanding._sum.outstandingAmount ?? 0, totalCredit: Math.abs(totalCredit._sum.outstandingAmount ?? 0), overdueCount: 0, collectionRate: 0 },
             topProducts: enrichedTopProducts,
             topCustomers,
             recentOrders,

@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { IsString, IsOptional, IsBoolean, Matches } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { PLAN_LIMITS, PlanName } from '../common/config/plan-limits.config';
 
@@ -13,6 +13,8 @@ export class UpdateOrgDto {
     @IsOptional() @IsString() pincode?: string;
     @IsOptional() @IsString() logoUrl?: string;
     @IsOptional() @IsString() website?: string;
+    @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/, { message: 'Slug must contain only lowercase letters, numbers, and hyphens' })
+    slug?: string;
 }
 
 export class UpdateSettingsDto {
@@ -22,6 +24,11 @@ export class UpdateSettingsDto {
     @IsOptional() @IsString() timezone?: string;
     @IsOptional() @IsString() language?: string;
     @IsOptional() @IsBoolean() autoInvoice?: boolean;
+    @IsOptional() @IsString() bankName?: string;
+    @IsOptional() @IsString() bankAccountNumber?: string;
+    @IsOptional() @IsString() bankIfscCode?: string;
+    @IsOptional() @IsString() bankBranch?: string;
+    @IsOptional() @IsString() upiId?: string;
 }
 
 @Injectable()
@@ -38,6 +45,18 @@ export class OrgService {
     }
 
     async updateOrg(orgId: string, dto: UpdateOrgDto) {
+        // Enforce slug uniqueness — another org must not use the same slug
+        if (dto.slug) {
+            const existing = await this.prisma.organization.findFirst({
+                where: { slug: dto.slug, NOT: { id: orgId } },
+            });
+            if (existing) {
+                throw new ConflictException({
+                    code: 'CONFLICT',
+                    message: `The portal slug "${dto.slug}" is already taken. Please choose a different one.`,
+                });
+            }
+        }
         return this.prisma.organization.update({ where: { id: orgId }, data: dto });
     }
 

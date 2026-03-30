@@ -4,10 +4,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
 
 // Plan pricing in paise (Razorpay uses smallest currency unit)
-const PLAN_PRICES: Record<string, { amount: number; label: string }> = {
-    STARTER: { amount: 49900, label: 'Starter — ₹499/mo' },
-    GROWTH: { amount: 89900, label: 'Growth — ₹899/mo' },
-    ENTERPRISE: { amount: 0, label: 'Enterprise — Custom' },
+const PLAN_PRICES: Record<string, { amount: number; label: string; annualAmount: number; annualLabel: string }> = {
+    STARTER: { amount: 49900, label: 'Starter — ₹499/mo', annualAmount: 499000, annualLabel: 'Starter — ₹4,990/yr' },
+    GROWTH: { amount: 89900, label: 'Growth — ₹899/mo', annualAmount: 899000, annualLabel: 'Growth — ₹8,990/yr' },
+    ENTERPRISE: { amount: 0, label: 'Enterprise — Custom', annualAmount: 0, annualLabel: 'Enterprise — Custom' },
 };
 
 @Injectable()
@@ -34,14 +34,15 @@ export class BillingService {
     /**
      * Create a Razorpay Order for the selected plan upgrade.
      */
-    async createCheckoutOrder(orgId: string, planName: string) {
+    async createCheckoutOrder(orgId: string, planName: string, isAnnual: boolean = false) {
         if (!this.razorpay) {
             throw new BadRequestException({ code: 'BILLING_DISABLED', message: 'Payment gateway not configured' });
         }
 
         const plan = planName.toUpperCase();
         const pricing = PLAN_PRICES[plan];
-        if (!pricing || pricing.amount === 0) {
+        const priceAmount = isAnnual ? pricing.annualAmount : pricing.amount;
+        if (!pricing || priceAmount === 0) {
             throw new BadRequestException({ code: 'INVALID_PLAN', message: `Plan "${planName}" is not available for self-service checkout` });
         }
 
@@ -55,22 +56,23 @@ export class BillingService {
 
         try {
             const order = await this.razorpay.orders.create({
-                amount: pricing.amount,
+                amount: priceAmount,
                 currency: 'INR',
                 receipt: `s_${orgId.slice(-8)}_${Date.now().toString(36)}`,
                 notes: {
                     orgId,
                     plan,
                     type: 'subscription_upgrade',
+                    isAnnual: isAnnual ? 'true' : 'false',
                 },
             });
 
             return {
                 orderId: order.id,
-                amount: pricing.amount,
+                amount: priceAmount,
                 currency: 'INR',
                 planName: plan,
-                planLabel: pricing.label,
+                planLabel: isAnnual ? pricing.annualLabel : pricing.label,
                 razorpayKeyId: this.config.get<string>('RAZORPAY_KEY_ID'),
             };
         } catch (err: any) {
@@ -90,6 +92,7 @@ export class BillingService {
         razorpay_payment_id: string;
         razorpay_signature: string;
         plan: string;
+        isAnnual?: boolean;
     }) {
         const secret = this.config.get<string>('RAZORPAY_KEY_SECRET', '');
 
@@ -104,9 +107,10 @@ export class BillingService {
         }
 
         const plan = body.plan.toUpperCase() as any;
+        const isAnnual = body.isAnnual ?? false;
         const now = new Date();
         const periodEnd = new Date(now);
-        periodEnd.setMonth(periodEnd.getMonth() + 1); // 1 month subscription
+        periodEnd.setMonth(periodEnd.getMonth() + (isAnnual ? 12 : 1)); // 1 or 12 month subscription
 
         // Upsert subscription record
         await this.prisma.subscription.upsert({

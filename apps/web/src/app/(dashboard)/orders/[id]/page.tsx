@@ -233,6 +233,56 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
             </div>
 
+            {/* ── Order Fulfillment Stepper ── */}
+            {(() => {
+                const STEPS = ["DRAFT", "CONFIRMED", "PACKED", "DISPATCHED", "DELIVERED"];
+                const isCancelled = order.status === "CANCELLED" || order.status === "RETURNED";
+                const currentIdx = STEPS.indexOf(order.status as string);
+                const stepIcons: Record<string, React.ElementType> = { DRAFT: Clock, CONFIRMED: CheckCircle, PACKED: Package, DISPATCHED: Truck, DELIVERED: MapPin };
+
+                if (isCancelled) {
+                    return (
+                        <div className="bg-[var(--bg-card)] border border-[var(--red)]/20 rounded-[var(--radius-md)] p-4 mb-6 flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-[var(--red)]/15 flex items-center justify-center"><XCircle size={18} className="text-[var(--red)]" /></div>
+                            <div>
+                                <p className="text-sm font-semibold text-[var(--red)]">Order {order.status === "RETURNED" ? "Returned" : "Cancelled"}</p>
+                                <p className="text-xs text-[var(--text-muted)]">This order has been {order.status?.toLowerCase()}</p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5 mb-6">
+                        <div className="flex items-center justify-between relative">
+                            {/* Connecting line */}
+                            <div className="absolute top-4 left-0 right-0 h-0.5 bg-[var(--border)]" style={{ left: '10%', right: '10%' }} />
+                            <div className="absolute top-4 left-0 h-0.5 bg-[var(--gold)] transition-all duration-500" style={{ left: '10%', width: currentIdx >= 0 ? `${Math.min((currentIdx / (STEPS.length - 1)) * 80, 80)}%` : '0%' }} />
+
+                            {STEPS.map((step, idx) => {
+                                const StepIcon = stepIcons[step] ?? Clock;
+                                const isComplete = idx < currentIdx;
+                                const isCurrent = idx === currentIdx;
+                                const isFuture = idx > currentIdx;
+
+                                return (
+                                    <div key={step} className="flex flex-col items-center z-10 relative" style={{ width: '20%' }}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${isComplete ? 'bg-[var(--gold)] text-[var(--bg-primary)] shadow-[0_0_12px_rgba(234,179,8,0.3)]' :
+                                            isCurrent ? 'bg-[var(--gold)]/20 text-[var(--gold)] border-2 border-[var(--gold)] shadow-[0_0_16px_rgba(234,179,8,0.25)]' :
+                                                'bg-[var(--bg-secondary)] text-[var(--text-muted)] border border-[var(--border)]'
+                                            }`}>
+                                            {isComplete ? <CheckCircle size={16} /> : <StepIcon size={14} />}
+                                        </div>
+                                        <span className={`mt-2 text-[10px] font-semibold uppercase tracking-wider ${isCurrent ? 'text-[var(--gold)]' : isComplete ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'
+                                            }`}>{step}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })()}
+
             <div className="grid lg:grid-cols-10 gap-6">
                 {/* Left: Items */}
                 <div className="lg:col-span-7 space-y-4">
@@ -307,6 +357,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Edit Draft Modal */}
             <EditDraftModal order={order} open={showEdit} onClose={() => setShowEdit(false)} />
-        </div>
+        </div >
     );
 }

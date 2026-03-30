@@ -108,25 +108,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const dd = dashData?.data ?? dashData ?? {};
 
     const notifications = useMemo(() => {
-        const items: { msg: string; t: string; color: string }[] = [];
+        const items: { msg: string; t: string; color: string; href: string; ts: number }[] = [];
+        const now = Date.now();
         const lowStock = dd?.inventory?.lowStockCount ?? 0;
-        if (lowStock > 0) items.push({ msg: `Low stock: ${lowStock} product${lowStock > 1 ? 's' : ''} below reorder level`, t: 'Now', color: 'var(--orange)' });
+        if (lowStock > 0) items.push({ msg: `Low stock: ${lowStock} product${lowStock > 1 ? 's' : ''} below reorder level`, t: 'Now', color: 'var(--orange)', href: '/inventory', ts: now });
         const outstanding = dd?.collections?.totalOutstanding ?? 0;
-        if (outstanding > 0) items.push({ msg: `Outstanding: ₹${outstanding.toLocaleString('en-IN')} total due`, t: 'Now', color: 'var(--red)' });
+        if (outstanding > 0) items.push({ msg: `Outstanding: ₹${outstanding.toLocaleString('en-IN')} total due`, t: 'Now', color: 'var(--red)', href: '/payments', ts: now });
         const recent = dd?.recentOrders ?? [];
         recent.slice(0, 3).forEach((o: any) => {
-            const ago = Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000);
+            const createdTs = new Date(o.createdAt).getTime();
+            const ago = Math.round((now - createdTs) / 60000);
             const t = ago < 60 ? `${ago}m ago` : ago < 1440 ? `${Math.round(ago / 60)}h ago` : `${Math.round(ago / 1440)}d ago`;
-            items.push({ msg: `Order ${o.orderNumber} from ${o.customer?.name ?? 'Unknown'} — ₹${(o.netAmount ?? 0).toLocaleString('en-IN')}`, t, color: 'var(--gold)' });
+            items.push({ msg: `Order ${o.orderNumber} from ${o.customer?.name ?? 'Unknown'} — ₹${(o.netAmount ?? 0).toLocaleString('en-IN')}`, t, color: 'var(--gold)', href: `/orders/${o.id}`, ts: createdTs });
         });
         const locs = dd?.recentLocationUpdates ?? [];
         locs.slice(0, 3).forEach((l: any) => {
-            const ago = Math.round((Date.now() - new Date(l.updatedAt).getTime()) / 60000);
+            const updatedTs = new Date(l.updatedAt).getTime();
+            const ago = Math.round((now - updatedTs) / 60000);
             const t = ago < 60 ? `${ago}m ago` : ago < 1440 ? `${Math.round(ago / 60)}h ago` : `${Math.round(ago / 1440)}d ago`;
-            items.push({ msg: `📍 Location shared by ${l.customer?.name ?? 'Unknown'}`, t, color: 'var(--whatsapp)' });
+            items.push({ msg: `📍 Location shared by ${l.customer?.name ?? 'Unknown'}`, t, color: 'var(--whatsapp)', href: '/customers', ts: updatedTs });
         });
         return items;
     }, [dd]);
+
+    // Unread tracking via localStorage
+    const [lastReadTs, setLastReadTs] = useState(() => {
+        if (typeof window === 'undefined') return 0;
+        return Number(localStorage.getItem('notif-read-ts') || '0');
+    });
+    const unreadCount = useMemo(() => notifications.filter(n => n.ts > lastReadTs).length, [notifications, lastReadTs]);
+    const markAllRead = () => {
+        const now = Date.now();
+        localStorage.setItem('notif-read-ts', String(now));
+        setLastReadTs(now);
+    };
 
     // ⌘K keyboard shortcut
     useEffect(() => {
@@ -259,21 +274,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <div className="relative" ref={notifRef}>
                                 <button onClick={() => setNotifOpen(!notifOpen)} className="relative text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
                                     <Bell size={18} />
-                                    {notifications.length > 0 && (
-                                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--red)] text-[9px] flex items-center justify-center text-white font-bold">{notifications.length}</span>
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--red)] text-[9px] flex items-center justify-center text-white font-bold">{unreadCount}</span>
                                     )}
                                 </button>
                                 {notifOpen && (
-                                    <div className="absolute right-0 mt-2 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl z-50">
+                                    <div className="absolute right-0 mt-2 w-80 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-xl z-50">
                                         <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
                                             <span className="text-sm font-semibold">Notifications</span>
-                                            <button onClick={() => setNotifOpen(false)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>
+                                            <div className="flex items-center gap-2">
+                                                {unreadCount > 0 && <button onClick={markAllRead} className="text-[10px] text-[var(--gold)] hover:underline">Mark all read</button>}
+                                                <button onClick={() => setNotifOpen(false)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>
+                                            </div>
                                         </div>
                                         {notifications.length > 0 ? notifications.map((n, i) => (
-                                            <div key={i} className="p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-card-hover)] transition cursor-pointer">
+                                            <Link key={i} href={n.href} onClick={() => setNotifOpen(false)}
+                                                className={`block p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-card-hover)] transition cursor-pointer ${n.ts > lastReadTs ? 'bg-[var(--gold)]/[0.03]' : ''}`}>
                                                 <p className="text-sm text-[var(--text-primary)]">{n.msg}</p>
                                                 <p className="text-[10px] mt-0.5" style={{ color: n.color }}>{n.t}</p>
-                                            </div>
+                                            </Link>
                                         )) : (
                                             <div className="p-4 text-center text-sm text-[var(--text-muted)]">No notifications</div>
                                         )}

@@ -3,7 +3,7 @@ import { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Package, Edit, X } from "lucide-react";
 import { useProduct, useUpdateProduct, useUploadFile } from "@/hooks/api-hooks";
-import { ImageUpload } from "@/components/ui/image-upload";
+import { MultiImageUpload } from "@/components/ui/multi-image-upload";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
@@ -19,6 +19,7 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
     const [mainImageIdx, setMainImageIdx] = useState(0);
     const [fullScreenIdx, setFullScreenIdx] = useState<number | null>(null);
     const parsedImages = useMemo(() => {
+        if (product?.imageUrls?.length > 0) return product.imageUrls;
         if (!product?.imageUrl) return [];
         try {
             const parsed = JSON.parse(product.imageUrl);
@@ -26,7 +27,7 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
         } catch {
             return [product.imageUrl];
         }
-    }, [product?.imageUrl]);
+    }, [product?.imageUrl, product?.imageUrls]);
 
     const [editData, setEditData] = useState({
         name: "", sku: "", brand: "", category: "",
@@ -57,7 +58,14 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
 
     const handleEditSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        updateProduct.mutate({ id: product.id, data: { ...editData, imageUrl: JSON.stringify(editImages) } }, {
+        updateProduct.mutate({
+            id: product.id,
+            data: {
+                ...editData,
+                imageUrl: editImages[0] || "",
+                imageUrls: editImages
+            }
+        }, {
             onSuccess: () => setIsEditing(false)
         });
     };
@@ -170,8 +178,8 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
 
             {/* Edit Product Modal */}
             {isEditing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
-                    <div className="bg-[var(--bg-primary)] rounded-[var(--radius-lg)] border border-[var(--border)] w-full max-w-4xl shadow-2xl animate-in fade-in zoom-in duration-200 my-8">
+                <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 sm:p-8 overflow-y-auto">
+                    <div className="bg-[var(--bg-primary)] rounded-[var(--radius-lg)] border border-[var(--border)] w-full max-w-4xl shadow-2xl animate-in fade-in zoom-in duration-200 relative">
                         <div className="p-4 border-b border-[var(--border)] flex justify-between items-center bg-[var(--bg-secondary)] sticky top-0 rounded-t-[var(--radius-lg)] z-10">
                             <h3 className="font-bold text-[var(--text-primary)] text-lg">Edit Product: {product.name}</h3>
                             <button onClick={() => setIsEditing(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition bg-[var(--bg-primary)] p-1 rounded-full"><X size={20} /></button>
@@ -181,19 +189,12 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                                 {/* Product Images */}
                                 <div className="space-y-4 lg:col-span-3">
                                     <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Product Images</h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                        {editImages.map((url, i) => (
-                                            <div key={i} className="relative group w-full aspect-square rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden bg-[var(--bg-secondary)]">
-                                                <img src={url} className="w-full h-full object-contain" />
-                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                                                    <button type="button" onClick={() => setEditImages(editImages.filter((_, idx) => idx !== i))} className="p-2 bg-[var(--red)] text-white rounded-full hover:scale-110 transition shadow-lg">
-                                                        <X size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        <ImageUpload onChange={(url) => setEditImages([...editImages, url])} onUpload={(file) => upload.mutateAsync(file)} disabled={updateProduct.isPending || upload.isPending} className="w-full aspect-square" />
-                                    </div>
+                                    <MultiImageUpload
+                                        value={editImages}
+                                        onChange={setEditImages}
+                                        onUpload={(file) => upload.mutateAsync(file)}
+                                        disabled={updateProduct.isPending || upload.isPending}
+                                    />
                                 </div>
                                 {/* Basic Info */}
                                 <div className="space-y-4 lg:col-span-3">

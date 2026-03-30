@@ -88,21 +88,49 @@ export default function InvoiceDetailPage() {
     const handleGeneratePdf = async () => {
         setPdfLoading(true);
         try {
-            const res = await apiClient.post(`/api/v1/invoices/${id}/pdf`);
-            const url = res.data?.data?.url ?? res.data?.url;
-            if (url) {
-                // Trigger an actual file download
+            // If a PDF URL already exists, download it directly
+            if (invoice.pdfUrl) {
                 const link = document.createElement("a");
-                link.href = url;
+                link.href = invoice.pdfUrl;
                 link.setAttribute("download", `Invoice-${invoice.invoiceNumber}.pdf`);
-                // Append, click, and clean up for programmatic download
+                link.setAttribute("target", "_blank");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 toast.success("PDF Downloaded");
-            } else {
-                toast.success("PDF generation initiated");
+                setPdfLoading(false);
+                return;
             }
+            // Trigger generation
+            await apiClient.post(`/api/v1/invoices/${id}/pdf`);
+            // Poll for the PDF to be ready (max 20s)
+            let attempts = 0;
+            const maxAttempts = 10;
+            const pollInterval = 2000;
+            const poll = async (): Promise<void> => {
+                attempts++;
+                const refreshed = await apiClient.get(`/api/v1/invoices/${id}`);
+                const inv = refreshed.data?.data ?? refreshed.data;
+                if (inv?.pdfUrl) {
+                    const link = document.createElement("a");
+                    link.href = inv.pdfUrl;
+                    link.setAttribute("download", `Invoice-${invoice.invoiceNumber}.pdf`);
+                    link.setAttribute("target", "_blank");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    toast.success("PDF Downloaded");
+                    refetch();
+                } else if (attempts < maxAttempts) {
+                    await new Promise(r => setTimeout(r, pollInterval));
+                    return poll();
+                } else {
+                    toast.error("PDF generation is taking longer than expected. Please try again.");
+                }
+            };
+            toast.loading("Generating PDF...", { id: "pdf-gen" });
+            await poll();
+            toast.dismiss("pdf-gen");
         } catch {
             toast.error("PDF generation failed");
         }
@@ -180,9 +208,11 @@ export default function InvoiceDetailPage() {
                             <Send size={14} /> WhatsApp
                         </a>
                     )}
-                    <button onClick={() => handleSend("email")} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
-                        <Send size={14} /> {actionLoading === "email" ? "..." : "Email"}
-                    </button>
+                    {invoice.customer?.email && (
+                        <button onClick={() => handleSend("email")} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
+                            <Send size={14} /> {actionLoading === "email" ? "..." : "Email"}
+                        </button>
+                    )}
                     {((invoice.balanceAmount as number) ?? 0) > 0 && (
                         <button onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 transition">
                             <CreditCard size={14} /> Record Payment

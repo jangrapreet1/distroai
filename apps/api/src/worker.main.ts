@@ -29,12 +29,16 @@ import { PaymentProcessor } from './queue/payment.processor';
         BullModule.forRootAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-                connection: {
-                    host: new URL(config.getOrThrow('REDIS_URL')).hostname,
-                    port: parseInt(new URL(config.getOrThrow('REDIS_URL')).port || '6379', 10),
-                },
-            }),
+            useFactory: (config: ConfigService) => {
+                const url = new URL(config.getOrThrow('REDIS_URL'));
+                return {
+                    connection: {
+                        host: url.hostname,
+                        port: parseInt(url.port || '6379', 10),
+                        ...(url.password ? { password: decodeURIComponent(url.password) } : {}),
+                    },
+                };
+            },
         }),
         PrismaModule,
         QueueModule,

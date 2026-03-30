@@ -216,18 +216,27 @@ export default function PaymentsPage() {
                     {/* Ageing Chart */}
                     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5 mb-6">
                         <h3 className="font-semibold mb-4 text-[var(--text-primary)]">Payment Ageing</h3>
-                        <div className="h-40 w-full relative">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={ageingData} layout="vertical" barSize={20} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                                    <XAxis type="number" tick={{ fontSize: 11, fill: "#5A5040" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                                    <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "#9A9080" }} axisLine={false} tickLine={false} width={80} />
-                                    <Tooltip cursor={{ fill: 'rgba(255,255,255,0.02)' }} contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }} formatter={(v: number | undefined) => [formatINR(v ?? 0)]} />
-                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                                        {ageingData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                        {ageingData.every(d => d.value === 0) ? (
+                            <div className="h-32 flex items-center justify-center text-sm text-[var(--text-muted)]">No outstanding balances to display</div>
+                        ) : (
+                            <div className="h-40 w-full relative">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={ageingData} layout="vertical" barSize={20} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                                        <XAxis type="number" tick={{ fontSize: 11, fill: "#5A5040" }} axisLine={false} tickLine={false} tickFormatter={(v) => {
+                                            if (v === 0) return '₹0';
+                                            if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+                                            if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`;
+                                            return `₹${v}`;
+                                        }} />
+                                        <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "#9A9080" }} axisLine={false} tickLine={false} width={80} />
+                                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.02)' }} contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }} formatter={(v: number | undefined) => [formatINR(v ?? 0)]} />
+                                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                            {ageingData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
                     </div>
 
                     {/* Outstanding — Desktop table, Mobile cards */}

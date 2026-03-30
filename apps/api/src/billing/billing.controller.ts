@@ -11,8 +11,8 @@ export class BillingController {
     constructor(private readonly billing: BillingService) { }
 
     @Post('checkout')
-    async checkout(@CurrentUser() u: JwtPayload, @Body() body: { plan: string }) {
-        return this.billing.createCheckoutOrder(u.orgId, body.plan);
+    async checkout(@CurrentUser() u: JwtPayload, @Body() body: { plan: string; isAnnual?: boolean }) {
+        return this.billing.createCheckoutOrder(u.orgId, body.plan, body.isAnnual);
     }
 
     @Post('verify')
@@ -21,6 +21,7 @@ export class BillingController {
         razorpay_payment_id: string;
         razorpay_signature: string;
         plan: string;
+        isAnnual?: boolean;
     }) {
         return this.billing.verifyPayment(u.orgId, body);
     }

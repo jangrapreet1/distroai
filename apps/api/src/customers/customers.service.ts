@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -40,6 +40,19 @@ export class CustomersService {
     }
 
     async create(orgId: string, dto: CreateCustomerDto) {
+        // Prevent duplicate customers with the same phone in the same org
+        if (dto.phone) {
+            const existing = await this.prisma.customer.findFirst({
+                where: { orgId, phone: dto.phone, isActive: true },
+            });
+            if (existing) {
+                throw new ConflictException({
+                    code: 'CONFLICT',
+                    message: `A customer with phone ${dto.phone} already exists: "${existing.name}"`,
+                    existingCustomerId: existing.id,
+                });
+            }
+        }
         const customer = await this.prisma.customer.create({ data: { orgId, ...dto, type: dto.type as any } });
         return customer;
     }

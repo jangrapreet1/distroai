@@ -24,6 +24,7 @@ export class CreateProductDto {
     @IsOptional() @IsNumber() maxStockLevel?: number;
     @IsOptional() @IsNumber() leadTimeDays?: number;
     @IsOptional() @IsString() imageUrl?: string;
+    @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
     @IsOptional() @IsString() description?: string;
     @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
     @IsOptional() @IsNumber() initialQuantity?: number;
@@ -47,6 +48,7 @@ export class UpdateProductDto {
     @IsOptional() @IsNumber() maxStockLevel?: number;
     @IsOptional() @IsBoolean() isActive?: boolean;
     @IsOptional() @IsString() imageUrl?: string;
+    @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
     @IsOptional() @IsString() description?: string;
 }
 

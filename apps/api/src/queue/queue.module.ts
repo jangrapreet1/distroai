@@ -22,13 +22,17 @@ const defaultJobOptions = {
         BullModule.forRootAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-                connection: {
-                    host: new URL(config.get<string>('REDIS_URL', 'redis://localhost:6380')).hostname,
-                    port: parseInt(new URL(config.get<string>('REDIS_URL', 'redis://localhost:6380')).port || '6379'),
-                },
-                defaultJobOptions,
-            }),
+            useFactory: (config: ConfigService) => {
+                const url = new URL(config.get<string>('REDIS_URL', 'redis://localhost:6380'));
+                return {
+                    connection: {
+                        host: url.hostname,
+                        port: parseInt(url.port || '6379'),
+                        ...(url.password ? { password: decodeURIComponent(url.password) } : {}),
+                    },
+                    defaultJobOptions,
+                };
+            },
         }),
         ...QUEUES.map((name) => BullModule.registerQueue({ name })),
     ],

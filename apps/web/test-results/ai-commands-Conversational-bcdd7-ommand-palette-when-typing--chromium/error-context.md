@@ -1,0 +1,120 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e6]
+          - generic [ref=e11]: DistroAI
+        - generic [ref=e12]:
+          - generic [ref=e13]: My Organization
+          - generic [ref=e14]: FREE
+      - navigation [ref=e15]:
+        - generic [ref=e16]:
+          - paragraph [ref=e17]: OPERATIONS
+          - link "Dashboard" [ref=e18] [cursor=pointer]:
+            - /url: /
+            - img [ref=e19]
+            - text: Dashboard
+          - link "Orders" [ref=e24] [cursor=pointer]:
+            - /url: /orders
+            - img [ref=e25]
+            - text: Orders
+          - link "Invoices" [ref=e29] [cursor=pointer]:
+            - /url: /invoices
+            - img [ref=e30]
+            - text: Invoices
+          - link "Inventory" [ref=e33] [cursor=pointer]:
+            - /url: /inventory
+            - img [ref=e34]
+            - text: Inventory
+          - link "Customers" [ref=e38] [cursor=pointer]:
+            - /url: /customers
+            - img [ref=e39]
+            - text: Customers
+          - link "Suppliers" [ref=e44] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e45]
+            - text: Suppliers
+        - generic [ref=e50]:
+          - paragraph [ref=e51]: FINANCE
+          - link "Payments" [ref=e52] [cursor=pointer]:
+            - /url: /payments
+            - img [ref=e53]
+            - text: Payments
+          - link "Purchase Orders" [ref=e55] [cursor=pointer]:
+            - /url: /purchase-orders
+            - img [ref=e56]
+            - text: Purchase Orders
+          - link "Expenses" [ref=e59] [cursor=pointer]:
+            - /url: /expenses
+            - img [ref=e60]
+            - text: Expenses
+        - generic [ref=e63]:
+          - paragraph [ref=e64]: INTELLIGENCE
+          - link "Analytics" [ref=e65] [cursor=pointer]:
+            - /url: /analytics
+            - img [ref=e66]
+            - text: Analytics
+          - link "DistroAI" [ref=e68] [cursor=pointer]:
+            - /url: /ai
+            - img [ref=e69]
+            - text: DistroAI
+        - generic [ref=e72]:
+          - paragraph [ref=e73]: SETTINGS
+          - link "Settings" [ref=e74] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e75]
+            - text: Settings
+      - generic [ref=e79]:
+        - generic [ref=e80]: U
+        - generic [ref=e81]:
+          - paragraph [ref=e82]: User
+          - paragraph [ref=e83]: admin
+        - button "Logout" [ref=e84]:
+          - img [ref=e85]
+    - generic [ref=e88]:
+      - banner [ref=e89]:
+        - navigation [ref=e91]:
+          - link "Home" [ref=e92] [cursor=pointer]:
+            - /url: /
+          - generic [ref=e93]: /
+          - generic [ref=e94]: ai
+        - generic [ref=e95] [cursor=pointer]:
+          - img [ref=e96]
+          - generic [ref=e99]: Search...
+          - generic [ref=e100]: ⌘K
+        - generic [ref=e101]:
+          - button [ref=e103]:
+            - img [ref=e104]
+          - generic [ref=e107]: U
+      - main [ref=e108]:
+        - generic [ref=e109]:
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - generic [ref=e112]:
+                - img [ref=e113]
+                - heading "DistroAI" [level=2] [ref=e116]
+              - button "New Chat" [ref=e117]:
+                - img [ref=e118]
+                - text: New Chat
+            - button "/order list" [ref=e121]
+          - generic [ref=e122]:
+            - generic [ref=e126]: /order list
+            - generic [ref=e130]:
+              - generic [ref=e131]:
+                - textbox "Type / for commands or ask anything..." [ref=e132]
+                - button "Attach Image" [ref=e133]:
+                  - img [ref=e134]
+              - button "Offline AR Scanner" [ref=e138]:
+                - img [ref=e139]
+              - button "Voice query" [ref=e144]:
+                - img [ref=e145]
+              - button [disabled] [ref=e148]:
+                - img [ref=e149]
+  - button "Open Next.js Dev Tools" [ref=e157] [cursor=pointer]:
+    - img [ref=e158]
+  - alert [ref=e161]
+```

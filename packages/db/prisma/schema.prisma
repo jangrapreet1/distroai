@@ -131,6 +131,7 @@ enum SubStatus {
 model Organization {
   id            String    @id @default(cuid())
   name          String
+  slug          String?   @unique // URL-friendly portal identifier, e.g. "amit-hardware"
   gstNumber     String?
   panNumber     String?
   phone         String?
@@ -262,6 +263,7 @@ model Product {
   leadTimeDays     Int      @default(0)
   isActive         Boolean  @default(true)
   imageUrl         String?
+  imageUrls        String[] @default([])
   description      String?
   tags             String[]
   embedding        Unsupported("vector(1536)")?
@@ -899,6 +901,14 @@ model OrgSettings {
   paymentReminderDays Int[]    @default([3, 7, 15, 30])
   whatsappBriefingTime String? @default("08:00") // HH:mm format
   language            String   @default("en")
+
+  // Bank & payment details (shown on invoice PDF)
+  bankName            String?
+  bankAccountNumber   String?
+  bankIfscCode        String?
+  bankBranch          String?
+  upiId               String?
+
   updatedAt           DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)

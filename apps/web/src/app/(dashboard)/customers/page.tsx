@@ -6,6 +6,7 @@ import { Plus, Search, Upload, X } from "lucide-react";
 import { useCustomers } from "@/hooks/api-hooks";
 import toast from "react-hot-toast";
 import { AddCustomerModal } from "@/components/AddCustomerModal";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
@@ -33,6 +34,12 @@ export default function CustomersPage() {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [showAdd, setShowAdd] = useState(false);
+    const { t } = useLanguage();
+
+    const TAB_LABELS: Record<string, string> = {
+        All: t('all'), GOLD: t('gold'), SILVER: t('silver'), BRONZE: t('bronze'),
+        'High Risk': t('high_risk'), Dormant: t('dormant'),
+    };
 
     const filters = { search: search || undefined, page, limit: 100 }; // Increase limit to fetch enough for client-side filtering
     const { data, isLoading } = useCustomers(filters);
@@ -53,20 +60,20 @@ export default function CustomersPage() {
     return (
         <div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Customers</h1>
+                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{t('customers')}</h1>
                 <div className="flex gap-2">
-                    <button onClick={() => toast("CSV import coming soon!", { icon: "📁" })} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Upload size={14} /> Import</button>
-                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] transition"><Plus size={16} /> Add Customer</button>
+                    <button onClick={() => toast(t('csv_import_soon'), { icon: "📁" })} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Upload size={14} /> {t('import')}</button>
+                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] transition"><Plus size={16} /> {t('add_customer')}</button>
                 </div>
             </div>
 
             {/* Summary */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
                 {[
-                    { label: "Total", value: meta.total, color: "var(--gold)" },
-                    { label: "Active", value: meta.total, color: "var(--green-bright)" },
-                    { label: "Retailers", value: customers.filter((c: Record<string, unknown>) => c.type === "RETAILER").length, color: "var(--purple)" },
-                    { label: "Wholesalers", value: customers.filter((c: Record<string, unknown>) => c.type === "WHOLESALER").length, color: "var(--orange)" },
+                    { label: t('total_label'), value: meta.total, color: "var(--gold)" },
+                    { label: t('active'), value: meta.total, color: "var(--green-bright)" },
+                    { label: t('retailers'), value: customers.filter((c: Record<string, unknown>) => c.type === "RETAILER").length, color: "var(--purple)" },
+                    { label: t('wholesalers'), value: customers.filter((c: Record<string, unknown>) => c.type === "WHOLESALER").length, color: "var(--orange)" },
                 ].map((s) => (
                     <div key={s.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4">
                         <p className="text-xs text-[var(--text-muted)] mb-1">{s.label}</p>
@@ -77,15 +84,15 @@ export default function CustomersPage() {
 
             {/* Tabs */}
             <div className="flex flex-wrap gap-1 mb-4">
-                {TABS.map((t) => (
-                    <button key={t} onClick={() => { setTab(t); setPage(1); }} className={`px-3 py-1.5 text-xs rounded-full transition ${tab === t ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>{t}</button>
+                {TABS.map((tabKey) => (
+                    <button key={tabKey} onClick={() => { setTab(tabKey); setPage(1); }} className={`px-3 py-1.5 text-xs rounded-full transition ${tab === tabKey ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>{TAB_LABELS[tabKey] ?? tabKey}</button>
                 ))}
             </div>
 
             {/* Search */}
             <div className="relative max-w-sm mb-4">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search customers..." className="w-full pl-9 pr-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search_customers')} className="w-full pl-9 pr-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
             </div>
 
             {/* Table */}
@@ -93,8 +100,8 @@ export default function CustomersPage() {
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
-                            <th className="text-left p-4">Name</th><th className="text-left p-4">City</th><th className="text-left p-4">Phone</th>
-                            <th className="text-right p-4">Outstanding</th><th className="text-center p-4">Score</th><th className="text-right p-4">Actions</th>
+                            <th className="text-left p-4">{t('name')}</th><th className="text-left p-4">{t('city')}</th><th className="text-left p-4">{t('phone')}</th>
+                            <th className="text-right p-4">{t('outstanding')}</th><th className="text-center p-4">{t('score')}</th><th className="text-right p-4">{t('actions')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -103,21 +110,27 @@ export default function CustomersPage() {
                         )) : displayCustomers.length === 0 ? (
                             <tr><td colSpan={6} className="p-12 text-center text-[var(--text-muted)]">
                                 <Search size={36} className="mx-auto mb-3 opacity-20" />
-                                <p className="font-medium">No customers found</p>
-                                <p className="text-xs mt-1">Try adjusting your search or filters</p>
+                                <p className="font-medium">{t('no_customers_found')}</p>
+                                <p className="text-xs mt-1">{t('try_adjusting')}</p>
                             </td></tr>
                         ) : displayCustomers.map((c: Record<string, unknown>) => (
                             <tr key={c.id as string} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
                                 <td className="p-4 font-medium"><Link href={`/customers/${c.id}`} className="text-[var(--gold)] hover:underline">{c.name as string}</Link></td>
                                 <td className="p-4 text-[var(--text-secondary)]">{c.city as string ?? "—"}</td>
                                 <td className="p-4 text-[var(--text-secondary)]">{c.phone as string ?? "—"}</td>
-                                <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)", color: (c.outstandingAmount as number) > 0 ? "var(--orange)" : "var(--text-secondary)" }}>
-                                    {formatINR(c.outstandingAmount as number ?? 0)}
+                                <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>
+                                    {(c.outstandingAmount as number) < 0 ? (
+                                        <span className="text-[var(--green)]">{formatINR(Math.abs(c.outstandingAmount as number))} credit</span>
+                                    ) : (
+                                        <span style={{ color: (c.outstandingAmount as number) > 0 ? "var(--orange)" : "var(--text-secondary)" }}>
+                                            {formatINR(c.outstandingAmount as number ?? 0)}
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="p-4 text-center"><ScoreRing score={(c.paymentScore as number) ?? 50} /></td>
                                 <td className="p-4 text-right">
-                                    <Link href={`/customers/${c.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition mr-3">View</Link>
-                                    {!!c.phone && <a href={`https://wa.me/${(c.phone as string).replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">WhatsApp</a>}
+                                    <Link href={`/customers/${c.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition mr-3">{t('view')}</Link>
+                                    {!!c.phone && <a href={`https://wa.me/${(c.phone as string).replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--whatsapp)] hover:underline">{t('whatsapp')}</a>}
                                 </td>
                             </tr>
                         ))}

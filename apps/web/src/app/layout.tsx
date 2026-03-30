@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
+import { Playfair_Display, Outfit, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -9,9 +9,9 @@ const playfair = Playfair_Display({
   variable: "--font-playfair",
   display: "swap",
 });
-const dmSans = DM_Sans({
+const baseFont = Outfit({
   subsets: ["latin"],
-  variable: "--font-dm-sans",
+  variable: "--font-dm-sans", // Keeping variable name the same for Tailwind compatibility
   display: "swap",
 });
 const jetbrainsMono = JetBrains_Mono({
@@ -41,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
+      className={`${playfair.variable} ${baseFont.variable} ${jetbrainsMono.variable}`}
     >
       <body className="antialiased">
         <Providers>

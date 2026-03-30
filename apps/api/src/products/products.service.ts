@@ -62,15 +62,16 @@ export class ProductsService {
     }
 
     async create(orgId: string, dto: CreateProductDto) {
-        const sku = dto.sku ?? this.generateSku(dto.brand, dto.category);
+        const { initialQuantity, ...productData } = dto;
+        const sku = productData.sku ?? this.generateSku(productData.brand, productData.category);
 
         const defaultWarehouse = await this.prisma.warehouse.findFirst({ where: { orgId, isDefault: true } });
 
         const product = await this.prisma.product.create({
             data: {
-                orgId, ...dto, sku,
+                orgId, ...productData, sku,
                 ...(defaultWarehouse && {
-                    inventories: { create: { orgId, warehouseId: defaultWarehouse.id, quantity: dto.initialQuantity ?? 0 } },
+                    inventories: { create: { orgId, warehouseId: defaultWarehouse.id, quantity: initialQuantity ?? 0 } },
                 }),
             },
         });
