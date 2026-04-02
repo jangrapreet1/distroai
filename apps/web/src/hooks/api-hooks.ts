@@ -204,6 +204,30 @@ export function useUploadFile() {
 export function useWarehouses() {
     return useQuery({ queryKey: ["inventory", "warehouses"], queryFn: () => apiClient.get("/api/v1/inventory/warehouses").then((r) => r.data) });
 }
+
+export function useCreateWarehouse() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: any) => apiClient.post("/api/v1/inventory/warehouses", data).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["inventory", "warehouses"] });
+            toast.success("Location added successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
+export function useUpdateWarehouse() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) => apiClient.put(`/api/v1/inventory/warehouses/${id}`, data).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["inventory", "warehouses"] });
+            toast.success("Location updated successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
 export function useInventoryValuation() {
     return useQuery({ queryKey: ["inventory", "valuation"], queryFn: () => apiClient.get("/api/v1/inventory/valuation").then((r) => r.data) });
 }
@@ -328,5 +352,39 @@ export function useExportCaGst() {
             });
             return response.data;
         }
+    });
+}
+
+// ===== WHATSAPP EMBEDDED SIGNUP =====
+export function useWhatsAppStatus() {
+    return useQuery({
+        queryKey: ["whatsapp-status"],
+        queryFn: () => apiClient.get("/api/v1/whatsapp/status").then((r) => r.data),
+    });
+}
+
+export function useWhatsAppConnect() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: { code: string }) =>
+            apiClient.post("/api/v1/whatsapp/connect", data).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+            toast.success("WhatsApp connected successfully! 🎉");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
+export function useWhatsAppDisconnect() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () =>
+            apiClient.post("/api/v1/whatsapp/disconnect").then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+            toast.success("WhatsApp disconnected.");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
     });
 }

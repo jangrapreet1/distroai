@@ -778,9 +778,11 @@ model WhatsAppConfig {
   id            String   @id @default(cuid())
   orgId         String   @unique
   phoneNumberId String
-  accessToken   String
-  webhookSecret String
+  accessToken   String   // AES-256-GCM encrypted
+  webhookSecret String?
   businessName  String?
+  wabaId        String?
+  phoneNumber   String?  // Display number e.g. "+91 98765 43210"
   isActive      Boolean  @default(true)
   updatedAt     DateTime @updatedAt
 

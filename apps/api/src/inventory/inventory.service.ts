@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AdjustInventoryDto, TransferInventoryDto, ListTransactionsQueryDto, InventoryQueryDto } from './dto/inventory.dto';
+import { AdjustInventoryDto, TransferInventoryDto, ListTransactionsQueryDto, InventoryQueryDto, CreateWarehouseDto, UpdateWarehouseDto } from './dto/inventory.dto';
 
 @Injectable()
 export class InventoryService {
@@ -43,6 +43,28 @@ export class InventoryService {
 
     async getWarehouses(orgId: string) {
         return this.prisma.warehouse.findMany({ where: { orgId } });
+    }
+
+    async createWarehouse(orgId: string, dto: CreateWarehouseDto) {
+        if (dto.isDefault) {
+            await this.prisma.warehouse.updateMany({ where: { orgId }, data: { isDefault: false } });
+        }
+        return this.prisma.warehouse.create({
+            data: { ...dto, orgId }
+        });
+    }
+
+    async updateWarehouse(orgId: string, warehouseId: string, dto: UpdateWarehouseDto) {
+        const wh = await this.prisma.warehouse.findFirst({ where: { id: warehouseId, orgId } });
+        if (!wh) throw new NotFoundException('Warehouse not found');
+
+        if (dto.isDefault) {
+            await this.prisma.warehouse.updateMany({ where: { orgId }, data: { isDefault: false } });
+        }
+        return this.prisma.warehouse.update({
+            where: { id: warehouseId },
+            data: dto
+        });
     }
 
     async adjust(orgId: string, dto: AdjustInventoryDto, userId: string) {

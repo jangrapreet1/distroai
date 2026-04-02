@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEnum, IsDate, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -29,4 +29,24 @@ export class ListTransactionsQueryDto {
 export class InventoryQueryDto {
     @ApiPropertyOptional() @IsOptional() @IsString() warehouseId?: string;
     @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) lowStockOnly?: boolean;
+}
+
+export class CreateWarehouseDto {
+    @IsString() name!: string;
+    @IsString() code!: string;
+    @IsOptional() @IsString() address?: string;
+    @IsOptional() @IsString() city?: string;
+    @IsOptional() @IsString() state?: string;
+    @IsOptional() @IsString() pincode?: string;
+    @IsOptional() @IsBoolean() isDefault?: boolean;
+}
+
+export class UpdateWarehouseDto {
+    @IsOptional() @IsString() name?: string;
+    @IsOptional() @IsString() code?: string;
+    @IsOptional() @IsString() address?: string;
+    @IsOptional() @IsString() city?: string;
+    @IsOptional() @IsString() state?: string;
+    @IsOptional() @IsString() pincode?: string;
+    @IsOptional() @IsBoolean() isDefault?: boolean;
 }

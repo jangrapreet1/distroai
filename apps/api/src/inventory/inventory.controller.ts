@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Query, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
-import { AdjustInventoryDto, TransferInventoryDto, ListTransactionsQueryDto, InventoryQueryDto } from './dto/inventory.dto';
+import { AdjustInventoryDto, TransferInventoryDto, ListTransactionsQueryDto, InventoryQueryDto, CreateWarehouseDto, UpdateWarehouseDto } from './dto/inventory.dto';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -22,6 +22,18 @@ export class InventoryController {
     @Get('warehouses')
     getWarehouses(@CurrentUser() user: JwtPayload) {
         return this.inventory.getWarehouses(user.orgId);
+    }
+
+    @Roles('OWNER', 'ADMIN')
+    @Post('warehouses')
+    createWarehouse(@CurrentUser() user: JwtPayload, @Body() dto: CreateWarehouseDto) {
+        return this.inventory.createWarehouse(user.orgId, dto);
+    }
+
+    @Roles('OWNER', 'ADMIN')
+    @Put('warehouses/:id')
+    updateWarehouse(@CurrentUser() user: JwtPayload, @Body() dto: UpdateWarehouseDto, @Param('id') id: string) {
+        return this.inventory.updateWarehouse(user.orgId, id, dto);
     }
 
     @Roles('OWNER', 'ADMIN', 'MANAGER')
