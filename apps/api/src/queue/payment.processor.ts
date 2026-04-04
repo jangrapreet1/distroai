@@ -49,7 +49,7 @@ export class PaymentProcessor extends WorkerHost {
 
         message += `\n\nPlease clear the dues at the earliest. Reply 'balance' to this chat to check your total outstanding.`;
 
-        await this.whatsappService.sendText(invoice.customer.phone, message);
+        await this.whatsappService.sendText(data.orgId, invoice.customer.phone, message);
         this.logger.log(`Sent payment reminder for invoice ${invoice.invoiceNumber} to ${invoice.customer.phone}`);
     }
 

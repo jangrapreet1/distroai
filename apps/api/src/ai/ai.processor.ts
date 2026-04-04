@@ -87,7 +87,7 @@ Data: ${JSON.stringify(data)}`;
         });
 
         for (const owner of owners) {
-            await this.whatsappService.sendText(owner.phone!, briefingText);
+            await this.whatsappService.sendText(orgId, owner.phone!, briefingText);
         }
     }
 

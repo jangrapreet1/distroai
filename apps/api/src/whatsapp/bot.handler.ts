@@ -50,8 +50,8 @@ export class BotHandler {
         const msgId = msg.id as string;
         const msgType = msg.type as string;
 
-        // Mark as read
-        await this.wa.markRead(msgId);
+        // Mark as read (we need orgId, but resolve it first below)
+        // Moved after orgId resolution
 
         // Find org by phoneNumberId
         const waConfig = await this.prisma.whatsAppConfig.findFirst({
@@ -61,9 +61,11 @@ export class BotHandler {
         const orgId = waConfig?.orgId;
         if (!orgId) {
             this.logger.warn(`No org found for phoneNumberId ${phoneNumberId}`);
-            await this.wa.sendText(from, 'Sorry, this number is not configured. Please contact your distributor.');
             return;
         }
+
+        // Mark as read (now that we have orgId)
+        await this.wa.markRead(orgId, msgId);
 
         // Load or create session (persisted in DB)
         let session = await this.prisma.whatsAppSession.findFirst({
@@ -97,7 +99,7 @@ export class BotHandler {
             }
         } else if (msgType === 'audio') {
             // Voice orders — stub for now, will integrate OpenAI Whisper in Phase 5
-            await this.wa.sendText(from, "Voice orders will be supported soon! Please type your order or use the menu. Send 'order' to start.");
+            await this.wa.sendText(orgId, from, "Voice orders will be supported soon! Please type your order or use the menu. Send 'order' to start.");
             return;
         }
 
@@ -108,29 +110,29 @@ export class BotHandler {
             switch (state) {
                 case 'IDLE':
                     if (ORDER_KEYWORDS.some((k) => lowerText.includes(k))) {
-                        await this.wa.sendButtons(from, 'Welcome! What would you like to do?', [
+                        await this.wa.sendButtons(orgId, from, 'Welcome! What would you like to do?', [
                             { id: 'place_order', title: 'Place Order' },
                             { id: 'check_balance', title: 'Check Balance' },
                             { id: 'track_order', title: 'Track Order' },
                         ]);
                         await this.updateSession(session.id, 'MAIN_MENU', { ...context, orgId });
                     } else {
-                        await this.wa.sendText(from, "Hi! I'm the DistroAI ordering assistant. Type 'order' to get started or say 'hi' for the menu.");
+                        await this.wa.sendText(orgId, from, "Hi! I'm the DistroAI ordering assistant. Type 'order' to get started or say 'hi' for the menu.");
                     }
                     break;
 
                 case 'MAIN_MENU':
                     if (buttonId === 'place_order') {
-                        await this.sendProductList(from, orgId);
+                        await this.sendProductList(orgId, from);
                         await this.updateSession(session.id, 'ORDER_PRODUCT_SELECT', { ...context, items: [] });
                     } else if (buttonId === 'check_balance') {
-                        await this.handleBalanceCheck(from, orgId);
+                        await this.handleBalanceCheck(orgId, from);
                         await this.updateSession(session.id, 'IDLE', {});
                     } else if (buttonId === 'track_order') {
-                        await this.wa.sendText(from, 'Enter your order number (e.g. ORD-2025-00123):');
+                        await this.wa.sendText(orgId, from, 'Enter your order number (e.g. ORD-2025-00123):');
                         await this.updateSession(session.id, 'ORDER_TRACK_INPUT', context);
                     } else {
-                        await this.wa.sendButtons(from, 'Please select an option:', [
+                        await this.wa.sendButtons(orgId, from, 'Please select an option:', [
                             { id: 'place_order', title: 'Place Order' },
                             { id: 'check_balance', title: 'Check Balance' },
                             { id: 'track_order', title: 'Track Order' },
@@ -144,7 +146,7 @@ export class BotHandler {
                             where: { id: listRowId, orgId },
                         });
                         if (product) {
-                            await this.wa.sendButtons(from, `How many ${product.name}? (Price: ${formatINR(Number(product.sellingPrice))} per ${product.unit})`, [
+                            await this.wa.sendButtons(orgId, from, `How many ${product.name}? (Price: ${formatINR(Number(product.sellingPrice))} per ${product.unit})`, [
                                 { id: 'qty_1', title: '1' },
                                 { id: 'qty_5', title: '5' },
                                 { id: 'qty_10', title: '10' },
@@ -160,7 +162,7 @@ export class BotHandler {
                             });
                         }
                     } else {
-                        await this.wa.sendText(from, 'Please select a product from the list.');
+                        await this.wa.sendText(orgId, from, 'Please select a product from the list.');
                     }
                     break;
 
@@ -172,7 +174,7 @@ export class BotHandler {
                     else qty = parseInt(text, 10);
 
                     if (!qty || qty <= 0 || isNaN(qty)) {
-                        await this.wa.sendText(from, 'Please enter a valid quantity (positive number).');
+                        await this.wa.sendText(orgId, from, 'Please enter a valid quantity (positive number).');
                         break;
                     }
 
@@ -185,7 +187,7 @@ export class BotHandler {
                     const summary = items.map((it: OrderItem) => `• ${it.name} x${it.qty} — ${formatINR(it.total)}`).join('\n');
                     const grandTotal = items.reduce((s: number, it: OrderItem) => s + it.total, 0);
 
-                    await this.wa.sendButtons(from, `📦 Current order:\n${summary}\nSubtotal: ${formatINR(grandTotal)}\n\nAdd more items?`, [
+                    await this.wa.sendButtons(orgId, from, `📦 Current order:\n${summary}\nSubtotal: ${formatINR(grandTotal)}\n\nAdd more items?`, [
                         { id: 'add_more', title: 'Add More' },
                         { id: 'confirm_order', title: 'Confirm Order' },
                         { id: 'cancel_order', title: 'Cancel' },
@@ -196,20 +198,20 @@ export class BotHandler {
 
                 case 'ORDER_ADD_MORE':
                     if (buttonId === 'add_more') {
-                        await this.sendProductList(from, orgId);
+                        await this.sendProductList(orgId, from);
                         await this.updateSession(session.id, 'ORDER_PRODUCT_SELECT', context);
                     } else if (buttonId === 'confirm_order') {
                         const items = context.items ?? [];
                         const total = items.reduce((s: number, it: OrderItem) => s + it.total, 0);
                         const summary = items.map((it: OrderItem) => `• ${it.name} x${it.qty} — ${formatINR(it.total)}`).join('\n');
 
-                        await this.wa.sendButtons(from, `📦 Order Summary:\n${summary}\n\nTotal: ${formatINR(total)} + GST\n\nConfirm this order?`, [
+                        await this.wa.sendButtons(orgId, from, `📦 Order Summary:\n${summary}\n\nTotal: ${formatINR(total)} + GST\n\nConfirm this order?`, [
                             { id: 'yes_confirm', title: 'Yes, Confirm' },
                             { id: 'no_cancel', title: 'No, Cancel' },
                         ]);
                         await this.updateSession(session.id, 'ORDER_AWAITING_CONFIRM', context);
                     } else if (buttonId === 'cancel_order') {
-                        await this.wa.sendText(from, "Order cancelled. Type 'order' anytime to start again.");
+                        await this.wa.sendText(orgId, from, "Order cancelled. Type 'order' anytime to start again.");
                         await this.updateSession(session.id, 'IDLE', {});
                     }
                     break;
@@ -218,33 +220,33 @@ export class BotHandler {
                     if (buttonId === 'yes_confirm') {
                         const order = await this.createOrderFromSession(orgId, from, context);
                         if (order) {
-                            await this.wa.sendText(from, `✅ Order #${order.orderNumber} confirmed!\nExpected delivery: within 2-3 days.\nWe'll notify you when dispatched.`);
+                            await this.wa.sendText(orgId, from, `✅ Order #${order.orderNumber} confirmed!\nExpected delivery: within 2-3 days.\nWe'll notify you when dispatched.`);
                             // Queue notification to owner
                             await this.queueService.addToQueue('notification', 'send-push', {
                                 type: 'NEW_WHATSAPP_ORDER', orgId, orderId: order.id,
                             });
                         } else {
-                            await this.wa.sendText(from, 'Sorry, there was an error creating your order. Please try again.');
+                            await this.wa.sendText(orgId, from, 'Sorry, there was an error creating your order. Please try again.');
                         }
                         await this.updateSession(session.id, 'IDLE', {});
                     } else if (buttonId === 'no_cancel') {
-                        await this.wa.sendText(from, "Order cancelled. Type 'order' anytime to start again.");
+                        await this.wa.sendText(orgId, from, "Order cancelled. Type 'order' anytime to start again.");
                         await this.updateSession(session.id, 'IDLE', {});
                     }
                     break;
 
                 case 'ORDER_TRACK_INPUT':
-                    await this.handleOrderTracking(from, orgId, text);
+                    await this.handleOrderTracking(orgId, from, text);
                     await this.updateSession(session.id, 'IDLE', {});
                     break;
 
                 default:
-                    await this.wa.sendText(from, "Hi! Type 'order' to get started.");
+                    await this.wa.sendText(orgId, from, "Hi! Type 'order' to get started.");
                     await this.updateSession(session.id, 'IDLE', {});
             }
         } catch (err) {
             this.logger.error(`Bot error for ${from} in state ${state}`, (err as Error).message);
-            await this.wa.sendText(from, "Something went wrong. Type 'order' to start again.");
+            await this.wa.sendText(orgId, from, "Something went wrong. Type 'order' to start again.");
             await this.updateSession(session.id, 'IDLE', {});
         }
 
@@ -269,7 +271,7 @@ export class BotHandler {
         });
     }
 
-    private async sendProductList(to: string, orgId: string) {
+    private async sendProductList(orgId: string, to: string) {
         const products = await this.prisma.product.findMany({
             where: { orgId, isActive: true },
             orderBy: { name: 'asc' },
@@ -278,7 +280,7 @@ export class BotHandler {
         });
 
         if (!products.length) {
-            await this.wa.sendText(to, 'No products available. Please contact your distributor.');
+            await this.wa.sendText(orgId, to, 'No products available. Please contact your distributor.');
             return;
         }
 
@@ -299,16 +301,16 @@ export class BotHandler {
             })),
         }));
 
-        await this.wa.sendList(to, 'Our Products', 'Select a product to add to your order:', 'View Products', sections);
+        await this.wa.sendList(orgId, to, 'Our Products', 'Select a product to add to your order:', 'View Products', sections);
     }
 
-    private async handleBalanceCheck(to: string, orgId: string) {
+    private async handleBalanceCheck(orgId: string, to: string) {
         const customer = await this.prisma.customer.findFirst({
             where: { orgId, phone: to.replace(/^\+?91/, '') },
         });
 
         if (!customer) {
-            await this.wa.sendText(to, "We couldn't find your account. Please contact your distributor.");
+            await this.wa.sendText(orgId, to, "We couldn't find your account. Please contact your distributor.");
             return;
         }
 
@@ -334,17 +336,17 @@ export class BotHandler {
                 msg += `\n\nPay via UPI: ${upiLink}`;
             }
         }
-        await this.wa.sendText(to, msg);
+        await this.wa.sendText(orgId, to, msg);
     }
 
-    private async handleOrderTracking(to: string, orgId: string, orderNumber: string) {
+    private async handleOrderTracking(orgId: string, to: string, orderNumber: string) {
         const order = await this.prisma.order.findFirst({
             where: { orgId, orderNumber: orderNumber.trim().toUpperCase() },
             include: { items: { include: { product: true } } },
         });
 
         if (!order) {
-            await this.wa.sendText(to, 'Order not found. Please check the order number and try again.');
+            await this.wa.sendText(orgId, to, 'Order not found. Please check the order number and try again.');
             return;
         }
 
@@ -353,7 +355,7 @@ export class BotHandler {
         };
 
         const itemsList = order.items.map((it: any) => `• ${it.product.name} x${it.quantity}`).join('\n');
-        await this.wa.sendText(to, `📦 Order #${order.orderNumber}\nStatus: ${statusEmoji[order.status] ?? '📋'} ${order.status}\n\nItems:\n${itemsList}\n\nTotal: ${formatINR(Number(order.netAmount))}`);
+        await this.wa.sendText(orgId, to, `📦 Order #${order.orderNumber}\nStatus: ${statusEmoji[order.status] ?? '📋'} ${order.status}\n\nItems:\n${itemsList}\n\nTotal: ${formatINR(Number(order.netAmount))}`);
     }
 
     private async createOrderFromSession(orgId: string, phone: string, context: SessionContext) {

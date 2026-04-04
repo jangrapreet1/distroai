@@ -1,55 +1,129 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
+import { decrypt } from '../common/utils/crypto.util';
 import axios, { AxiosInstance } from 'axios';
+
+const GRAPH_API_DEFAULT = 'https://graph.facebook.com/v19.0';
+
+/** Cached per-org WhatsApp client */
+interface OrgClient {
+    client: AxiosInstance;
+    phoneNumberId: string;
+    expiresAt: number; // cache TTL
+}
 
 @Injectable()
 export class WhatsAppService {
     private readonly logger = new Logger(WhatsAppService.name);
-    private readonly client: AxiosInstance;
-    private readonly phoneNumberId: string;
-    private readonly isConfigured: boolean;
+    private readonly clientCache = new Map<string, OrgClient>();
+    private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-    constructor(private config: ConfigService) {
-        const apiUrl = config.get<string>('WHATSAPP_API_URL', 'https://graph.facebook.com/v19.0');
+    // Env-var fallback (single-tenant legacy)
+    private readonly fallbackClient: AxiosInstance | null;
+    private readonly fallbackPhoneNumberId: string;
+    private readonly hasFallback: boolean;
+
+    constructor(
+        private config: ConfigService,
+        private prisma: PrismaService,
+    ) {
+        const apiUrl = config.get<string>('WHATSAPP_API_URL', GRAPH_API_DEFAULT);
         const accessToken = config.get<string>('WHATSAPP_ACCESS_TOKEN');
-        this.phoneNumberId = config.get<string>('WHATSAPP_PHONE_NUMBER_ID', '');
-        this.isConfigured = !!(accessToken && this.phoneNumberId);
+        this.fallbackPhoneNumberId = config.get<string>('WHATSAPP_PHONE_NUMBER_ID', '');
+        this.hasFallback = !!(accessToken && this.fallbackPhoneNumberId);
 
-        this.client = axios.create({
-            baseURL: `${apiUrl}/${this.phoneNumberId}`,
-            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        });
+        if (this.hasFallback) {
+            this.fallbackClient = axios.create({
+                baseURL: `${apiUrl}/${this.fallbackPhoneNumberId}`,
+                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            });
+        } else {
+            this.fallbackClient = null;
+        }
 
-        if (!this.isConfigured) {
-            this.logger.warn('WhatsApp not configured — messages will be logged to console');
+        if (!this.hasFallback) {
+            this.logger.warn('No env-level WhatsApp config — relying on per-tenant DB credentials');
         }
     }
 
-    async sendText(to: string, body: string): Promise<void> {
-        if (!this.isConfigured) {
-            this.logger.log(`[WA STUB] sendText to=${to}: ${body}`);
+    /**
+     * Resolve an Axios client for the given orgId.
+     * Priority: DB credentials → env-var fallback → null (stub mode)
+     */
+    private async getClient(orgId: string): Promise<{ client: AxiosInstance; phoneNumberId: string } | null> {
+        // Check cache first
+        const cached = this.clientCache.get(orgId);
+        if (cached && Date.now() < cached.expiresAt) {
+            return { client: cached.client, phoneNumberId: cached.phoneNumberId };
+        }
+
+        // Look up DB
+        const waConfig = await this.prisma.whatsAppConfig.findUnique({
+            where: { orgId },
+            select: { accessToken: true, phoneNumberId: true, isActive: true },
+        });
+
+        if (waConfig && waConfig.isActive && waConfig.accessToken && waConfig.phoneNumberId) {
+            try {
+                const token = decrypt(waConfig.accessToken);
+                const client = axios.create({
+                    baseURL: `${GRAPH_API_DEFAULT}/${waConfig.phoneNumberId}`,
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                });
+
+                const entry: OrgClient = {
+                    client,
+                    phoneNumberId: waConfig.phoneNumberId,
+                    expiresAt: Date.now() + this.CACHE_TTL_MS,
+                };
+                this.clientCache.set(orgId, entry);
+                return { client, phoneNumberId: waConfig.phoneNumberId };
+            } catch (err) {
+                this.logger.error(`Failed to decrypt WA token for org ${orgId}`, (err as Error).message);
+            }
+        }
+
+        // Fallback to env-var config
+        if (this.hasFallback && this.fallbackClient) {
+            return { client: this.fallbackClient, phoneNumberId: this.fallbackPhoneNumberId };
+        }
+
+        return null;
+    }
+
+    /** Invalidate cached client for an org (call after disconnect/reconnect) */
+    invalidateCache(orgId: string): void {
+        this.clientCache.delete(orgId);
+    }
+
+    async sendText(orgId: string, to: string, body: string): Promise<void> {
+        const resolved = await this.getClient(orgId);
+        if (!resolved) {
+            this.logger.log(`[WA STUB] sendText org=${orgId} to=${to}: ${body}`);
             return;
         }
         try {
-            await this.client.post('/messages', {
+            await resolved.client.post('/messages', {
                 messaging_product: 'whatsapp', to,
                 type: 'text', text: { body },
             });
         } catch (err) {
-            this.logger.error(`Failed to send text to ${to}`, (err as Error).message);
+            this.logger.error(`Failed to send text to ${to} (org ${orgId})`, (err as Error).message);
         }
     }
 
     async sendButtons(
-        to: string, body: string,
+        orgId: string, to: string, body: string,
         buttons: Array<{ id: string; title: string }>,
     ): Promise<void> {
-        if (!this.isConfigured) {
-            this.logger.log(`[WA STUB] sendButtons to=${to}: ${body} | buttons=${JSON.stringify(buttons)}`);
+        const resolved = await this.getClient(orgId);
+        if (!resolved) {
+            this.logger.log(`[WA STUB] sendButtons org=${orgId} to=${to}: ${body}`);
             return;
         }
         try {
-            await this.client.post('/messages', {
+            await resolved.client.post('/messages', {
                 messaging_product: 'whatsapp', to, type: 'interactive',
                 interactive: {
                     type: 'button', body: { text: body },
@@ -59,20 +133,21 @@ export class WhatsAppService {
                 },
             });
         } catch (err) {
-            this.logger.error(`Failed to send buttons to ${to}`, (err as Error).message);
+            this.logger.error(`Failed to send buttons to ${to} (org ${orgId})`, (err as Error).message);
         }
     }
 
     async sendList(
-        to: string, header: string, body: string, buttonText: string,
+        orgId: string, to: string, header: string, body: string, buttonText: string,
         sections: Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }>,
     ): Promise<void> {
-        if (!this.isConfigured) {
-            this.logger.log(`[WA STUB] sendList to=${to}: ${header}`);
+        const resolved = await this.getClient(orgId);
+        if (!resolved) {
+            this.logger.log(`[WA STUB] sendList org=${orgId} to=${to}: ${header}`);
             return;
         }
         try {
-            await this.client.post('/messages', {
+            await resolved.client.post('/messages', {
                 messaging_product: 'whatsapp', to, type: 'interactive',
                 interactive: {
                     type: 'list', header: { type: 'text', text: header }, body: { text: body },
@@ -80,35 +155,37 @@ export class WhatsAppService {
                 },
             });
         } catch (err) {
-            this.logger.error(`Failed to send list to ${to}`, (err as Error).message);
+            this.logger.error(`Failed to send list to ${to} (org ${orgId})`, (err as Error).message);
         }
     }
 
-    async sendDocument(to: string, documentUrl: string, filename: string, caption?: string): Promise<void> {
-        if (!this.isConfigured) {
-            this.logger.log(`[WA STUB] sendDocument to=${to}: ${filename}`);
+    async sendDocument(orgId: string, to: string, documentUrl: string, filename: string, caption?: string): Promise<void> {
+        const resolved = await this.getClient(orgId);
+        if (!resolved) {
+            this.logger.log(`[WA STUB] sendDocument org=${orgId} to=${to}: ${filename}`);
             return;
         }
         try {
-            await this.client.post('/messages', {
+            await resolved.client.post('/messages', {
                 messaging_product: 'whatsapp', to, type: 'document',
                 document: { link: documentUrl, filename, ...(caption && { caption }) },
             });
         } catch (err) {
-            this.logger.error(`Failed to send document to ${to}`, (err as Error).message);
+            this.logger.error(`Failed to send document to ${to} (org ${orgId})`, (err as Error).message);
         }
     }
 
     async sendTemplate(
-        to: string, templateName: string, languageCode: string,
+        orgId: string, to: string, templateName: string, languageCode: string,
         components?: Record<string, unknown>[],
     ): Promise<void> {
-        if (!this.isConfigured) {
-            this.logger.log(`[WA STUB] sendTemplate to=${to}: ${templateName}`);
+        const resolved = await this.getClient(orgId);
+        if (!resolved) {
+            this.logger.log(`[WA STUB] sendTemplate org=${orgId} to=${to}: ${templateName}`);
             return;
         }
         try {
-            await this.client.post('/messages', {
+            await resolved.client.post('/messages', {
                 messaging_product: 'whatsapp', to, type: 'template',
                 template: {
                     name: templateName, language: { code: languageCode },
@@ -116,18 +193,19 @@ export class WhatsAppService {
                 },
             });
         } catch (err) {
-            this.logger.error(`Failed to send template to ${to}`, (err as Error).message);
+            this.logger.error(`Failed to send template to ${to} (org ${orgId})`, (err as Error).message);
         }
     }
 
-    async markRead(messageId: string): Promise<void> {
-        if (!this.isConfigured) return;
+    async markRead(orgId: string, messageId: string): Promise<void> {
+        const resolved = await this.getClient(orgId);
+        if (!resolved) return;
         try {
-            await this.client.post('/messages', {
+            await resolved.client.post('/messages', {
                 messaging_product: 'whatsapp', status: 'read', message_id: messageId,
             });
         } catch (err) {
-            this.logger.error(`Failed to mark read: ${messageId}`, (err as Error).message);
+            this.logger.error(`Failed to mark read: ${messageId} (org ${orgId})`, (err as Error).message);
         }
     }
 }

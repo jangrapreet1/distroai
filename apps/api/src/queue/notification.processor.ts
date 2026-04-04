@@ -43,19 +43,19 @@ export class NotificationProcessor extends WorkerHost {
                     const payment = await this.prisma.payment.findUnique({ where: { id: data.paymentId }, include: { invoice: true } });
                     if (payment) {
                         const msg = `✅ Received payment of ₹${payment.amount.toLocaleString('en-IN')} for ${payment.invoice ? 'Invoice ' + payment.invoice.invoiceNumber : 'your account'}. Thank you!`;
-                        await this.wa.sendText(`91${customer.phone}`, msg);
+                        await this.wa.sendText(data.orgId, `91${customer.phone}`, msg);
                     }
                 } else if (data.daysOverdue) {
                     const invoice = await this.prisma.invoice.findUnique({ where: { id: data.invoiceId } });
                     if (invoice) {
                         const msg = `⚠️ Payment Reminder: Invoice ${invoice.invoiceNumber} for ₹${invoice.balanceAmount.toLocaleString('en-IN')} is overdue by ${data.daysOverdue} days. Please clear the pending dues.`;
-                        await this.wa.sendText(`91${customer.phone}`, msg);
+                        await this.wa.sendText(data.orgId, `91${customer.phone}`, msg);
                     }
                 }
             } else if (job.name === 'send-whatsapp-briefing') {
                 const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
                 if (user && user.phone) {
-                    await this.wa.sendText(`91${user.phone}`, data.message);
+                    await this.wa.sendText(data.orgId, `91${user.phone}`, data.message);
                 }
             } else if (job.name === 'send-email') {
                 // Generic email send from queue
