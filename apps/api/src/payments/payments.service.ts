@@ -58,36 +58,55 @@ export class PaymentsService {
                 data: { orgId, customerId: dto.customerId, invoiceId: dto.invoiceId, amount: dto.amount, method: dto.method, referenceNumber: dto.referenceNumber, notes: dto.notes, paidAt: dto.paidAt ? new Date(dto.paidAt) : new Date(), status: 'COMPLETED' },
             });
 
+            let remainingAmount = dto.amount;
+
             if (dto.invoiceId) {
-                // Explicit invoice — update just that one
+                // Apply to the specific invoice first
                 const invoice = await tx.invoice.findFirst({ where: { id: dto.invoiceId, orgId } });
-                if (invoice) {
-                    const newPaid = invoice.paidAmount + dto.amount;
-                    const newBalance = invoice.totalAmount - newPaid;
+                if (invoice && invoice.balanceAmount > 0) {
+                    const allocate = Math.min(remainingAmount, invoice.balanceAmount);
+                    const newPaid = invoice.paidAmount + allocate;
+                    const newBalance = invoice.balanceAmount - allocate;
                     await tx.invoice.update({
-                        where: { id: dto.invoiceId },
-                        data: { paidAmount: newPaid, balanceAmount: Math.max(0, newBalance), status: newBalance <= 0 ? 'PAID' : 'PARTIAL' },
+                        where: { id: invoice.id },
+                        data: { paidAmount: newPaid, balanceAmount: newBalance, status: newBalance <= 0 ? 'PAID' : 'PARTIAL' },
                     });
+                    await tx.paymentAllocation.create({
+                        data: { paymentId: payment.id, invoiceId: invoice.id, amountAllocated: allocate }
+                    });
+                    remainingAmount -= allocate;
                 }
-            } else {
-                // No specific invoice — auto-allocate to oldest unpaid invoices (FIFO)
+            }
+
+            if (remainingAmount > 0) {
+                // Auto-allocate remaining amount to oldest unpaid invoices (FIFO)
                 const unpaidInvoices = await tx.invoice.findMany({
                     where: { orgId, customerId: dto.customerId, balanceAmount: { gt: 0 } },
                     orderBy: { dueDate: 'asc' },
                 });
 
-                let remaining = dto.amount;
                 for (const inv of unpaidInvoices) {
-                    if (remaining <= 0) break;
-                    const allocate = Math.min(remaining, inv.balanceAmount);
+                    if (remainingAmount <= 0) break;
+                    const allocate = Math.min(remainingAmount, inv.balanceAmount);
                     const newPaid = inv.paidAmount + allocate;
-                    const newBalance = inv.totalAmount - newPaid;
+                    const newBalance = inv.balanceAmount - allocate;
                     await tx.invoice.update({
                         where: { id: inv.id },
-                        data: { paidAmount: newPaid, balanceAmount: Math.max(0, newBalance), status: newBalance <= 0 ? 'PAID' : 'PARTIAL' },
+                        data: { paidAmount: newPaid, balanceAmount: newBalance, status: newBalance <= 0 ? 'PAID' : 'PARTIAL' },
                     });
-                    remaining -= allocate;
+                    await tx.paymentAllocation.create({
+                        data: { paymentId: payment.id, invoiceId: inv.id, amountAllocated: allocate }
+                    });
+                    remainingAmount -= allocate;
                 }
+            }
+
+            if (remainingAmount > 0) {
+                // If there's still money left, log it as an advance attached to the payment
+                await tx.payment.update({
+                    where: { id: payment.id },
+                    data: { advanceAmount: remainingAmount }
+                });
             }
 
             await tx.customer.update({ where: { id: dto.customerId }, data: { outstandingAmount: { decrement: dto.amount } } });
@@ -171,21 +190,47 @@ export class PaymentsService {
 
     async getOutstanding(orgId: string) {
         const now = new Date();
+        const nowTime = now.getTime();
         const customers = await this.prisma.customer.findMany({
             where: { orgId, outstandingAmount: { gt: 0 } },
-            include: { invoices: { where: { balanceAmount: { gt: 0 } }, orderBy: { dueDate: 'asc' }, take: 1 } },
+            // Fetch ALL unpaid invoices to properly calculate AR Aging buckets
+            include: { invoices: { where: { balanceAmount: { gt: 0 } }, orderBy: { dueDate: 'asc' } } },
         });
 
         return customers.map((c) => {
             const oldestInvoice = c.invoices[0];
             const buckets = { current: 0, overdue30: 0, overdue60: 0, overdue90: 0 };
-            buckets.current = c.outstandingAmount;
 
-            // Calculate pseudo avgDaysOverdue from the oldest invoice or default
+            // Distribute invoice balances into aging buckets
+            let totalInvoiced = 0;
+            for (const inv of c.invoices) {
+                totalInvoiced += inv.balanceAmount;
+                const diffMs = nowTime - inv.dueDate.getTime();
+                const daysOverdue = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                if (daysOverdue <= 0) {
+                    buckets.current += inv.balanceAmount;
+                } else if (daysOverdue <= 30) {
+                    buckets.overdue30 += inv.balanceAmount;
+                } else if (daysOverdue <= 60) {
+                    buckets.overdue60 += inv.balanceAmount;
+                } else {
+                    buckets.overdue90 += inv.balanceAmount;
+                }
+            }
+
+            // If outstandingAmount is higher than the sum of unpaid invoices (e.g. Opening Balance without invoice),
+            // add it to 'current' bucket so the math matches.
+            const unaccounted = c.outstandingAmount - totalInvoiced;
+            if (unaccounted > 0) {
+                buckets.current += unaccounted;
+            }
+
+            // Calculate pseudo avgDaysOverdue from the oldest invoice
             let avgDaysOverdue = 0;
             if (oldestInvoice && oldestInvoice.dueDate) {
-                const diffTime = Math.abs(now.getTime() - oldestInvoice.dueDate.getTime());
-                avgDaysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const diffTime = Math.max(0, nowTime - oldestInvoice.dueDate.getTime());
+                avgDaysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
             }
 
             return {
@@ -200,15 +245,23 @@ export class PaymentsService {
     }
 
     async getCollectionPlan(orgId: string) {
-        const now = new Date();
+        const nowTime = new Date().getTime();
         const customers = await this.prisma.customer.findMany({
             where: { orgId, outstandingAmount: { gt: 0 } },
-            include: { payments: { orderBy: { createdAt: 'desc' }, take: 1 } },
+            include: {
+                payments: { orderBy: { createdAt: 'desc' }, take: 1 },
+                invoices: { where: { balanceAmount: { gt: 0 } }, orderBy: { dueDate: 'asc' }, take: 1 }
+            },
         });
 
         const scored = customers.map((c) => {
-            const oldestInvoice = null as null;
-            const daysOverdue = 30; // simplified
+            const oldestInvoice = c.invoices[0];
+            let daysOverdue = 0;
+            if (oldestInvoice && oldestInvoice.dueDate) {
+                const diffTime = Math.max(0, nowTime - oldestInvoice.dueDate.getTime());
+                daysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            }
+
             const priorityScore = daysOverdue * 0.4 + (c.outstandingAmount / 1000) * 0.3 + ((100 - c.paymentScore) * 0.3);
             return {
                 customer: { id: c.id, name: c.name, phone: c.phone, whatsappNumber: c.whatsappNumber },
