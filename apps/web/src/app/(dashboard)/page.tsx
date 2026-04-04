@@ -136,7 +136,7 @@ export default function DashboardPage() {
                     icon={AlertTriangle} accentColor="var(--red)" sparkData={sparkOutstanding}
                     actionNode={<Link href="/customers" className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 uppercase tracking-wider"><ArrowRight size={14} /> View</Link>}
                 >
-                    <div className="flex items-center justify-between text-xs w-full">
+                    <div className="flex flex-wrap items-center justify-between text-xs w-full gap-y-2">
                         <div className="flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full bg-[var(--blue-light, #3b82f6)]"></div>
                             <span className="text-[var(--text-secondary)]">Current:</span>

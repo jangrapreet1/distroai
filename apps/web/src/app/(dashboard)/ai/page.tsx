@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Bot, Sparkles, Package, Users, BarChart3, Clock, MessageSquare } from "lucide-react";
+import { Sparkles, Package, Users, BarChart3, Clock, MessageSquare } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 import { OfflineScanner } from "@/components/Scanner/OfflineScanner";
 import { ChatMessage } from "@/components/ai/chat-message";
@@ -264,7 +264,7 @@ export default function AIPage() {
                 {/* Mobile History Toggle Header */}
                 <div className="lg:hidden flex items-center justify-between p-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
                     <div className="flex items-center gap-2">
-                        <Bot size={18} className="text-[var(--purple)]" />
+                        <Sparkles size={18} className="text-[var(--purple)]" />
                         <span className="font-semibold text-sm">AI Chat</span>
                     </div>
                     <button onClick={() => setShowHistoryMenu(true)} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">

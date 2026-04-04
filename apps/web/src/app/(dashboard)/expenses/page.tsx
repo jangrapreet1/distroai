@@ -217,7 +217,7 @@ function AIScanModal({ onClose }: { onClose: () => void }) {
                 <div className="flex justify-between items-center p-4 border-b border-[var(--border-primary)] bg-[var(--bg-card)]">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-[var(--gold)]/10 flex items-center justify-center">
-                            <Bot className="w-4 h-4 text-[var(--gold)]" />
+                            <Sparkles className="w-4 h-4 text-[var(--gold)]" />
                         </div>
                         <h2 className="text-lg font-semibold tracking-tight">AI Receipt Scanner</h2>
                     </div>
@@ -282,7 +282,7 @@ function AddExpenseModal({ onClose, initialData }: { onClose: () => void, initia
 }
 
 // ─── Expense Form (Shared) ───
-import { Bot } from "lucide-react";
+import { Sparkles } from "lucide-react";
 function AddExpenseForm({ initialData, onSuccess }: { initialData: any, onSuccess: () => void }) {
     const queryClient = useQueryClient();
     const [formData, setFormData] = useState({

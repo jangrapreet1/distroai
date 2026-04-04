@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { IndianRupee, CreditCard, X, Send } from "lucide-react";
+import { IndianRupee, CreditCard, X, Send, ChevronDown } from "lucide-react";
 import { useOutstanding, usePayments, useRecordPayment, useCustomers } from "@/hooks/api-hooks";
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts";
 import { formatDate } from "@/lib/utils";
@@ -39,6 +39,8 @@ function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerN
     const [method, setMethod] = useState<string>("CASH");
     const [referenceNumber, setReferenceNumber] = useState("");
     const [notes, setNotes] = useState("");
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [error, setError] = useState("");
 
     const { data: customersData } = useCustomers({ search: customerSearch.trim() || undefined, limit: 10 });
     const customers = customersData?.data?.data ?? customersData?.data ?? [];
@@ -53,9 +55,18 @@ function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerN
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!customerId || amount <= 0) return;
+        if (!customerId) { setError("Please select a valid customer from the list."); return; }
+        if (amount <= 0) { setError("Amount must be greater than ₹0."); return; }
+        setError("");
+
         recordPayment.mutate({ customerId, amount, method, referenceNumber: referenceNumber || undefined, notes: notes || undefined }, {
-            onSuccess: () => { onClose(); setCustomerSearch(""); setCustomerId(""); setAmount(0); setMethod("CASH"); setReferenceNumber(""); setNotes(""); },
+            onSuccess: () => {
+                onClose();
+                setCustomerSearch(""); setCustomerId(""); setAmount(0); setMethod("CASH"); setReferenceNumber(""); setNotes(""); setError("");
+            },
+            onError: (err: any) => {
+                setError(err?.response?.data?.message || err.message || "Failed to record payment. Please try again.");
+            }
         });
     };
 
@@ -68,39 +79,64 @@ function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerN
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-5 space-y-4">
-                    <label>
-                        <span className="text-xs text-[var(--text-muted)] mb-1 block">Customer</span>
-                        <input value={customerSearch} onChange={(e) => { setCustomerSearch(e.target.value); setCustomerId(""); }} placeholder="Search customer..." className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
-                    </label>
-                    {customerSearch && !customerId && (
-                        <div className="border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)] max-h-36 overflow-y-auto">
-                            {(Array.isArray(customers) ? customers : []).map((c: Record<string, unknown>) => (
-                                <button key={c.id as string} type="button" onClick={() => { setCustomerId(c.id as string); setCustomerSearch(c.name as string); }}
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] transition">
-                                    {c.name as string}
-                                </button>
-                            ))}
+                    {error && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-md text-sm">
+                            {error}
                         </div>
                     )}
-                    {customerId && <p className="text-xs text-[var(--green-bright)]">✓ Customer selected</p>}
-                    <label>
+
+                    <div className="relative">
+                        <label className="block mb-1">
+                            <span className="text-xs text-[var(--text-muted)]">Customer</span>
+                        </label>
+                        <div className="relative">
+                            <input
+                                value={customerSearch}
+                                onChange={(e) => { setCustomerSearch(e.target.value); setCustomerId(""); setDropdownOpen(true); setError(""); }}
+                                onFocus={() => setDropdownOpen(true)}
+                                onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+                                placeholder="Search customer..."
+                                className="w-full px-3 py-2 pr-10 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition"
+                            />
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" size={16} />
+                        </div>
+
+                        {dropdownOpen && (
+                            <div className="absolute z-20 w-full mt-1 border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)] max-h-48 overflow-y-auto shadow-xl">
+                                {customers.length === 0 ? (
+                                    <div className="px-3 py-4 text-sm text-[var(--text-muted)] text-center">No customers found</div>
+                                ) : (
+                                    (Array.isArray(customers) ? customers : []).map((c: Record<string, unknown>) => (
+                                        <button key={c.id as string} type="button"
+                                            onClick={() => { setCustomerId(c.id as string); setCustomerSearch(c.name as string); setDropdownOpen(false); setError(""); }}
+                                            className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] transition">
+                                            {c.name as string}
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                        {customerId && <p className="text-xs text-[var(--green-bright)] mt-1">✓ Customer selected</p>}
+                    </div>
+
+                    <label className="block">
                         <span className="text-xs text-[var(--text-muted)] mb-1 block">Amount (₹)</span>
-                        <input type="number" min={0.01} step={0.01} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                        <input type="number" min={0.01} step={0.01} value={amount || ''} onChange={(e) => { setAmount(Number(e.target.value)); setError(""); }} placeholder="0.00" className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
                     </label>
-                    <label>
+                    <label className="block">
                         <span className="text-xs text-[var(--text-muted)] mb-1 block">Method</span>
                         <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition">
                             {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m.replace("_", " ")}</option>)}
                         </select>
                     </label>
-                    <label>
+                    <label className="block">
                         <span className="text-xs text-[var(--text-muted)] mb-1 block">Reference</span>
                         <input value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} placeholder="UPI Ref / Cheque No." className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
                     </label>
                     <div className="flex justify-end gap-3 pt-2">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition">Cancel</button>
-                        <button type="submit" disabled={recordPayment.isPending || !customerId} className="px-6 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 disabled:opacity-50 transition">
-                            {recordPayment.isPending ? "Recording..." : "Record"}
+                        <button type="submit" disabled={recordPayment.isPending} className="px-6 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 disabled:opacity-50 transition">
+                            {recordPayment.isPending ? "..." : "Record"}
                         </button>
                     </div>
                 </form>

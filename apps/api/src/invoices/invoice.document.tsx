@@ -43,19 +43,19 @@ const s = StyleSheet.create({
     tdCell: { fontSize: 9, padding: 6 },
 
     /* Column widths */
-    colIdx: { width: '4%', textAlign: 'center' },
-    colDesc: { width: '26%' },
-    colHsn: { width: '8%', textAlign: 'center' },
-    colQty: { width: '6%', textAlign: 'right' },
-    colUnit: { width: '5%', textAlign: 'center' },
-    colRate: { width: '9%', textAlign: 'right' },
-    colDisc: { width: '7%', textAlign: 'right' },
-    colTaxable: { width: '10%', textAlign: 'right' },
-    colTaxPct: { width: '5%', textAlign: 'center' },
-    colTaxAmt: { width: '8%', textAlign: 'right' },
-    colTotal: { width: '10%', textAlign: 'right', fontWeight: 'bold' },
-    colIgstPct: { width: '7%', textAlign: 'center' },
-    colIgstAmt: { width: '10%', textAlign: 'right' },
+    colIdx: { width: 22, textAlign: 'center' },
+    colDesc: { flex: 1 },
+    colHsn: { width: 45, textAlign: 'center' },
+    colQty: { width: 30, textAlign: 'right' },
+    colUnit: { width: 35, textAlign: 'center' },
+    colRate: { width: 50, textAlign: 'right' },
+    colDisc: { width: 40, textAlign: 'right' },
+    colTaxable: { width: 55, textAlign: 'right' },
+    colTaxPct: { width: 35, textAlign: 'center' },
+    colTaxAmt: { width: 45, textAlign: 'right' },
+    colTotal: { width: 55, textAlign: 'right', fontWeight: 'bold' },
+    colIgstPct: { width: 40, textAlign: 'center' },
+    colIgstAmt: { width: 55, textAlign: 'right' },
 
     /* Totals */
     totalsSection: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 },
@@ -108,7 +108,7 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
     const settings = org.settings ?? {};
     const items: any[] = invoice.items ?? [];
 
-    const isInterState = (org.state || '').toLowerCase() !== (customer.state || '').toLowerCase();
+    const isInterState = Number(invoice.igstAmount ?? 0) > 0 || (Number(invoice.cgstAmount ?? 0) === 0 && (org.state || '').trim().toLowerCase() !== (customer.state || '').trim().toLowerCase());
     const amountInWords = indianAmountToWords(Number(invoice.totalAmount ?? 0));
 
     const totalTax = Number(invoice.cgstAmount ?? 0) + Number(invoice.sgstAmount ?? 0) + Number(invoice.igstAmount ?? 0) + Number(invoice.cessAmount ?? 0);

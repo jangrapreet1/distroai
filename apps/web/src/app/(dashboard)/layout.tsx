@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
     LayoutDashboard, ShoppingCart, FileText, Package, Users, Truck,
-    CreditCard, ClipboardList, Receipt, BarChart3, Bot,
+    CreditCard, ClipboardList, Receipt, BarChart3, Sparkles,
     Settings, Menu, X, Search, Command,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -43,7 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['OWNER', 'ADMIN', 'MANAGER'],
         items: [
             { label: "analytics", href: "/analytics", icon: BarChart3 },
-            { label: "AI Chat", href: "/ai", icon: Bot },
+            { label: "AI Chat", href: "/ai", icon: Sparkles },
         ],
     },
     {

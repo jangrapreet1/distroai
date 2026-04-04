@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, MessageSquare, X } from "lucide-react";
+import { Sparkles, MessageSquare, X } from "lucide-react";
 import type { ChatSession } from "./ai-types";
 
 interface ChatSidebarProps {
@@ -25,7 +25,7 @@ export function ChatSidebar({ sessions, activeSessionId, showHistoryMenu, onSele
                 <div className="p-4 border-b border-[var(--border)] flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <Bot size={20} className="text-[var(--purple)]" />
+                            <Sparkles size={20} className="text-[var(--purple)]" />
                             <h2 className="font-bold">DistroAI</h2>
                         </div>
                         <button onClick={onCloseMenu} className="lg:hidden p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">

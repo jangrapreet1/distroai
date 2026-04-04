@@ -37,7 +37,7 @@ export function KPICard({ title, value, change, changeLabel, icon: Icon, accentC
                 )}
             </div>
             <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-1.5">{title}</h3>
-            <p className="text-3xl font-light mb-1.5" style={{ fontFamily: "var(--font-mono)" }}>{value}</p>
+            <p className="text-2xl lg:text-3xl font-light mb-1.5 truncate" title={value} style={{ fontFamily: "var(--font-mono)" }}>{value}</p>
             <div className="text-xs text-[var(--text-muted)]">{changeLabel}</div>
             {children && <div className="mt-4 pt-4 border-t border-[var(--border)]">{children}</div>}
 
