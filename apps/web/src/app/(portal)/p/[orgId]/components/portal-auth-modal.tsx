@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { X, User, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { usePortalAuth, usePortalOrgId, portalApi } from "@/contexts/portal-context";
+import { usePortalAuth, usePortalOrgId, usePortalBusinessType, portalApi } from "@/contexts/portal-context";
 
 export function PortalAuthModal({ onClose }: { onClose: () => void }) {
     const orgId = usePortalOrgId();
     const auth = usePortalAuth();
+    const businessType = usePortalBusinessType();
     const [step, setStep] = useState(1);
     const [phone, setPhone] = useState("");
     const [otp, setOtp] = useState("");
@@ -46,8 +47,8 @@ export function PortalAuthModal({ onClose }: { onClose: () => void }) {
                         <User className="w-5 h-5 text-[var(--gold)]" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-white">Retailer Login</h2>
-                        <p className="text-sm text-zinc-400">Access wholesale pricing & order history</p>
+                        <h2 className="text-xl font-bold text-white">{businessType === 'Manufacturer' ? 'Partner Login' : 'Retailer Login'}</h2>
+                        <p className="text-sm text-zinc-400">{businessType === 'Manufacturer' ? 'Access partner pricing & order history' : 'Access wholesale pricing & order history'}</p>
                     </div>
                 </div>
 

@@ -80,7 +80,7 @@ export default function ExpensesPage() {
                         key={s}
                         onClick={() => setStatusFilter(s)}
                         className={`px-3 py-1.5 text-xs font-semibold tracking-wider rounded-full transition-colors ${statusFilter === s
-                            ? "bg-[var(--gold)] text-[var(--bg-main)]"
+                            ? "bg-[var(--gold)] text-[var(--bg-primary)]"
                             : "bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-primary)]"
                             }`}
                     >
@@ -93,7 +93,7 @@ export default function ExpensesPage() {
             <div className="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-[var(--radius-lg)] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-[#111111]/50 text-[var(--text-muted)] uppercase text-xs">
+                        <thead className="bg-[var(--bg-secondary)] text-[var(--text-muted)] uppercase text-xs">
                             <tr>
                                 <th className="px-6 py-4 font-medium tracking-wider">Date</th>
                                 <th className="px-6 py-4 font-medium tracking-wider">Vendor</th>
@@ -113,13 +113,31 @@ export default function ExpensesPage() {
                                 </tr>
                             ) : expenses.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">
-                                        No expenses found.
+                                    <td colSpan={6} className="p-0">
+                                        <div className="text-center py-16">
+                                            <div className="w-16 h-16 rounded-2xl bg-[var(--gold)]/10 flex items-center justify-center mx-auto mb-4">
+                                                <ScanLine className="w-7 h-7 text-[var(--gold)]" />
+                                            </div>
+                                            <h3 className="text-base font-medium mb-1">{statusFilter !== "ALL" ? "No matching expenses" : "No expenses yet"}</h3>
+                                            <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto mb-5">
+                                                {statusFilter !== "ALL" ? "Try changing the status filter." : "Start tracking expenses by scanning a receipt or adding one manually."}
+                                            </p>
+                                            {statusFilter === "ALL" && (
+                                                <div className="flex items-center justify-center gap-3">
+                                                    <button onClick={() => setIsScanModalOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] hover:bg-[var(--gold-light)] transition">
+                                                        <ScanLine className="w-4 h-4" /> AI Scan Receipt
+                                                    </button>
+                                                    <button onClick={() => setIsAddModalOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition">
+                                                        <Plus className="w-4 h-4" /> Add Manual
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
                                 expenses.map((exp: any) => (
-                                    <tr key={exp.id} className="hover:bg-white/5 transition-colors group">
+                                    <tr key={exp.id} className="hover:bg-[var(--bg-card-hover)] transition-colors group">
                                         <td className="px-6 py-4 text-[var(--text-secondary)] whitespace-nowrap">
                                             {new Date(exp.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </td>
@@ -213,7 +231,7 @@ function AIScanModal({ onClose }: { onClose: () => void }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-[var(--bg-main)] border border-[var(--border-accent)] w-full max-w-lg rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-[var(--bg-primary)] border border-[var(--border-accent)] w-full max-w-lg rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b border-[var(--border-primary)] bg-[var(--bg-card)]">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-[var(--gold)]/10 flex items-center justify-center">
@@ -221,14 +239,14 @@ function AIScanModal({ onClose }: { onClose: () => void }) {
                         </div>
                         <h2 className="text-lg font-semibold tracking-tight">AI Receipt Scanner</h2>
                     </div>
-                    <button onClick={onClose} className="p-2 text-[var(--text-muted)] hover:text-white rounded-full hover:bg-white/10 transition">
+                    <button onClick={onClose} className="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-full hover:bg-[var(--bg-card-hover)] transition">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 <div className="p-6 overflow-y-auto">
                     {!file ? (
-                        <div className="relative border-2 border-dashed border-[var(--border-accent)] rounded-lg p-10 flex flex-col items-center justify-center text-center hover:bg-white/5 transition group cursor-pointer">
+                        <div className="relative border-2 border-dashed border-[var(--border-accent)] rounded-lg p-10 flex flex-col items-center justify-center text-center hover:bg-[var(--bg-card-hover)] transition group cursor-pointer">
                             <input
                                 type="file"
                                 accept="image/*"
@@ -245,7 +263,7 @@ function AIScanModal({ onClose }: { onClose: () => void }) {
                         </div>
                     ) : scanMutation.isPending ? (
                         <div className="py-12 flex flex-col items-center justify-center text-center">
-                            <div className="relative w-24 h-32 rounded-lg bg-white/5 mb-6 overflow-hidden flex items-center justify-center">
+                            <div className="relative w-24 h-32 rounded-lg bg-[var(--bg-card)] mb-6 overflow-hidden flex items-center justify-center">
                                 {preview && <img src={preview} alt="preview" className="absolute inset-0 w-full h-full object-cover opacity-30" />}
                                 <div className="absolute inset-0 bg-gradient-to-t from-[var(--gold)]/20 to-transparent animate-pulse" />
                                 <ScanLine className="w-8 h-8 text-[var(--gold)] animate-bounce relative z-10" />
@@ -266,10 +284,10 @@ function AIScanModal({ onClose }: { onClose: () => void }) {
 function AddExpenseModal({ onClose, initialData }: { onClose: () => void, initialData: any }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-[var(--bg-main)] border border-[var(--border-accent)] w-full max-w-lg rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-[var(--bg-primary)] border border-[var(--border-accent)] w-full max-w-lg rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b border-[var(--border-primary)] bg-[var(--bg-card)]">
                     <h2 className="text-lg font-semibold tracking-tight">{initialData ? 'Confirm Expense' : 'Add Expense'}</h2>
-                    <button onClick={onClose} className="p-2 text-[var(--text-muted)] hover:text-white rounded-full hover:bg-white/10 transition">
+                    <button onClick={onClose} className="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-full hover:bg-[var(--bg-card-hover)] transition">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -373,7 +391,7 @@ function AddExpenseForm({ initialData, onSuccess }: { initialData: any, onSucces
             </div>
 
             <div className="pt-4 flex justify-end gap-2">
-                <button type="button" onClick={onSuccess} className="px-4 py-2 hover:bg-white/5 rounded-md text-sm transition">
+                <button type="button" onClick={onSuccess} className="px-4 py-2 hover:bg-[var(--bg-card-hover)] rounded-md text-sm transition">
                     Cancel
                 </button>
                 <button

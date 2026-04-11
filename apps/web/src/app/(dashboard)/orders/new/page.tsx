@@ -1,4 +1,5 @@
 "use client";
+import { formatINR } from "@/lib/utils";
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -7,7 +8,6 @@ import Link from "next/link";
 import { useCreateOrder, useCustomers, useProducts, useWarehouses } from "@/hooks/api-hooks";
 import { AddCustomerModal } from "@/components/AddCustomerModal";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 interface OrderItem {
     productId: string;
@@ -23,6 +23,7 @@ interface OrderItem {
 export default function NewOrderPage() {
     const router = useRouter();
     const createOrder = useCreateOrder();
+    const [orderType, setOrderType] = useState<"B2B" | "B2C">("B2B");
 
     const [customerId, setCustomerId] = useState("");
     const [customerSearch, setCustomerSearch] = useState("");
@@ -88,12 +89,43 @@ export default function NewOrderPage() {
         setItems(items.filter((_, i) => i !== idx));
     };
 
-    const subtotal = useMemo(() => items.reduce((s, i) => s + (i.price * i.quantity) - i.discount, 0), [items]);
-    const taxTotal = useMemo(() => items.reduce((s, i) => {
-        const lineTotal = (i.price * i.quantity) - i.discount;
-        return s + (lineTotal * i.taxRate / 100);
-    }, 0), [items]);
-    const grandTotal = subtotal + taxTotal;
+    // ── Price Math ──
+    // B2B: price is the base taxable price → tax is added on top
+    // B2C: price is what the end customer pays (inclusive of GST) → we back-calculate
+    const subtotal = useMemo(() => {
+        const raw = items.reduce((s, i) => {
+            if (orderType === "B2C") {
+                // Back-calculate taxable value: taxable = inclusive / (1 + rate/100)
+                const taxable = i.price / (1 + i.taxRate / 100);
+                return s + (taxable * i.quantity) - i.discount;
+            }
+            return s + (i.price * i.quantity) - i.discount;
+        }, 0);
+        return Math.round(raw * 100) / 100;
+    }, [items, orderType]);
+
+    const taxTotal = useMemo(() => {
+        const raw = items.reduce((s, i) => {
+            if (orderType === "B2C") {
+                const taxable = i.price / (1 + i.taxRate / 100);
+                const lineBase = (taxable * i.quantity) - i.discount;
+                return s + (lineBase * i.taxRate / 100);
+            }
+            const lineTotal = (i.price * i.quantity) - i.discount;
+            return s + (lineTotal * i.taxRate / 100);
+        }, 0);
+        return Math.round(raw * 100) / 100;
+    }, [items, orderType]);
+
+    // Grand Total:
+    //   B2B → subtotal + taxTotal (base price + tax on top)
+    //   B2C → simply the sum of what the customer pays (price × qty − discount)
+    const grandTotal = useMemo(() => {
+        if (orderType === "B2C") {
+            return Math.round(items.reduce((s, i) => s + (i.price * i.quantity) - i.discount, 0) * 100) / 100;
+        }
+        return Math.round((subtotal + taxTotal) * 100) / 100;
+    }, [items, orderType, subtotal, taxTotal]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -109,7 +141,7 @@ export default function NewOrderPage() {
                 productId: i.productId,
                 quantity: i.quantity,
                 unit: i.unit,
-                price: i.price,
+                price: orderType === "B2C" ? parseFloat((i.price / (1 + i.taxRate / 100)).toFixed(2)) : i.price,
                 discount: i.discount,
             })),
         };
@@ -125,11 +157,28 @@ export default function NewOrderPage() {
     return (
         <div className="max-w-4xl mx-auto">
             {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
-                <Link href="/orders" className="p-2 rounded-lg hover:bg-[var(--bg-card)] transition">
-                    <ArrowLeft size={18} className="text-[var(--text-muted)]" />
-                </Link>
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>New Order</h1>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div className="flex items-center gap-3">
+                    <Link href="/orders" className="p-2 rounded-lg hover:bg-[var(--bg-card)] transition">
+                        <ArrowLeft size={18} className="text-[var(--text-muted)]" />
+                    </Link>
+                    <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>New Order</h1>
+                </div>
+
+                <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-1 w-full sm:w-64">
+                    <button
+                        onClick={() => setOrderType("B2B")}
+                        className={`flex-1 py-1.5 text-sm font-semibold rounded transition ${orderType === "B2B" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                    >
+                        B2B (GST Breakup)
+                    </button>
+                    <button
+                        onClick={() => setOrderType("B2C")}
+                        className={`flex-1 py-1.5 text-sm font-semibold rounded transition ${orderType === "B2C" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                    >
+                        B2C (Final Price)
+                    </button>
+                </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -164,7 +213,16 @@ export default function NewOrderPage() {
                                         <button
                                             key={c.id as string}
                                             type="button"
-                                            onClick={() => { setCustomerId(c.id as string); setCustomerSearch(c.name as string); setShowCustomerDropdown(false); }}
+                                            onClick={() => {
+                                                setCustomerId(c.id as string);
+                                                setCustomerSearch(c.name as string);
+                                                setShowCustomerDropdown(false);
+                                                if (c.type === "INDIVIDUAL") {
+                                                    setOrderType("B2C");
+                                                } else {
+                                                    setOrderType("B2B");
+                                                }
+                                            }}
                                             className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] transition flex items-center justify-between"
                                         >
                                             <span className="font-medium">{c.name as string}</span>

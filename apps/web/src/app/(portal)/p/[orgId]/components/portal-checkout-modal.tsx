@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { X, CheckCircle2, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { usePortalOrgId, usePortalCart, usePortalAuth, portalApi } from "@/contexts/portal-context";
+import { usePortalOrgId, usePortalCart, usePortalAuth, usePortalBusinessType, portalApi } from "@/contexts/portal-context";
 
 interface CheckoutModalProps {
     onClose: () => void;
@@ -15,6 +15,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
     const orgId = usePortalOrgId();
     const cart = usePortalCart();
     const auth = usePortalAuth();
+    const businessType = usePortalBusinessType();
 
     const items = cart.getItems();
     const total = cart.getTotal();
@@ -22,7 +23,9 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
     const [guestName, setGuestName] = useState("");
     const [guestPhone, setGuestPhone] = useState("");
     const [guestAddress, setGuestAddress] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState(auth.isAuthenticated ? "LEDGER" : "RAZORPAY");
+    // Retailer orgs are B2C — no LEDGER. Distributor/Manufacturer orgs allow LEDGER for authenticated users.
+    const allowLedger = businessType !== 'Retailer' && auth.isAuthenticated;
+    const [paymentMethod, setPaymentMethod] = useState(allowLedger ? "LEDGER" : "RAZORPAY");
 
     const checkoutMutation = useMutation({
         mutationFn: async () => {
@@ -66,7 +69,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
                         {auth.isAuthenticated && auth.customer ? (
                             <div className="bg-[var(--gold)]/10 border border-[var(--gold)]/30 rounded-lg p-4">
                                 <div className="flex items-center gap-2 text-[var(--gold)] mb-2 text-sm">
-                                    <CheckCircle2 className="w-4 h-4" /> B2B Retailer
+                                    <CheckCircle2 className="w-4 h-4" /> B2B {auth.customer.type === 'WHOLESALER' ? 'Wholesaler' : auth.customer.type === 'INSTITUTION' ? 'Institution' : 'Retailer'}
                                 </div>
                                 <h3 className="font-bold text-white">{auth.customer.name}</h3>
                                 <p className="text-xs text-zinc-400 mt-1">
@@ -93,7 +96,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
 
                         <div className="space-y-2 pt-3 border-t border-[#333]">
                             <h3 className="font-semibold text-white text-sm">Payment Method</h3>
-                            {auth.isAuthenticated && (
+                            {allowLedger && (
                                 <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${paymentMethod === "LEDGER" ? "border-[var(--gold)] bg-[var(--gold)]/5" : "border-[#333] bg-[#1a1a1a] hover:border-zinc-500"}`}>
                                     <input type="radio" name="payment" value="LEDGER" checked={paymentMethod === "LEDGER"} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 accent-[var(--gold)]" />
                                     <div>

@@ -1,11 +1,11 @@
 "use client";
+import { formatINR } from "@/lib/utils";
 import { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Package, Edit, X } from "lucide-react";
 import { useProduct, useUpdateProduct, useUploadFile } from "@/hooks/api-hooks";
 import { MultiImageUpload } from "@/components/ui/multi-image-upload";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 export default function ProductDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);

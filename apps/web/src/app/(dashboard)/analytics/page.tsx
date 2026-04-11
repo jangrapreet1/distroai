@@ -1,11 +1,12 @@
 "use client";
+import { formatINR, exportToCSV } from "@/lib/utils";
 
 import { useState, useMemo } from "react";
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from "recharts";
-import { Download, Calendar } from "lucide-react";
-import { useSalesAnalytics, useInventory } from "@/hooks/api-hooks";
+import { Download, Calendar, Lock } from "lucide-react";
+import { useSalesAnalytics, useInventory, useSubscription } from "@/hooks/api-hooks";
+import Link from "next/link";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 
 const categoryColors: Record<string, string> = {
@@ -19,11 +20,20 @@ const categoryColors: Record<string, string> = {
 const defaultColor = "var(--gold)";
 
 export default function AnalyticsPage() {
-    const [tab, setTab] = useState<"sales" | "inventory" | "collections" | "custom">("sales");
+    const { data: subRes } = useSubscription();
+    const hasAdvancedAnalytics = subRes?.features?.advancedAnalytics;
+
+    const [tab, setTab] = useState<"sales" | "inventory" | "collections">("sales");
     const [groupBy, setGroupBy] = useState("Month");
 
-    // Fetch Sales data based on static dates for simplicity, dynamic ranges can be added later
-    const { data: salesRes, isLoading: salesLoading } = useSalesAnalytics("2024-01-01", "2026-12-31", groupBy.toLowerCase());
+    const dateRange = useMemo(() => {
+        const to = new Date();
+        const from = new Date();
+        from.setDate(to.getDate() - (hasAdvancedAnalytics ? 365 : 30));
+        return { from: from.toISOString().split('T')[0], to: to.toISOString().split('T')[0] };
+    }, [hasAdvancedAnalytics]);
+
+    const { data: salesRes, isLoading: salesLoading } = useSalesAnalytics(dateRange.from, dateRange.to, hasAdvancedAnalytics ? groupBy.toLowerCase() : "day");
     const salesData = salesRes?.data ?? [];
 
     // Fetch Inventory data for Valuation by Category
@@ -54,11 +64,11 @@ export default function AnalyticsPage() {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Analytics & Reports</h1>
-                <button className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Download size={14} /> Export</button>
+                <button onClick={() => exportToCSV("analytics-sales", salesData)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Download size={14} /> Export</button>
             </div>
 
             <div className="flex flex-wrap gap-1 mb-6">
-                {(["sales", "inventory", "collections", "custom"] as const).map((t) => (
+                {(["sales", "inventory", "collections"] as const).map((t) => (
                     <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition capitalize ${tab === t ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>{t}</button>
                 ))}
             </div>
@@ -66,11 +76,22 @@ export default function AnalyticsPage() {
             {tab === "sales" && (
                 <div className="space-y-6">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="flex gap-1">
-                            {["Day", "Week", "Month", "Product", "Customer"].map((g) => (
-                                <button key={g} onClick={() => setGroupBy(g)} className={`px-3 py-1.5 text-xs rounded-full transition ${groupBy === g ? "bg-[var(--gold)]/15 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}>{g}</button>
+                        <div className="flex gap-1 relative">
+                            {["Day", "Week", "Month", "Product", "Category", "Customer", "Region"].map((g) => (
+                                <button
+                                    key={g}
+                                    onClick={() => hasAdvancedAnalytics && setGroupBy(g)}
+                                    className={`px-3 py-1.5 text-xs rounded-full transition ${(!hasAdvancedAnalytics && g !== 'Day') ? 'opacity-40 cursor-not-allowed' : ''} ${(!hasAdvancedAnalytics ? 'Day' === g : groupBy === g) ? "bg-[var(--gold)]/15 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}
+                                >
+                                    {g} {(!hasAdvancedAnalytics && g !== 'Day') && <Lock size={10} className="inline ml-1 mb-0.5" />}
+                                </button>
                             ))}
                         </div>
+                        {!hasAdvancedAnalytics && (
+                            <div className="text-xs text-[var(--text-muted)] bg-[var(--gold)]/10 text-[var(--gold)] px-2 py-1 rounded">
+                                ★ Upgrade to unlock dates & segments
+                            </div>
+                        )}
                     </div>
                     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5">
                         <h3 className="font-semibold mb-4">Revenue by {groupBy}</h3>
@@ -81,7 +102,7 @@ export default function AnalyticsPage() {
                                         <BarChart data={salesData}>
                                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#5A5040" }} axisLine={false} tickLine={false} />
                                             <YAxis domain={[0, 'auto']} tick={{ fontSize: 10, fill: "#5A5040" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                                            <Tooltip contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }} />
+                                            <Tooltip contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 12, color: "var(--tooltip-text)" }} />
                                             <Bar dataKey="revenue" fill="var(--gold)" radius={[4, 4, 0, 0]} opacity={0.8} maxBarSize={60} />
                                         </BarChart>
                                     </ResponsiveContainer>}
@@ -122,27 +143,34 @@ export default function AnalyticsPage() {
             )}
 
             {tab === "collections" && (
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5">
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5 relative overflow-hidden">
+                    {!hasAdvancedAnalytics && (
+                        <div className="absolute inset-0 z-10 backdrop-blur-md bg-[var(--bg-card)]/50 flex items-center justify-center">
+                            <div className="bg-[var(--bg-secondary)] border border-[var(--border)] p-8 rounded-[var(--radius-lg)] shadow-2xl max-w-sm text-center">
+                                <div className="w-16 h-16 bg-[var(--gold)]/10 flex items-center justify-center rounded-full mx-auto mb-4">
+                                    <Lock size={28} className="text-[var(--gold)]" />
+                                </div>
+                                <h3 className="text-lg font-bold mb-2">Unlock Collection Trends</h3>
+                                <p className="text-sm text-[var(--text-muted)] mb-6">See exactly how fast your customers are paying you and forecast your cash flow. Available on the Growth Plan.</p>
+                                <Link href="/settings/billing" className="block w-full py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] font-semibold hover:bg-[var(--gold-light)] transition">
+                                    Upgrade Plan
+                                </Link>
+                            </div>
+                        </div>
+                    )}
+
                     <h3 className="font-semibold mb-4">Collection Rate Trend</h3>
-                    <div className="h-64">
+                    <div className={`h-64 ${!hasAdvancedAnalytics ? 'opacity-30 blur-sm select-none' : ''}`}>
                         {collectionsTrend.length === 0 ? <div className="p-12 text-center text-[var(--text-muted)]">No Collection Trend present to display</div> :
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={collectionsTrend}>
                                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9A9080" }} axisLine={false} tickLine={false} />
                                     <YAxis tick={{ fontSize: 11, fill: "#5A5040" }} domain={[60, 100]} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                                    <Tooltip contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }} />
+                                    <Tooltip contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 12, color: "var(--tooltip-text)" }} />
                                     <Line dataKey="rate" stroke="var(--green-bright)" strokeWidth={2} dot={{ fill: "var(--green-bright)", r: 4 }} />
                                 </LineChart>
                             </ResponsiveContainer>}
                     </div>
-                </div>
-            )}
-
-            {tab === "custom" && (
-                <div className="text-center py-20">
-                    <div className="text-5xl mb-4">🚀</div>
-                    <h3 className="text-lg font-semibold mb-2">Custom Reports</h3>
-                    <p className="text-sm text-[var(--text-muted)]">Coming in the next update. Build any report with drag-and-drop.</p>
                 </div>
             )}
         </div>

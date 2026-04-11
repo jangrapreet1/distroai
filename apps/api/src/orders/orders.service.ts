@@ -138,6 +138,7 @@ export class OrdersService {
     }
 
     // Calculate totals
+    const r2 = (n: number) => Math.round(n * 100) / 100;
     let totalAmount = 0,
       discountAmount = 0,
       taxAmount = 0;
@@ -151,23 +152,66 @@ export class OrdersService {
             code: "NOT_FOUND",
             message: `Product ${item.productId} not found`,
           });
-        const lineTotal = item.price * item.quantity;
-        const disc = item.discount ?? 0;
-        const taxable = lineTotal - disc;
-        const tax = (taxable * product.gstRate) / 100;
+
+        const isSelfServe = dto.source === "PORTAL" || dto.source === "WEB";
+
+        let actualPrice = item.price;
+        let actualDiscount = item.discount ?? 0;
+
+        if (isSelfServe) {
+          // ── Real-time Inventory Block ──
+          const inv = await this.prisma.inventory.findFirst({
+            where: { productId: product.id, warehouseId },
+          });
+          const available = (inv?.quantity ?? 0) - (inv?.reservedQty ?? 0);
+          if (available < item.quantity) {
+            throw new ConflictException({
+              code: "CONFLICT",
+              message: `Insufficient stock. Only ${available} available for ${product.name}.`,
+              productId: product.id,
+              available,
+            });
+          }
+
+          // ── Structural Pricing Logic ──
+          if (customer.type === "INDIVIDUAL") {
+            // B2C assumes final price is the sellingPrice (which is inclusive of GST)
+            // We reverse-calculate the tax-exclusive base price strictly from sellingPrice
+            actualPrice = r2(product.sellingPrice / (1 + product.gstRate / 100));
+            actualDiscount = 0;
+          } else {
+            actualPrice = product.sellingPrice; // B2B assumes sellingPrice is tax-exclusive
+            if (customer.tier === "GOLD") {
+              actualDiscount = r2(actualPrice * item.quantity * 0.05); // 5% bulk discount
+            } else if (customer.tier === "SILVER") {
+              actualDiscount = r2(actualPrice * item.quantity * 0.025); // 2.5% bulk discount
+            } else {
+              actualDiscount = 0; // BRONZE gets standard selling price
+            }
+          }
+        }
+
+
+        const lineTotal = r2(actualPrice * item.quantity);
+        const disc = r2(actualDiscount);
+        const taxable = r2(lineTotal - disc);
+        const tax = r2((taxable * product.gstRate) / 100);
+
         totalAmount += lineTotal;
         discountAmount += disc;
         taxAmount += tax;
         return {
           ...item,
+          price: actualPrice,
+          discount: actualDiscount,
           taxRate: product.gstRate,
           taxAmount: tax,
-          totalAmount: taxable + tax,
+          totalAmount: r2(taxable + tax),
         };
       }),
     );
 
-    const netAmount = totalAmount - discountAmount + taxAmount;
+    const netAmount = r2(totalAmount - discountAmount + taxAmount);
     const orderNumber = await this.generateOrderNumber(orgId);
 
     const order = await this.prisma.order.create({
@@ -290,21 +334,42 @@ export class OrdersService {
     });
   }
 
-  async confirm(orgId: string, id: string, userId: string) {
+  async confirm(orgId: string, id: string, userId: string, overrideReason?: string) {
     const order = await this.prisma.order.findFirst({
       where: { id, orgId },
-      include: { items: true },
+      include: {
+        items: { include: { product: { select: { name: true, hsnCode: true } } } },
+        customer: true,
+      },
     });
-    if (!order)
-      throw new NotFoundException({
-        code: "NOT_FOUND",
-        message: "Order not found",
+    if (!order) throw new NotFoundException({ code: "NOT_FOUND", message: "Order not found" });
+    if (order.status !== "DRAFT") throw new BadRequestException({ code: "UNPROCESSABLE", message: `Cannot confirm order in status ${order.status}` });
+
+    // --- CREDIT CHECK ---
+    if (!overrideReason && order.customer.creditLimit > 0) {
+      const newTotal = order.customer.outstandingAmount + (order.balanceAmount ?? order.netAmount);
+      if (newTotal > order.customer.creditLimit) {
+        throw new BadRequestException({
+          code: "CREDIT_LIMIT_EXCEEDED",
+          message: `Customer credit limit (₹${order.customer.creditLimit}) exceeded. New total would be ₹${newTotal}.`
+        });
+      }
+
+      // Check for overdue invoices beyond grace period
+      const overdueDate = new Date();
+      overdueDate.setDate(overdueDate.getDate() - order.customer.gracePeriodDays);
+
+      const overdueInvoice = await this.prisma.invoice.findFirst({
+        where: { orgId, customerId: order.customerId, status: { in: ['PARTIAL', 'OVERDUE'] }, dueDate: { lt: overdueDate } }
       });
-    if (order.status !== "DRAFT")
-      throw new BadRequestException({
-        code: "UNPROCESSABLE",
-        message: `Cannot confirm order in status ${order.status}`,
-      });
+
+      if (overdueInvoice) {
+        throw new BadRequestException({
+          code: "OVERDUE_INVOICES",
+          message: `Customer has un-paid invoices overdue beyond their grace period of ${order.customer.gracePeriodDays} days.`
+        });
+      }
+    }
 
     // Check inventory AND reserve inside a single transaction with row-level locks
     await this.prisma.$transaction(async (tx: any) => {
@@ -359,8 +424,119 @@ export class OrdersService {
       });
     });
 
+    // --- AUTO-GENERATE INVOICE ---
+    if (!order.invoiceId) {
+      const invoiceDto = {
+        customerId: order.customerId,
+        orderId: order.id,
+        invoiceDate: new Date().toISOString(),
+        dueDate: new Date(Date.now() + order.customer.creditDays * 24 * 60 * 60 * 1000).toISOString(),
+        notes: order.notes,
+        items: order.items.map((item: any) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unit: item.unit,
+          price: item.price,
+          discount: item.discount ?? 0,
+          hsnCode: item.product?.hsnCode,
+        })),
+      };
+
+      await this.invoices.create(orgId, invoiceDto as any);
+      // Stage 5 WhatsApp notification is hooked up within invoices.service.ts
+    }
+
     await this.invalidateAnalytics(orgId);
     return { success: true, status: "CONFIRMED" };
+  }
+
+  async markPaid(orgId: string, id: string, userId: string, method: 'CASH' | 'UPI' | 'CHEQUE' | 'BANK_TRANSFER' | 'CREDIT' = 'CASH') {
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
+    const order = await this.prisma.order.findFirst({
+      where: { id, orgId },
+      include: { customer: { select: { id: true } } },
+    });
+    if (!order) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Order not found' });
+
+    let invoiceId = order.invoiceId;
+    if (!invoiceId) throw new BadRequestException({ code: 'NO_INVOICE', message: 'Order has no invoice. Please confirm it first.' });
+
+    const invoice = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
+    if (!invoice) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Invoice not found' });
+
+    const balanceAmount = r2(invoice.balanceAmount);
+
+    if (balanceAmount > 0) {
+      await this.prisma.$transaction(async (tx: any) => {
+        await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${order.customerId} FOR UPDATE`;
+        const payment = await tx.payment.create({
+          data: {
+            orgId,
+            customerId: order.customerId,
+            invoiceId,
+            amount: balanceAmount,
+            method,
+            status: 'COMPLETED',
+            paidAt: new Date(),
+            notes: 'Auto-recorded via Mark Paid flow',
+          }
+        });
+
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            paidAmount: { increment: balanceAmount },
+            balanceAmount: 0,
+            status: 'PAID',
+          }
+        });
+
+        await tx.paymentAllocation.create({
+          data: {
+            paymentId: payment.id,
+            invoiceId,
+            amountAllocated: balanceAmount
+          }
+        });
+
+        // Lock customer row to prevent concurrent race conditions (#7)
+        const customer = await tx.customer.update({
+          where: { id: order.customerId },
+          data: { outstandingAmount: { decrement: balanceAmount } },
+          select: { outstandingAmount: true }
+        });
+
+        await tx.ledgerEntry.create({
+          data: {
+            orgId,
+            customerId: order.customerId,
+            type: 'CREDIT',
+            amount: balanceAmount,
+            balance: customer.outstandingAmount,
+            referenceId: payment.id,
+            referenceType: 'PAYMENT',
+            notes: `Payment recorded via Mark Paid flow`
+          }
+        });
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            paidAmount: order.netAmount,
+            balanceAmount: 0,
+          }
+        });
+      });
+    }
+
+    // Invalidate cache AFTER transaction commits (#9)
+    await Promise.all([
+      this.redis.del(`analytics:dashboard:${orgId}`),
+      this.redis.del(`analytics:sales:${orgId}`)
+    ]);
+
+    return { success: true };
   }
 
   async pack(orgId: string, id: string, userId: string) {
@@ -426,21 +602,6 @@ export class OrdersService {
       });
     });
 
-    // Generate an invoice
-    await this.invoices.create(orgId, {
-      customerId: order.customerId,
-      orderId: order.id,
-      invoiceDate: new Date().toISOString(),
-      items: order.items.map((item: any) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        unit: item.unit,
-        price: item.price,
-        discount: item.discount,
-      })),
-      notes: `Auto-generated for Order ${order.orderNumber}`,
-    });
-    this.logger.log(`Generated invoice for order ${order.orderNumber}`);
 
     await this.invalidateAnalytics(orgId);
     return { success: true, status: "DISPATCHED" };
@@ -451,6 +612,8 @@ export class OrdersService {
   }
 
   async cancel(orgId: string, id: string, userId: string) {
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
     const order = await this.prisma.order.findFirst({
       where: { id, orgId },
       include: { items: true },
@@ -468,7 +631,11 @@ export class OrdersService {
     }
 
     await this.prisma.$transaction(async (tx: any) => {
+      await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${order.customerId} FOR UPDATE`;
+
       await tx.order.update({ where: { id }, data: { status: "CANCELLED" } });
+
+      // Release reserved inventory for confirmed/packed orders
       if (["CONFIRMED", "PACKED"].includes(order.status)) {
         for (const item of order.items) {
           await tx.inventory.updateMany({
@@ -480,6 +647,41 @@ export class OrdersService {
           });
         }
       }
+
+      // Void linked invoice and reverse customer outstanding (#3)
+      if (order.invoiceId) {
+        const invoice = await tx.invoice.findUnique({ where: { id: order.invoiceId } });
+        if (invoice && invoice.status !== 'CANCELLED') {
+          const balanceToReverse = r2(invoice.balanceAmount);
+
+          await tx.invoice.update({
+            where: { id: order.invoiceId },
+            data: { status: 'CANCELLED', balanceAmount: 0 },
+          });
+
+          if (balanceToReverse > 0) {
+            const customer = await tx.customer.update({
+              where: { id: order.customerId },
+              data: { outstandingAmount: { decrement: balanceToReverse } },
+              select: { outstandingAmount: true },
+            });
+
+            await tx.ledgerEntry.create({
+              data: {
+                orgId,
+                customerId: order.customerId,
+                type: 'CREDIT',
+                amount: balanceToReverse,
+                balance: customer.outstandingAmount,
+                referenceId: order.invoiceId,
+                referenceType: 'CANCELLATION',
+                notes: `Invoice cancelled due to order cancellation`,
+              },
+            });
+          }
+        }
+      }
+
       await tx.orderStatusHistory.create({
         data: {
           orderId: id,
@@ -516,7 +718,39 @@ export class OrdersService {
       });
 
     const txResult = await this.prisma.$transaction(async (tx: any) => {
+      await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${original.customerId} FOR UPDATE`;
+
+      const r2 = (n: number) => Math.round(n * 100) / 100;
       const returnNumber = await this.generateOrderNumber(orgId);
+
+      // Build return items and calculate return value
+      let returnValue = 0;
+      const returnItems = dto.items.map((ri) => {
+        const origItem = original.items.find(
+          (i: any) => i.id === ri.orderItemId,
+        );
+        if (!origItem)
+          throw new BadRequestException({
+            code: "NOT_FOUND",
+            message: `OrderItem ${ri.orderItemId} not found`,
+          });
+        if (ri.returnQty > origItem.quantity)
+          throw new BadRequestException({
+            code: "CONFLICT",
+            message: "Return qty exceeds ordered qty",
+          });
+        const lineReturn = r2(origItem.price * ri.returnQty);
+        returnValue += lineReturn;
+        return {
+          productId: origItem.productId,
+          quantity: ri.returnQty,
+          unit: origItem.unit,
+          price: origItem.price,
+          totalAmount: lineReturn,
+        };
+      });
+      returnValue = r2(returnValue);
+
       const returnOrder = await tx.order.create({
         data: {
           orgId,
@@ -525,34 +759,14 @@ export class OrdersService {
           warehouseId: original.warehouseId,
           status: "RETURNED",
           type: "RETURN",
-          items: {
-            create: dto.items.map((ri) => {
-              const origItem = original.items.find(
-                (i: any) => i.id === ri.orderItemId,
-              );
-              if (!origItem)
-                throw new BadRequestException({
-                  code: "NOT_FOUND",
-                  message: `OrderItem ${ri.orderItemId} not found`,
-                });
-              if (ri.returnQty > origItem.quantity)
-                throw new BadRequestException({
-                  code: "CONFLICT",
-                  message: "Return qty exceeds ordered qty",
-                });
-              return {
-                productId: origItem.productId,
-                quantity: ri.returnQty,
-                unit: origItem.unit,
-                price: origItem.price,
-                totalAmount: origItem.price * ri.returnQty,
-              };
-            }),
-          },
+          netAmount: returnValue,
+          totalAmount: returnValue,
+          items: { create: returnItems },
         },
         include: { items: true },
       });
 
+      // Restore inventory
       for (const ri of dto.items) {
         const origItem = original.items.find((i: any) => i.id === ri.orderItemId);
         if (!origItem) continue;
@@ -577,6 +791,52 @@ export class OrdersService {
               createdBy: userId,
             },
           });
+        }
+      }
+
+      // Reverse financials on linked invoice (#1)
+      if (original.invoiceId && returnValue > 0) {
+        const invoice = await tx.invoice.findUnique({ where: { id: original.invoiceId } });
+        if (invoice) {
+          // Reduce the invoice balance (credit back the return value)
+          const newBalance = r2(Math.max(0, invoice.balanceAmount - returnValue));
+          const adjustedPaid = r2(Math.max(0, invoice.paidAmount - returnValue));
+          const newStatus = newBalance <= 0 ? 'PAID' : (adjustedPaid > 0 ? 'PARTIAL' : invoice.status);
+
+          await tx.invoice.update({
+            where: { id: original.invoiceId },
+            data: {
+              balanceAmount: newBalance,
+              totalAmount: r2(invoice.totalAmount - returnValue),
+              paidAmount: adjustedPaid,
+              status: newStatus,
+            },
+          });
+
+          // Decrement customer outstanding by the return value natively (like a credit note)
+          const outstandingReduction = returnValue;
+          if (outstandingReduction > 0) {
+            await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${original.customerId} FOR UPDATE`;
+
+            const customer = await tx.customer.update({
+              where: { id: original.customerId },
+              data: { outstandingAmount: { decrement: outstandingReduction } },
+              select: { outstandingAmount: true },
+            });
+
+            await tx.ledgerEntry.create({
+              data: {
+                orgId,
+                customerId: original.customerId,
+                type: 'CREDIT',
+                amount: outstandingReduction,
+                balance: customer.outstandingAmount,
+                referenceId: returnOrder.id,
+                referenceType: 'RETURN',
+                notes: `Return against order ${original.orderNumber}`,
+              },
+            });
+          }
         }
       }
 

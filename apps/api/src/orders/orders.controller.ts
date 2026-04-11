@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, UpdateDraftOrderDto, ReturnOrderDto, DispatchOrderDto, ListOrdersQueryDto } from './dto/orders.dto';
+import { CreateOrderDto, UpdateDraftOrderDto, ReturnOrderDto, DispatchOrderDto, ListOrdersQueryDto, MarkPaidDto } from './dto/orders.dto';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -21,4 +21,5 @@ export class OrdersController {
     @Post(':id/deliver') deliver(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.deliver(u.orgId, id, u.sub); }
     @Post(':id/cancel') cancel(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.cancel(u.orgId, id, u.sub); }
     @Post(':id/return') returnOrder(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ReturnOrderDto) { return this.orders.returnOrder(u.orgId, id, dto, u.sub); }
+    @Post(':id/mark-paid') markPaid(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: MarkPaidDto) { return this.orders.markPaid(u.orgId, id, u.sub, dto.method); }
 }

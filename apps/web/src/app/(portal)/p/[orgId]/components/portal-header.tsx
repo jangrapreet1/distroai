@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ShoppingCart, LogIn, Search, X, User, LogOut, FileText, LayoutDashboard } from "lucide-react";
-import { usePortalCart, usePortalAuth, usePortalOrgId } from "@/contexts/portal-context";
+import { usePortalCart, usePortalAuth, usePortalOrgId, usePortalBusinessType } from "@/contexts/portal-context";
 import { PortalAuthModal } from "./portal-auth-modal";
 
 interface StoreInfo {
@@ -17,6 +17,7 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
     const orgId = usePortalOrgId();
     const cart = usePortalCart();
     const auth = usePortalAuth();
+    const businessType = usePortalBusinessType();
     const [searchQuery, setSearchQuery] = useState("");
     const [showSearch, setShowSearch] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
@@ -49,7 +50,7 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
                                 {storeInfo?.name || "Store"}
                             </h1>
                             <span className="text-[10px] text-[var(--gold)] font-medium px-1.5 py-0.5 rounded-full border border-[var(--gold)]/30 bg-[var(--gold)]/10 uppercase tracking-wider">
-                                B2B Portal
+                                {businessType === 'Retailer' ? 'Shop' : businessType === 'Distributor' || businessType === 'Manufacturer' ? 'B2B Portal' : 'Store'}
                             </span>
                         </div>
                     </Link>
@@ -76,7 +77,7 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
                             <Search className="w-5 h-5" />
                         </button>
 
-                        {/* Auth */}
+                        {/* Auth — hidden for Retailer orgs (B2C consumers don't need accounts) */}
                         {auth.isAuthenticated && auth.customer ? (
                             <div className="relative">
                                 <button
@@ -123,15 +124,15 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
                                     </>
                                 )}
                             </div>
-                        ) : (
+                        ) : businessType !== 'Retailer' ? (
                             <button
                                 onClick={() => setShowAuthModal(true)}
                                 className="flex items-center gap-2 text-sm font-medium text-white hover:text-[var(--gold)] transition-colors"
                             >
                                 <LogIn className="w-4 h-4" />
-                                <span className="hidden sm:inline">Retailer Login</span>
+                                <span className="hidden sm:inline">{businessType === 'Manufacturer' ? 'Partner Login' : 'Retailer Login'}</span>
                             </button>
-                        )}
+                        ) : null}
 
                         {/* Cart */}
                         <Link

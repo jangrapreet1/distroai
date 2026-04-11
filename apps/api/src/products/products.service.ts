@@ -4,6 +4,7 @@ import {
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/services/redis.service';
+import { PLAN_LIMITS } from '../common/config/plan-limits.config';
 import { CreateProductDto, UpdateProductDto, ListProductsQueryDto, ExpiringQueryDto } from './dto/products.dto';
 
 @Injectable()
@@ -62,6 +63,16 @@ export class ProductsService {
     }
 
     async create(orgId: string, dto: CreateProductDto) {
+        const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
+        if (!org) throw new NotFoundException('Organization not found');
+        const planKey = org.plan as keyof typeof PLAN_LIMITS;
+        const currentCount = await this.prisma.product.count({ where: { orgId } });
+        const limit = PLAN_LIMITS[planKey]?.maxProducts || 50;
+
+        if (currentCount >= limit) {
+            throw new BadRequestException({ code: 'PLAN_LIMIT_REACHED', message: `Your plan allows a maximum of ${limit} products.` });
+        }
+
         const { initialQuantity, ...productData } = dto;
         const sku = productData.sku ?? this.generateSku(productData.brand, productData.category);
 

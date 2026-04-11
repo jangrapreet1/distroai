@@ -138,14 +138,24 @@ export default function AIPage() {
                 const lines = chunk.split("\n").filter((l) => l.startsWith("data:"));
                 for (const line of lines) {
                     try {
-                        const data = JSON.parse(line.replace("data:", "").trim());
+                        const data = JSON.parse(line.replace(/^data:\s?/, "").trim());
+                        if (data.error === 'AI_QUOTA_EXCEEDED') {
+                            // Show quota error as a failed message with the server's message
+                            setSessions(prev => prev.map(s => {
+                                if (s.id !== currentSessionId) return s;
+                                const newMsgs = [...s.messages];
+                                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: data.token || 'Monthly AI query limit reached.', streaming: false, failed: false };
+                                return { ...s, messages: newMsgs };
+                            }));
+                            break;
+                        }
                         if (data.token) {
                             fullResponse += data.token;
                             const parsed = parseAIResponse(fullResponse);
                             setSessions(prev => prev.map(s => {
                                 if (s.id !== currentSessionId) return s;
                                 const newMsgs = [...s.messages];
-                                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: parsed.cleanText, charts: parsed.charts, tables: parsed.tables };
+                                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: parsed.cleanText, charts: parsed.charts, tables: parsed.tables, askInputs: parsed.askInputs };
                                 return { ...s, messages: newMsgs };
                             }));
                         }
@@ -260,7 +270,7 @@ export default function AIPage() {
             />
 
             {/* Right Panel — Chat */}
-            <div className="flex-1 flex flex-col min-w-0 bg-[#050505]">
+            <div className="flex-1 flex flex-col min-w-0 bg-[var(--bg-primary)]">
                 {/* Mobile History Toggle Header */}
                 <div className="lg:hidden flex items-center justify-between p-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
                     <div className="flex items-center gap-2">

@@ -4,10 +4,9 @@ import { useState, useMemo, useEffect } from "react";
 import { IndianRupee, CreditCard, X, Send, ChevronDown } from "lucide-react";
 import { useOutstanding, usePayments, useRecordPayment, useCustomers } from "@/hooks/api-hooks";
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatINR } from "@/lib/utils";
 import Link from "next/link";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 const PAYMENT_METHODS = ["CASH", "UPI", "CHEQUE", "BANK_TRANSFER", "CREDIT"] as const;
 
@@ -108,7 +107,7 @@ function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerN
                                 ) : (
                                     (Array.isArray(customers) ? customers : []).map((c: Record<string, unknown>) => (
                                         <button key={c.id as string} type="button"
-                                            onClick={() => { setCustomerId(c.id as string); setCustomerSearch(c.name as string); setDropdownOpen(false); setError(""); }}
+                                            onMouseDown={(e) => { e.preventDefault(); setCustomerId(c.id as string); setCustomerSearch(c.name as string); setDropdownOpen(false); setError(""); }}
                                             className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] transition">
                                             {c.name as string}
                                         </button>
@@ -265,7 +264,7 @@ export default function PaymentsPage() {
                                             return `₹${v}`;
                                         }} />
                                         <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "#9A9080" }} axisLine={false} tickLine={false} width={80} />
-                                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.02)' }} contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }} formatter={(v: number | undefined) => [formatINR(v ?? 0)]} />
+                                        <Tooltip cursor={{ fill: 'var(--bg-card-hover)' }} contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 12, color: "var(--tooltip-text)" }} formatter={(v: number | undefined) => [formatINR(v ?? 0)]} />
                                         <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                                             {ageingData.map((d, i) => <Cell key={i} fill={d.color} />)}
                                         </Bar>

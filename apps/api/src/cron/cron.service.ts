@@ -40,7 +40,7 @@ export class CronService {
         this.logger.log('Running payment reminder cron...');
         const today = new Date();
 
-        for (const days of [3, 7, 15]) {
+        for (const days of [-3, 0, 3, 7]) {
             const targetDate = new Date(today);
             targetDate.setDate(targetDate.getDate() - days);
             const dayStart = new Date(targetDate.setHours(0, 0, 0, 0));
@@ -48,7 +48,7 @@ export class CronService {
 
             const overdueInvoices = await this.prisma.invoice.findMany({
                 where: {
-                    status: { in: ['SENT', 'OVERDUE'] },
+                    status: { in: ['SENT', 'PARTIAL', 'OVERDUE'] },
                     dueDate: { gte: dayStart, lte: dayEnd },
                     balanceAmount: { gt: 0 },
                 },
@@ -60,8 +60,21 @@ export class CronService {
                     invoiceId: inv.id, orgId: inv.orgId, customerId: inv.customerId, daysOverdue: days,
                 });
             }
-            this.logger.log(`Queued ${overdueInvoices.length} reminders for ${days}-day overdue`);
+            this.logger.log(`Queued ${overdueInvoices.length} reminders for offset ${days} (days past due)`);
         }
+
+        // Auto-mark invoices as OVERDUE if they passed due date without being fully PAID
+        const yesterdayEnd = new Date(today);
+        yesterdayEnd.setHours(0, 0, 0, 0); // Effectively midnight earlier today
+        const marked = await this.prisma.invoice.updateMany({
+            where: {
+                status: { in: ['DRAFT', 'SENT', 'PARTIAL'] },
+                dueDate: { lt: yesterdayEnd },
+                balanceAmount: { gt: 0 }
+            },
+            data: { status: 'OVERDUE' }
+        });
+        this.logger.log(`Auto-marked ${marked.count} invoices as OVERDUE`);
     }
 
     // Demand forecast — 2:00 AM IST

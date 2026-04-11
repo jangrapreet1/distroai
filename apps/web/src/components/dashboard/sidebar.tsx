@@ -1,10 +1,10 @@
-"use client";
-
+import { useState } from "react";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings, ArrowUpCircle, ChevronUp, Globe, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { Logo } from "@/components/Logo";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useUpgradeStore } from "@/stores/upgrade.store";
 
 interface NavItem { label: string; href: string; icon: React.ElementType; roles?: string[] }
 interface NavGroup { title: string; items: NavItem[]; roles?: string[] }
@@ -33,7 +33,20 @@ interface SidebarProps {
 }
 
 export function SidebarContent({ navGroups, userRole, userName, orgName, orgPlan, pathname, onNavClick, onLogout }: SidebarProps) {
-    const { t } = useLanguage();
+    const { t, language, setLanguage } = useLanguage();
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    const [showLanguages, setShowLanguages] = useState(false);
+    const { openModal } = useUpgradeStore();
+
+    const AVAILABLE_LANGUAGES = [
+        { code: 'en', name: 'English' },
+        { code: 'hi', name: 'हिंदी (Hindi)' },
+        { code: 'ta', name: 'தமிழ் (Tamil)' },
+        { code: 'te', name: 'తెలుగు (Telugu)' },
+        { code: 'mr', name: 'मराठी (Marathi)' },
+        { code: 'gu', name: 'ગુજરાતી (Gujarati)' },
+        { code: 'id', name: 'Bahasa Indonesia' },
+    ];
 
     const isActive = (href: string) => {
         if (href === "/") return pathname === "/";
@@ -84,19 +97,58 @@ export function SidebarContent({ navGroups, userRole, userName, orgName, orgPlan
             </nav>
 
             {/* User */}
-            <div className="px-4 py-4 border-t border-[var(--border)]">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[var(--gold)]/15 flex items-center justify-center text-sm font-semibold text-[var(--gold)]">
+            <div className="relative px-4 py-4 border-t border-[var(--border)]">
+                {isProfileMenuOpen && (
+                    <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsProfileMenuOpen(false)} />
+                        <div className="absolute bottom-full mb-2 left-4 right-4 bg-[var(--bg-secondary)] border border-[var(--border-accent)] rounded-lg shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+                            <Link href="/settings" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors">
+                                <Settings size={16} /> Settings
+                            </Link>
+
+                            <button onClick={() => setShowLanguages(!showLanguages)} className="w-full flex items-center justify-between px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors">
+                                <div className="flex items-center gap-2"><Globe size={16} /> Language</div>
+                                <ChevronRight size={14} className={`transition-transform duration-200 ${showLanguages ? "rotate-90" : ""}`} />
+                            </button>
+
+                            {showLanguages && (
+                                <div className="px-3 py-1 space-y-0.5 bg-[var(--bg-secondary)]/30 border-y border-[var(--border)] max-h-32 overflow-y-auto">
+                                    {AVAILABLE_LANGUAGES.map(l => (
+                                        <button
+                                            key={l.code}
+                                            onClick={() => { setLanguage(l.code); setIsProfileMenuOpen(false); setShowLanguages(false); }}
+                                            className={`w-full text-left text-xs py-1.5 px-3 rounded-md transition-colors ${language === l.code ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]"}`}
+                                        >
+                                            {l.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <button onClick={() => { setIsProfileMenuOpen(false); openModal('premium features'); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors">
+                                <ArrowUpCircle size={16} /> Upgrade plan
+                            </button>
+                            <div className="h-px bg-[var(--border)] my-1 mx-2" />
+                            <button onClick={() => { setIsProfileMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                <LogOut size={16} /> Log out
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                <button
+                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                    className="w-full flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors text-left"
+                >
+                    <div className="w-9 h-9 rounded-full bg-[var(--gold)]/15 flex items-center justify-center text-sm font-semibold text-[var(--gold)] shrink-0">
                         {userName?.[0] ?? "U"}
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{userName ?? "User"}</p>
                         <p className="text-xs text-[var(--text-muted)] capitalize">{userRole?.toLowerCase() ?? "viewer"}</p>
                     </div>
-                    <button onClick={onLogout} className="text-[var(--text-muted)] hover:text-[var(--red)] transition" title="Logout">
-                        <LogOut size={16} />
-                    </button>
-                </div>
+                    <ChevronUp size={16} className={`text-[var(--text-muted)] shrink-0 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
+                </button>
             </div>
         </>
     );

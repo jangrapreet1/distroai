@@ -11,6 +11,7 @@ type AuthStore = ReturnType<typeof createPortalAuthStore>;
 
 interface PortalContextValue {
     orgId: string;
+    businessType: string | null;
     cartStore: CartStore;
     authStore: AuthStore;
 }
@@ -19,16 +20,18 @@ const PortalContext = createContext<PortalContextValue | null>(null);
 
 export function PortalProvider({
     orgId,
+    businessType,
     children,
 }: {
     orgId: string;
+    businessType?: string | null;
     children: ReactNode;
 }) {
     const cartStore = useMemo(() => createPortalCartStore(orgId), [orgId]);
     const authStore = useMemo(() => createPortalAuthStore(orgId), [orgId]);
 
     return (
-        <PortalContext.Provider value={{ orgId, cartStore, authStore }}>
+        <PortalContext.Provider value={{ orgId, businessType: businessType ?? null, cartStore, authStore }}>
             {children}
         </PortalContext.Provider>
     );
@@ -42,6 +45,10 @@ function usePortalContext() {
 
 export function usePortalOrgId() {
     return usePortalContext().orgId;
+}
+
+export function usePortalBusinessType() {
+    return usePortalContext().businessType;
 }
 
 // Cart hooks

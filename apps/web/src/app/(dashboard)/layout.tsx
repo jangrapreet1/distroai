@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
     LayoutDashboard, ShoppingCart, FileText, Package, Users, Truck,
     CreditCard, ClipboardList, Receipt, BarChart3, Sparkles,
-    Settings, Menu, X, Search, Command,
+    Settings, Menu, X, Search, Command, Sun, Moon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +16,8 @@ import { useSyncOfflineData } from "@/hooks/useSyncOfflineData";
 import { SidebarContent, type NavGroup } from "@/components/dashboard/sidebar";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { SearchModal } from "@/components/dashboard/search-modal";
+import { UpgradeModal } from "@/components/modals/upgrade-modal";
+import { useTheme } from "@/contexts/ThemeProvider";
 
 const NAV_GROUPS: NavGroup[] = [
     {
@@ -60,6 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const { user, org, logout } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
+    const { theme, toggleTheme } = useTheme();
 
     useSyncOfflineData();
 
@@ -166,6 +169,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
 
                         <div className="flex items-center gap-3">
+                            <button
+                                onClick={toggleTheme}
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition"
+                                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                            >
+                                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                            </button>
                             <NotificationBell notifications={notifications} />
                             <div className="w-8 h-8 rounded-full bg-[var(--gold)]/15 flex items-center justify-center text-xs font-semibold text-[var(--gold)]">
                                 {user?.firstName?.[0] ?? "U"}
@@ -181,6 +191,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* ⌘K Search Modal */}
                 <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} navGroups={NAV_GROUPS} />
+
+                {/* Global Plan Upgrade Interceptor Modal */}
+                <UpgradeModal />
             </div>
         </LanguageProvider>
     );

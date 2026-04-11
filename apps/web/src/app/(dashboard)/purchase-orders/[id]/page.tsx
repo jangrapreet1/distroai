@@ -5,12 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { usePurchaseOrder, useReceivePurchaseOrder } from "@/hooks/api-hooks";
 import { ArrowLeft, CheckCircle2, ChevronDown, Package } from "lucide-react";
 import Link from "next/link";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatINR } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
 const statusClass: Record<string, string> = { DRAFT: "badge-draft", SENT: "badge-sent", ACKNOWLEDGED: "badge-partial", RECEIVED: "badge-delivered", CANCELLED: "badge-cancelled" };
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 export default function PurchaseOrderDetailPage() {
     const params = useParams();
@@ -25,6 +24,22 @@ export default function PurchaseOrderDetailPage() {
 
     if (isLoading) return <div className="p-12 flex justify-center"><div className="w-8 h-8 rounded-full border-4 border-[var(--gold)] border-t-transparent animate-spin"></div></div>;
     if (!po) return <div className="p-12 text-center text-[var(--test-muted)]">Purchase Order not found.</div>;
+
+    const handleReceive = () => {
+        const payload = {
+            id: poId,
+            data: {
+                items: po.items.map((i: any) => ({
+                    poItemId: i.id,
+                    receivedQty: i.orderedQty - i.receivedQty,
+                }))
+            }
+        };
+
+        receivePo.mutate(payload, {
+            onSuccess: () => toast.success("Purchase order marked as received and inventory updated!")
+        });
+    }
 
     const handleReceiveToggle = () => {
         if (!receiving) {

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Outfit, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "./providers";
+import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { FacebookSDK } from "@/components/facebook-sdk";
 import "./globals.css";
 
@@ -46,22 +47,24 @@ export default function RootLayout({
     >
       <body className="antialiased">
         <Providers>
-          {children}
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
           <Toaster
             position="top-right"
             toastOptions={{
               style: {
-                background: "#1a1625",
-                color: "#F0E8D5",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--tooltip-bg)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
                 borderRadius: "10px",
                 fontSize: "14px",
               },
               success: {
-                iconTheme: { primary: "#2E8B57", secondary: "#F0E8D5" },
+                iconTheme: { primary: "var(--green)", secondary: "var(--text-primary)" },
               },
               error: {
-                iconTheme: { primary: "#E07B60", secondary: "#F0E8D5" },
+                iconTheme: { primary: "var(--red)", secondary: "var(--text-primary)" },
               },
             }}
           />

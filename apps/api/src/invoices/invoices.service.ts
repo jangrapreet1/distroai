@@ -46,11 +46,14 @@ export class InvoicesService {
         private readonly redis: RedisService,
     ) { }
 
+    /** Round to 2 decimal places — every INR value must pass through this */
+    private r2(n: number) { return Math.round(n * 100) / 100; }
+
     private calculateGst(amount: number, gstRate: number, sameState: boolean) {
-        const gstAmount = (amount * gstRate) / 100;
+        const gstAmount = this.r2((amount * gstRate) / 100);
         return sameState
-            ? { cgstRate: gstRate / 2, sgstRate: gstRate / 2, igstRate: 0, cgstAmount: gstAmount / 2, sgstAmount: gstAmount / 2, igstAmount: 0 }
-            : { cgstRate: 0, sgstRate: 0, igstRate: gstRate, cgstAmount: 0, sgstAmount: 0, igstAmount: gstAmount };
+            ? { cgstRate: gstRate / 2, sgstRate: gstRate / 2, igstRate: 0, cgstAmount: this.r2(gstAmount / 2), sgstAmount: this.r2(gstAmount / 2), igstAmount: 0 }
+            : { cgstRate: 0, sgstRate: 0, igstRate: gstRate, cgstAmount: 0, sgstAmount: 0, igstAmount: this.r2(gstAmount) };
     }
 
     private async generateInvoiceNumber(orgId: string): Promise<string> {
@@ -91,12 +94,12 @@ export class InvoicesService {
         const itemsData = await Promise.all(dto.items.map(async (item) => {
             const product = await this.prisma.product.findFirst({ where: { id: item.productId, orgId } });
             if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: `Product ${item.productId} not found` });
-            const lineTotal = item.price * item.quantity;
-            const disc = item.discount ?? 0;
-            const taxable = lineTotal - disc;
+            const lineTotal = this.r2(item.price * item.quantity);
+            const disc = this.r2(item.discount ?? 0);
+            const taxable = this.r2(lineTotal - disc);
             const gst = this.calculateGst(taxable, product.gstRate, sameState);
-            const cessAmt = (taxable * (product.cessRate ?? 0)) / 100;
-            const total = taxable + gst.cgstAmount + gst.sgstAmount + gst.igstAmount + cessAmt;
+            const cessAmt = this.r2((taxable * (product.cessRate ?? 0)) / 100);
+            const total = this.r2(taxable + gst.cgstAmount + gst.sgstAmount + gst.igstAmount + cessAmt);
 
             subtotal += lineTotal;
             discountAmount += disc;
@@ -114,7 +117,7 @@ export class InvoicesService {
             };
         }));
 
-        const totalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount + cessAmount;
+        const totalAmount = this.r2(taxableAmount + cgstAmount + sgstAmount + igstAmount + cessAmount);
         const invoiceNumber = await this.generateInvoiceNumber(orgId);
         const dueDate = dto.dueDate ? new Date(dto.dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -129,7 +132,68 @@ export class InvoicesService {
                 },
                 include: { items: true, customer: { select: { name: true } } },
             });
-            await tx.customer.update({ where: { id: dto.customerId }, data: { outstandingAmount: { increment: totalAmount } } });
+
+            // ── Auto-apply unspent customer advances ──
+            let invoiceBalance = totalAmount;
+            const advancePayments = await tx.payment.findMany({
+                where: { orgId, customerId: dto.customerId, advanceAmount: { gt: 0 } },
+                orderBy: { paidAt: 'asc' },
+            });
+
+            for (const adv of advancePayments) {
+                if (invoiceBalance <= 0) break;
+                const allocate = this.r2(Math.min(adv.advanceAmount, invoiceBalance));
+                if (allocate <= 0) continue;
+
+                // Reduce the advance on the payment
+                await tx.payment.update({
+                    where: { id: adv.id },
+                    data: { advanceAmount: this.r2(adv.advanceAmount - allocate) },
+                });
+
+                // Create allocation record
+                await tx.paymentAllocation.create({
+                    data: { paymentId: adv.id, invoiceId: inv.id, amountAllocated: allocate },
+                });
+
+                invoiceBalance = this.r2(invoiceBalance - allocate);
+            }
+
+            // Update invoice if advances were applied
+            const advanceApplied = this.r2(totalAmount - invoiceBalance);
+            if (advanceApplied > 0) {
+                await tx.invoice.update({
+                    where: { id: inv.id },
+                    data: {
+                        paidAmount: advanceApplied,
+                        balanceAmount: invoiceBalance,
+                        status: invoiceBalance <= 0 ? 'PAID' : 'PARTIAL',
+                    },
+                });
+            }
+
+            // ── Update Customer Ledger ──
+            // Fetch current customer to get exact balance for ledger
+            await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${dto.customerId} FOR UPDATE`;
+
+            const customer = await tx.customer.update({
+                where: { id: dto.customerId },
+                data: { outstandingAmount: { increment: totalAmount } },
+                select: { outstandingAmount: true }
+            });
+
+            await tx.ledgerEntry.create({
+                data: {
+                    orgId,
+                    customerId: dto.customerId,
+                    type: 'DEBIT',
+                    amount: totalAmount,
+                    balance: customer.outstandingAmount,
+                    referenceId: inv.id,
+                    referenceType: 'INVOICE',
+                    notes: `Invoice ${invoiceNumber} generated`
+                }
+            });
 
             if (dto.orderId) {
                 await tx.order.update({
@@ -143,6 +207,9 @@ export class InvoicesService {
 
         await this.queue.addToQueue('invoice', 'generate-pdf', { invoiceId: invoice.id });
         this.logger.log(`Queued PDF generation for invoice ${invoice.id}`);
+
+        await this.send(orgId, invoice.id, ['whatsapp']);
+        this.logger.log(`Queued initial WhatsApp notification for invoice ${invoice.id}`);
 
         await Promise.all([
             this.redis.del(`analytics:dashboard:${orgId}`),
@@ -256,6 +323,76 @@ export class InvoicesService {
             b2b: Object.entries(b2b).map(([customerGst, invoices]) => ({ customerGst, invoices })),
             b2c: b2cTotals,
             summary: { totalInvoices, totalTaxableValue, totalTax, totalCess: 0 },
+        };
+    }
+
+    /**
+     * Data reconciliation: recalculate customer outstanding from actual invoice balances.
+     * Fixes inconsistencies caused by testing or bugs.
+     */
+    async reconcile(orgId: string) {
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+        const fixes: { customerId: string; customerName: string; oldOutstanding: number; newOutstanding: number }[] = [];
+        const duplicateInvoices: { invoiceId: string; invoiceNumber: string; orderId: string }[] = [];
+
+        // Step 1: Find orders with multiple invoices (duplicates from testing)
+        const orders = await this.prisma.order.findMany({
+            where: { orgId, invoiceId: { not: null } },
+            select: { id: true, invoiceId: true, orderNumber: true },
+        });
+        const orderInvoiceMap = new Map<string, string>();
+        // All invoices that are linked to orders
+        const linkedInvoiceIds = new Set(orders.map(o => o.invoiceId).filter(Boolean));
+
+        // Find invoices NOT linked to any order (orphans from duplicate creation)
+        const allInvoices = await this.prisma.invoice.findMany({
+            where: { orgId },
+            select: { id: true, invoiceNumber: true, customerId: true, balanceAmount: true, status: true },
+        });
+
+        // Step 2: Recalculate each customer's outstanding from their ACTIVE invoice balances
+        const customers = await this.prisma.customer.findMany({
+            where: { orgId },
+            select: { id: true, name: true, outstandingAmount: true },
+        });
+
+        for (const customer of customers) {
+            // Sum all unpaid invoice balances for this customer (excluding CANCELLED)
+            const invoices = await this.prisma.invoice.findMany({
+                where: { orgId, customerId: customer.id, status: { not: 'CANCELLED' } },
+                select: { balanceAmount: true },
+            });
+            const actualOutstanding = r2(invoices.reduce((sum, inv) => sum + inv.balanceAmount, 0));
+            const currentOutstanding = r2(customer.outstandingAmount);
+
+            if (actualOutstanding !== currentOutstanding) {
+                await this.prisma.customer.update({
+                    where: { id: customer.id },
+                    data: { outstandingAmount: actualOutstanding },
+                });
+                fixes.push({
+                    customerId: customer.id,
+                    customerName: customer.name,
+                    oldOutstanding: currentOutstanding,
+                    newOutstanding: actualOutstanding,
+                });
+            }
+        }
+
+        // Step 3: Invalidate analytics cache
+        await Promise.all([
+            this.redis.del(`analytics:dashboard:${orgId}`),
+            this.redis.del(`analytics:sales:${orgId}`),
+        ]);
+
+        return {
+            success: true,
+            customersFixed: fixes.length,
+            fixes,
+            totalInvoices: allInvoices.length,
+            message: fixes.length > 0
+                ? `Fixed ${fixes.length} customer(s) outstanding amounts`
+                : 'All data is consistent — no fixes needed',
         };
     }
 }

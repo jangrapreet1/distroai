@@ -4,12 +4,11 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Package, Warehouse, AlertTriangle, Clock, Search, List, Grid, Plus, ArrowRightLeft, ArrowUpRight, ArrowDownRight, ArrowRight, X, Filter, FileText, Upload, SlidersHorizontal, ArrowLeft, MoreHorizontal, FileDown, Eye, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { useProducts, useInventoryValuation, useAdjustInventory, useTransferInventory, useInventoryTransactions, useCreateProduct, useWarehouses, useUploadFile } from "@/hooks/api-hooks";
-import { formatDate, getPrimaryImageUrl } from "@/lib/utils";
+import { formatDate, getPrimaryImageUrl, formatINR } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { MultiImageUpload } from "@/components/ui/multi-image-upload";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 /* ─── Add Product Modal ─── */
 function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -168,7 +167,17 @@ function AdjustModal({ open, onClose, products }: { open: boolean; onClose: () =
                     </label>
                     <label>
                         <span className="text-xs text-[var(--text-muted)] mb-1 block">Reason</span>
-                        <input value={reason} onChange={(e) => setReason(e.target.value)} required placeholder="e.g. Damaged goods, Count correction" className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
+                        <select value={reason} onChange={(e) => setReason(e.target.value)} required className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition">
+                            <option value="">Select reason...</option>
+                            <option value="Damaged/Expired">Damaged / Expired</option>
+                            <option value="Count Correction">Count Correction</option>
+                            <option value="Returned by Customer">Returned by Customer</option>
+                            <option value="Opening Stock">Opening Stock</option>
+                            <option value="Sample/Promo">Sample / Promo</option>
+                            <option value="Theft/Loss">Theft / Loss</option>
+                            <option value="Transfer">Transfer (Inter-Warehouse)</option>
+                            <option value="Other">Other</option>
+                        </select>
                     </label>
                     <div className="flex justify-end gap-3 pt-2">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition">Cancel</button>
@@ -251,7 +260,7 @@ function TransferModal({ open, onClose, products }: { open: boolean; onClose: ()
 /* ─── Main Inventory Page ─── */
 export default function InventoryPage() {
     const [mainTab, setMainTab] = useState<"products" | "transactions">("products");
-    const [tab, setTab] = useState<"all" | "low" | "expiring">("all");
+    const [tab, setTab] = useState<"all" | "low">("all");
     const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
@@ -274,7 +283,6 @@ export default function InventoryPage() {
 
     const displayProducts = Array.isArray(products) ? products.filter((p: Record<string, unknown>) => {
         if (tab === "low") return ((p.totalQuantity as number) ?? 0) <= ((p.minStockLevel as number) ?? 10);
-        if (tab === "expiring") return false; // Mock filtering logic if no expiry backend
         return true;
     }) : [];
 
@@ -319,10 +327,10 @@ export default function InventoryPage() {
                 <>
                     {/* Filters */}
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="flex gap-1">
-                            {(["all", "low", "expiring"] as const).map((f) => (
-                                <button key={f} onClick={() => setTab(f)} className={`px-3 py-1.5 text-xs rounded-full transition capitalize ${tab === f ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>
-                                    {f === "all" ? t('all') : f === "low" ? t('low_stock_tab') : t('expiring_tab')}
+                        <div className="flex bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-1 overflow-x-auto no-scrollbar">
+                            {(["all", "low"] as const).map((f) => (
+                                <button key={f} onClick={() => { setTab(f); setPage(1); }} className={`px-4 py-1.5 text-sm rounded ${tab === f ? "bg-[var(--gold)]/10 text-[var(--gold)] font-medium" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
+                                    {f === "all" ? t('all') : t('low_stock_tab')}
                                 </button>
                             ))}
                         </div>

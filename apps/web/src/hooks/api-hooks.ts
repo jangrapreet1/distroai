@@ -25,6 +25,24 @@ export function useOrderAction() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+export function useBulkOrderAction() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ ids, action, data }: { ids: string[]; action: string; data?: Record<string, unknown> }) => {
+            const promises = ids.map(id => apiClient.post(`/api/v1/orders/${id}/${action}`, data ?? {}));
+            return Promise.all(promises);
+        },
+        onSuccess: (_, v) => {
+            qc.invalidateQueries({ queryKey: ["orders"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
+            qc.invalidateQueries({ queryKey: ["invoices"] });
+            qc.invalidateQueries({ queryKey: ["payments"] });
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            toast.success(`Successfully ${v.action === 'mark-paid' ? 'marked' : v.action + 'ed'} ${v.ids.length} orders`);
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
 export function useUpdateDraftOrder() {
     const qc = useQueryClient();
     return useMutation({
@@ -104,6 +122,29 @@ export function useRecordPayment() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+export function useBulkMarkInvoicesPaid() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (items: { id: string; customerId: string; invoiceId?: string; balanceAmount: number }[]) => {
+            const promises = items.map(item => apiClient.post(`/api/v1/payments`, {
+                customerId: item.customerId,
+                invoiceId: item.id,
+                amount: item.balanceAmount,
+                method: 'BANK_TRANSFER',
+                notes: 'Marked Paid'
+            }));
+            return Promise.all(promises);
+        },
+        onSuccess: (_, v) => {
+            qc.invalidateQueries({ queryKey: ["invoices"] });
+            qc.invalidateQueries({ queryKey: ["payments"] });
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["orders"] });
+            toast.success(`Successfully marked ${v.length} invoices paid`);
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
 export function useOutstanding() {
     return useQuery({ queryKey: ["payments", "outstanding"], queryFn: () => apiClient.get("/api/v1/payments/outstanding").then((r) => r.data) });
 }
@@ -157,6 +198,9 @@ export function useDashboard() {
 }
 export function useSalesAnalytics(from: string, to: string, groupBy: string) {
     return useQuery({ queryKey: ["analytics", "sales", from, to, groupBy], queryFn: () => apiClient.get("/api/v1/analytics/sales", { params: { from, to, groupBy } }).then((r) => r.data) });
+}
+export function useAiUsage() {
+    return useQuery({ queryKey: ["ai", "usage"], queryFn: () => apiClient.get("/api/v1/ai/usage").then((r) => r.data) });
 }
 
 // ===== ORG =====
@@ -359,7 +403,9 @@ export function useExportCaGst() {
 export function useWhatsAppStatus() {
     return useQuery({
         queryKey: ["whatsapp-status"],
-        queryFn: () => apiClient.get("/api/v1/whatsapp/status").then((r) => r.data),
+        queryFn: () => apiClient.get("/api/v1/whatsapp/status", {
+            headers: { 'x-suppress-upgrade-modal': 'true' }
+        }).then((r) => r.data).catch(() => null),
     });
 }
 

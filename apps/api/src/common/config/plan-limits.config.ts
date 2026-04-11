@@ -12,6 +12,7 @@ export const PLAN_LIMITS = {
             advancedAnalytics: false,
             tallySync: false,
             apiAccess: false,
+            customerPortal: false,
         },
     },
     STARTER: {
@@ -27,6 +28,7 @@ export const PLAN_LIMITS = {
             advancedAnalytics: false,
             tallySync: true,
             apiAccess: false,
+            customerPortal: true,
         },
     },
     GROWTH: {
@@ -42,6 +44,7 @@ export const PLAN_LIMITS = {
             advancedAnalytics: true,
             tallySync: true,
             apiAccess: false,
+            customerPortal: true,
         },
     },
     ENTERPRISE: {
@@ -57,6 +60,7 @@ export const PLAN_LIMITS = {
             advancedAnalytics: true,
             tallySync: true,
             apiAccess: true,
+            customerPortal: true,
         },
     },
 } as const;

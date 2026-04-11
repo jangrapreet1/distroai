@@ -25,7 +25,6 @@ export function getLlm(): ChatOpenAI | null {
     if (!_llmInitialized) {
         _llmInitialized = true;
         const apiKey = process.env.OPENROUTER_API_KEY;
-        console.log("DEBUG: OPENROUTER_API_KEY length is", apiKey?.length, "starts with", apiKey?.substring(0, 10));
         if (apiKey) {
             _llm = new ChatOpenAI({
                 modelName: 'nvidia/nemotron-3-super-120b-a12b:free',
@@ -186,6 +185,24 @@ export class AiService {
         }
     }
 
+    async getUsage(orgId: string) {
+        let current = 0;
+        if (this.redis) {
+            const currentMonth = new Date().toISOString().substring(0, 7);
+            const key = `ai_usage:${orgId}:${currentMonth}`;
+            const countStr = await this.redis.get(key);
+            current = countStr ? parseInt(countStr, 10) : 0;
+        }
+
+        const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
+        const planKey = org?.plan as keyof typeof PLAN_LIMITS | undefined;
+        // Check local ai.service limits or plan-limits config limits depending on architecture, 
+        // fallback to common 50 for free if undef. But here we use PLAN_LIMITS[planKey].
+        const limit = planKey ? (PLAN_LIMITS[planKey]?.maxAiQueriesPerMonth || 0) : 0;
+
+        return { current, limit };
+    }
+
     private buildTools(orgId: string, userId?: string) {
         return [
             createQuerySalesTool(orgId, this.prisma),
@@ -281,7 +298,7 @@ export class AiService {
 
         // Immediate persistence for background generation
         const aiQueryRecord = await this.prisma.aIQuery.create({
-            data: { orgId, userId, query: userQuery, response: "", latencyMs: 0 }
+            data: { orgId, userId, sessionId, query: userQuery, response: "", latencyMs: 0 }
         });
         const aiQueryRecordId = aiQueryRecord.id;
         let finalOutput = '';

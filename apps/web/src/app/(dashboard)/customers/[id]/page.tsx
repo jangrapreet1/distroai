@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import { useCustomer, useCustomerCreditScore, useCustomerActivity, useCreateLocationRequest } from "@/hooks/api-hooks";
 import Link from "next/link";
 import { ArrowLeft, Mail, Phone, MapPin, TrendingUp, CreditCard, ShieldCheck, AlertTriangle, Clock, Package, Send, MessageCircle } from "lucide-react";
-import { formatDate, buildWhatsAppInvoiceLink } from "@/lib/utils";
+import { formatDate, buildWhatsAppInvoiceLink, formatINR } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import dynamic from "next/dynamic";
 
@@ -13,23 +13,22 @@ const CustomerMap = dynamic(() => import("@/components/ui/customer-map"), {
     loading: () => <div className="h-64 w-full bg-[var(--bg-secondary)] animate-pulse rounded-[var(--radius-lg)]" />
 });
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 function PaymentScoreGauge({ score, band }: { score: number; band: string }) {
     const color = band === "GREEN" ? "var(--green-bright)" : band === "YELLOW" ? "var(--warning)" : band === "ORANGE" ? "var(--orange)" : "var(--red)";
     const circumference = 2 * Math.PI * 45;
     const strokeDashoffset = circumference - (score / 100) * circumference;
     return (
-        <div className="flex flex-col items-center">
-            <svg width="120" height="120" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="45" fill="none" stroke="var(--border)" strokeWidth="10" />
+        <div className="flex flex-col items-center group">
+            <svg width="120" height="120" viewBox="0 0 120 120" className="transition-transform duration-500 group-hover:scale-105" style={{ filter: `drop-shadow(0 0 8px ${color}40)` }}>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="var(--border)" strokeWidth="10" className="opacity-50" />
                 <circle cx="60" cy="60" r="45" fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
                     strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-                    transform="rotate(-90 60 60)" className="transition-all duration-1000 ease-out" />
+                    transform="rotate(-90 60 60)" className="transition-all duration-1000 ease-out animate-pulse" />
                 <text x="60" y="55" textAnchor="middle" fill={color} fontSize="28" fontWeight="bold" fontFamily="var(--font-mono)">{score}</text>
                 <text x="60" y="72" textAnchor="middle" fill="var(--text-muted)" fontSize="10" fontWeight="500">/ 100</text>
             </svg>
-            <span className="text-xs font-semibold mt-1 px-3 py-1 rounded-full" style={{ backgroundColor: `${color}20`, color }}>{band}</span>
+            <span className="text-[10px] uppercase font-bold mt-2 px-3 py-1 rounded-sm shadow-[inset_0_1px_rgba(255,255,255,0.1)] tracking-widest" style={{ backgroundColor: `${color}15`, color, border: `1px solid ${color}30` }}>{band}</span>
         </div>
     );
 }
@@ -79,23 +78,23 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             </Link>
 
             {/* Quick Actions Bar */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
                 {customer.phone && (
                     <>
                         <a href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 transition">
-                            <MessageCircle size={14} /> WhatsApp
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-white/5 border border-white/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 hover:border-[var(--whatsapp)]/50 hover:shadow-[0_0_15px_rgba(37,211,102,0.15)] hover:-translate-y-0.5 transition-all duration-300">
+                            <MessageCircle size={16} /> WhatsApp
                         </a>
                         <a href={`tel:${customer.phone}`}
-                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition">
-                            <Phone size={14} /> Call
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 hover:border-white/20 hover:shadow-[0_4px_15px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 transition-all duration-300">
+                            <Phone size={16} /> Call
                         </a>
                         <button
                             onClick={handleRequestLocation}
                             disabled={isRequestingLocation}
-                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--gold)]/30 transition disabled:opacity-50"
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-white/5 border border-white/10 text-[var(--text-primary)] hover:border-[var(--gold)]/50 hover:shadow-[0_0_15px_rgba(251,191,36,0.15)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:transform-none"
                         >
-                            <MapPin size={14} className="text-[var(--gold)]" />
+                            <MapPin size={16} className={isRequestingLocation ? "text-[var(--text-muted)] animate-pulse" : "text-[var(--gold)]"} />
                             {isRequestingLocation ? "Generating..." : "Request Location"}
                         </button>
                     </>
@@ -106,253 +105,253 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 {/* LEFT SIDEBAR — Customer Info + Payment Score */}
                 <div className="w-full lg:w-1/3 space-y-6">
                     {/* Contact Card */}
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{customer.name}</h1>
+                    <div className="relative overflow-hidden bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-[var(--radius-lg)] p-6">
+                        <div className="absolute top-0 right-0 w-64 h-64 opacity-20 pointer-events-none blur-[60px]" style={{ background: `radial-gradient(circle, ${tierColors[customer.tier] || "var(--gold)"} 0%, transparent 70%)` }} />
+                        <div className="relative z-10 flex items-center justify-between mb-4">
+                            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70" style={{ fontFamily: "var(--font-playfair)" }}>{customer.name}</h1>
                             <div className="flex gap-2">
-                                <span className="px-2 py-1 text-xs font-medium rounded" style={{ backgroundColor: `${tierColors[customer.tier] || "var(--gold)"}20`, color: tierColors[customer.tier] || "var(--gold)" }}>
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-sm border" style={{ backgroundColor: `${tierColors[customer.tier] || "var(--gold)"}15`, color: tierColors[customer.tier] || "var(--gold)", borderColor: `${tierColors[customer.tier] || "var(--gold)"}30` }}>
                                     {customer.tier}
                                 </span>
-                                <span className="px-2 py-1 bg-[var(--gold)]/10 text-[var(--gold)] text-xs font-medium rounded">{customer.type}</span>
+                                <span className="px-2 py-0.5 bg-white/10 text-white/80 border border-white/20 text-[10px] font-bold rounded-sm">{customer.type}</span>
                             </div>
                         </div>
-                        <div className="space-y-3">
-                            {customer.phone && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]"><Phone size={16} className="text-[var(--text-muted)]" />{customer.phone}</div>}
-                            {customer.email && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]"><Mail size={16} className="text-[var(--text-muted)]" />{customer.email}</div>}
-                            {(customer.city || customer.state) && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]"><MapPin size={16} className="text-[var(--text-muted)]" />{customer.city}{customer.state ? `, ${customer.state}` : ""}</div>}
-                            {customer.gstNumber && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]"><ShieldCheck size={16} className="text-[var(--text-muted)]" />GSTIN: {customer.gstNumber}</div>}
+                        <div className="relative z-10 space-y-3">
+                            {customer.phone && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><Phone size={16} className="text-[var(--gold)]/70" />{customer.phone}</div>}
+                            {customer.email && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><Mail size={16} className="text-[var(--gold)]/70" />{customer.email}</div>}
+                            {(customer.city || customer.state) && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><MapPin size={16} className="text-[var(--gold)]/70" />{customer.city}{customer.state ? `, ${customer.state}` : ""}</div>}
+                            {customer.gstNumber && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><ShieldCheck size={16} className="text-[var(--gold)]/70" />GSTIN: {customer.gstNumber}</div>}
                         </div>
                     </div>
 
                     {/* Payment Score Card */}
                     {creditScore && (
-                        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
-                            <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-4 font-semibold">Payment Score</h3>
+                        <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-lg rounded-[var(--radius-lg)] p-6">
+                            <h3 className="text-[10px] tracking-widest text-[var(--text-muted)] uppercase mb-4 font-bold">Payment Score</h3>
                             <PaymentScoreGauge score={creditScore.score ?? customer.paymentScore ?? 0} band={creditScore.band ?? "GREEN"} />
-                            <p className="text-xs text-[var(--text-muted)] mt-4 text-center leading-relaxed">{creditScore.recommendation}</p>
+                            <p className="text-xs text-[var(--text-muted)] mt-5 text-center leading-relaxed px-2">{creditScore.recommendation}</p>
                         </div>
                     )}
 
                     {/* Financial Snapshot */}
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
-                        <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-4 font-semibold">Financial Snapshot</h3>
+                    <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-lg rounded-[var(--radius-lg)] p-6">
+                        <h3 className="text-[10px] tracking-widest text-[var(--text-muted)] uppercase mb-4 font-bold">Financial Snapshot</h3>
                         <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm text-[var(--text-muted)] flex items-center gap-2"><AlertTriangle size={14} /> Outstanding</span>
+                            <div className="flex justify-between items-center group">
+                                <span className="text-sm text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition flex items-center gap-2"><AlertTriangle size={14} className="text-[var(--red)]/70" /> Outstanding</span>
                                 <span className="text-lg font-bold text-[var(--red)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(customer.outstandingAmount ?? 0)}</span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm text-[var(--text-muted)] flex items-center gap-2"><CreditCard size={14} /> Credit Limit</span>
+                            <div className="flex justify-between items-center group">
+                                <span className="text-sm text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition flex items-center gap-2"><CreditCard size={14} className="text-[var(--gold)]/70" /> Credit Limit</span>
                                 <span className="text-sm font-medium" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(customer.creditLimit ?? 0)}</span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm text-[var(--text-muted)] flex items-center gap-2"><Clock size={14} /> Credit Days</span>
+                            <div className="flex justify-between items-center group">
+                                <span className="text-sm text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition flex items-center gap-2"><Clock size={14} className="text-[var(--gold)]/70" /> Credit Days</span>
                                 <span className="text-sm font-medium">{customer.creditDays ?? 0} days</span>
                             </div>
-                            <div className="border-t border-[var(--border)] pt-3 mt-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-[var(--text-muted)] flex items-center gap-2"><TrendingUp size={14} /> Lifetime Revenue</span>
+                            <div className="border-t border-white/5 pt-3 mt-3">
+                                <div className="flex justify-between items-center group">
+                                    <span className="text-sm text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition flex items-center gap-2"><TrendingUp size={14} className="text-[var(--green-bright)]/70" /> Lifetime Revenue</span>
                                     <span className="text-sm font-bold text-[var(--green-bright)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(stats?.totalRevenue ?? 0)}</span>
                                 </div>
-                                <div className="flex justify-between items-center mt-2">
-                                    <span className="text-sm text-[var(--text-muted)]">Total Orders</span>
+                                <div className="flex justify-between items-center mt-2 group">
+                                    <span className="text-sm text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition">Total Orders</span>
                                     <span className="text-sm font-medium">{stats?.totalOrders ?? 0}</span>
                                 </div>
-                                <div className="flex justify-between items-center mt-2">
-                                    <span className="text-sm text-[var(--text-muted)]">Avg Order Value</span>
+                                <div className="flex justify-between items-center mt-2 group">
+                                    <span className="text-sm text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition">Avg Order Value</span>
                                     <span className="text-sm font-medium" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(stats?.avgOrderValue ?? 0)}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {/* GPS Location Map */}
-                {customer.latitude && customer.longitude && (
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
-                        <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-4 font-semibold flex items-center justify-between">
-                            GPS Location
-                            <span className="text-[10px] bg-[var(--green-bright)]/10 text-[var(--green-bright)] px-2 py-0.5 rounded-full capitalize flex items-center gap-1"><MapPin size={10} /> Verified</span>
-                        </h3>
-                        <CustomerMap latitude={customer.latitude} longitude={customer.longitude} customerName={customer.name} />
-                    </div>
-                )}
-            </div>
-
-            {/* RIGHT MAIN CONTENT */}
-            <div className="w-full lg:w-2/3 space-y-6">
-                {/* Payment Ageing */}
-                {paymentSummary && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {[
-                            { label: "Current", amount: paymentSummary.current, color: "var(--green-bright)" },
-                            { label: "30+ Days", amount: paymentSummary.overdue30, color: "var(--warning)" },
-                            { label: "60+ Days", amount: paymentSummary.overdue60, color: "var(--orange)" },
-                            { label: "90+ Days", amount: paymentSummary.overdue90, color: "var(--red)" },
-                        ].map((a) => (
-                            <div key={a.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4 text-center">
-                                <p className="text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: a.color }}>{a.label}</p>
-                                <p className="text-lg font-bold" style={{ fontFamily: "var(--font-mono)", color: a.amount > 0 ? a.color : "var(--text-muted)" }}>{formatINR(a.amount ?? 0)}</p>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Recent Orders */}
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
-                    <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
-                        <h2 className="font-semibold" style={{ fontFamily: "var(--font-playfair)" }}>Recent Orders</h2>
-                        <Link href={`/orders/new?customer=${customer.id}`} className="px-3 py-1.5 bg-[var(--gold)] text-[var(--bg-primary)] text-xs font-semibold rounded hover:bg-[var(--gold-light)] transition">
-                            New Order
-                        </Link>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
-                                    <th className="text-left p-4">Order #</th>
-                                    <th className="text-left p-4">Date</th>
-                                    <th className="text-right p-4">Amount</th>
-                                    <th className="text-center p-4">Status</th>
-                                    <th className="text-right p-4">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {recentOrders.length === 0 ? (
-                                    <tr><td colSpan={5} className="p-8 text-center text-[var(--text-muted)]">
-                                        <Package size={32} className="mx-auto mb-2 opacity-30" />No orders yet
-                                    </td></tr>
-                                ) : (
-                                    recentOrders.map((order: any) => (
-                                        <tr key={order.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
-                                            <td className="p-4 font-medium"><Link href={`/orders/${order.id}`} className="text-[var(--gold)] hover:underline">{order.orderNumber}</Link></td>
-                                            <td className="p-4 text-[var(--text-secondary)]">{formatDate(order.createdAt)}</td>
-                                            <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.netAmount)}</td>
-                                            <td className="p-4 text-center">
-                                                <span className={`inline-block px-2 py-1 text-[10px] font-bold uppercase rounded-full tracking-wider ${order.status === 'DELIVERED' ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)]' :
-                                                    order.status === 'CANCELLED' ? 'bg-red-500/10 text-red-500' :
-                                                        order.status === 'DRAFT' ? 'bg-[var(--text-muted)]/10 text-[var(--text-secondary)]' :
-                                                            'bg-[var(--gold)]/10 text-[var(--gold)]'
-                                                    }`}>{order.status}</span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                {order.invoiceId && customer.phone && (
-                                                    <a href={buildWhatsAppInvoiceLink({
-                                                        customerPhone: customer.phone,
-                                                        customerName: customer.name,
-                                                        invoiceNumber: order.orderNumber,
-                                                        invoiceAmount: order.netAmount,
-                                                        invoiceId: order.invoiceId,
-                                                    })} target="_blank" rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1 text-xs text-[var(--whatsapp)] hover:underline transition">
-                                                        <Send size={12} /> Send Invoice
-                                                    </a>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Recent Payments */}
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
-                    <div className="p-4 border-b border-[var(--border)]">
-                        <h2 className="font-semibold" style={{ fontFamily: "var(--font-playfair)" }}>Recent Payments</h2>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
-                                    <th className="text-left p-4">Date</th>
-                                    <th className="text-left p-4">Method</th>
-                                    <th className="text-right p-4">Amount</th>
-                                    <th className="text-left p-4">Reference</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {recentPayments.length === 0 ? (
-                                    <tr><td colSpan={4} className="p-8 text-center text-[var(--text-muted)]">
-                                        <CreditCard size={32} className="mx-auto mb-2 opacity-30" />No payments recorded
-                                    </td></tr>
-                                ) : (
-                                    recentPayments.map((p: any) => (
-                                        <tr key={p.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
-                                            <td className="p-4 text-[var(--text-secondary)]">{formatDate(p.paidAt ?? p.createdAt)}</td>
-                                            <td className="p-4"><span className="px-2 py-0.5 rounded-full text-xs bg-[var(--gold)]/15 text-[var(--gold)]">{p.method?.replace("_", " ")}</span></td>
-                                            <td className="p-4 text-right text-[var(--green-bright)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(p.amount ?? 0)}</td>
-                                            <td className="p-4 text-[var(--text-muted)]">{p.referenceNumber ?? "—"}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            {/* Customer Activity Feed */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 mt-6">
-                <h2 className="font-semibold mb-6 flex items-center gap-2" style={{ fontFamily: "var(--font-playfair)" }}>
-                    <Clock className="text-[var(--gold)]" size={18} />
-                    Activity Timeline
-                </h2>
-
-                <div className="space-y-6">
-                    {activityLoading ? (
-                        <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading activity...</p>
-                    ) : activities.length === 0 ? (
-                        <div className="text-center py-8 text-[var(--text-muted)]">
-                            <Clock size={32} className="mx-auto mb-3 opacity-30" />
-                            <p className="text-sm">No recent activity</p>
+                    {/* GPS Location Map */}
+                    {customer.latitude && customer.longitude && (
+                        <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-lg rounded-[var(--radius-lg)] p-6">
+                            <h3 className="text-[10px] tracking-widest text-[var(--text-muted)] uppercase mb-4 font-bold flex items-center justify-between">
+                                GPS Location
+                                <span className="bg-[var(--green-bright)]/10 text-[var(--green-bright)] border border-[var(--green-bright)]/30 px-2 py-0.5 rounded-sm flex items-center gap-1 shadow-[0_0_10px_rgba(0,255,100,0.1)]">
+                                    <MapPin size={10} /> Verified
+                                </span>
+                            </h3>
+                            <CustomerMap latitude={customer.latitude} longitude={customer.longitude} customerName={customer.name} />
                         </div>
-                    ) : (
-                        <div className="relative before:absolute before:inset-0 before:ml-[1.125rem] before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-[var(--border)] before:to-transparent">
-                            {activities.map((act: any) => (
-                                <div key={act.id} className="relative flex items-start gap-4 mb-6 last:mb-0">
-                                    <div className="relative z-10 flex shrink-0 items-center justify-center w-9 h-9 rounded-full border bg-[var(--bg-card)] shadow-sm font-semibold 
-                                            text-sm">
-                                        {act.type.includes('ORDER') ? (
-                                            <Package size={16} className={act.type === 'ORDER_RETURNED' ? 'text-[var(--orange)]' : 'text-[var(--gold)]'} />
-                                        ) : act.type === 'LOCATION_SHARED' ? (
-                                            <MapPin size={16} className="text-[var(--whatsapp)]" />
-                                        ) : (
-                                            <CreditCard size={16} className="text-[var(--green-bright)]" />
-                                        )}
-                                    </div>
-                                    <div className="flex-1 bg-[var(--bg-secondary)]/30 rounded-[var(--radius-md)] p-4 border border-[var(--border)]/50">
-                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-                                            <h4 className="font-medium text-[var(--text-primary)] text-sm">{act.title}</h4>
-                                            <time className="text-xs text-[var(--text-muted)] font-medium">
-                                                {formatDistanceToNow(new Date(act.createdAt), { addSuffix: true })}
-                                            </time>
-                                        </div>
-                                        <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-2">
-                                            <p className="text-sm text-[var(--text-secondary)]">{act.description}</p>
-                                            {(act.amount !== null && act.amount > 0) ? (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--bg-primary)]/50 border border-[var(--border)]">
-                                                        {act.status}
-                                                    </span>
-                                                    <span className={`text-sm font-bold ${act.type.includes('PAYMENT') ? 'text-[var(--green-bright)]' : ''}`} style={{ fontFamily: "var(--font-mono)" }}>
-                                                        {act.type.includes('PAYMENT') ? '+' : ''}{formatINR(act.amount)}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--green-bright)]/10 text-[var(--green-bright)] border border-[var(--green-bright)]/20">
-                                                        {act.status}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                    )}
+                </div>
+
+                {/* RIGHT MAIN CONTENT */}
+                <div className="w-full lg:w-2/3 space-y-6">
+                    {/* Payment Ageing */}
+                    {paymentSummary && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {[
+                                { label: "Current", amount: paymentSummary.current, color: "var(--green-bright)" },
+                                { label: "30+ Days", amount: paymentSummary.overdue30, color: "var(--warning)" },
+                                { label: "60+ Days", amount: paymentSummary.overdue60, color: "var(--orange)" },
+                                { label: "90+ Days", amount: paymentSummary.overdue90, color: "var(--red)" },
+                            ].map((a) => (
+                                <div key={a.label} className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-[var(--radius-md)] p-5 text-center group hover:-translate-y-1 hover:bg-white/[0.04] hover:shadow-xl transition-all duration-300">
+                                    <p className="text-[10px] uppercase tracking-widest font-bold mb-2 group-hover:scale-105 transition-transform" style={{ color: a.color }}>{a.label}</p>
+                                    <p className="text-xl font-bold tracking-tight" style={{ fontFamily: "var(--font-mono)", color: a.amount > 0 ? a.color : "var(--text-muted)" }}>{formatINR(a.amount ?? 0)}</p>
                                 </div>
                             ))}
                         </div>
                     )}
+
+                    {/* Recent Orders */}
+                    <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-[var(--radius-lg)] overflow-hidden">
+                        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-transparent to-white/[0.01]">
+                            <h2 className="font-semibold text-lg" style={{ fontFamily: "var(--font-playfair)" }}>Recent Orders</h2>
+                            <Link href={`/orders/new?customer=${customer.id}`} className="px-4 py-2 bg-[var(--gold)] text-black text-xs font-bold rounded-md hover:bg-[var(--gold-light)] hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:-translate-y-0.5 transition-all duration-300">
+                                + New Order
+                            </Link>
+                        </div>
+                        <div className="p-2 space-y-1">
+                            {/* Header Row */}
+                            <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_auto] gap-4 p-3 text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold border-b border-white/5 mx-2">
+                                <div>Order #</div>
+                                <div>Date</div>
+                                <div className="text-right">Amount</div>
+                                <div className="text-center">Status</div>
+                                <div className="text-right w-20">Actions</div>
+                            </div>
+
+                            {recentOrders.length === 0 ? (
+                                <div className="p-10 text-center text-[var(--text-muted)] animate-in fade-in">
+                                    <Package size={40} className="mx-auto mb-3 opacity-20" />
+                                    <p>No orders yet</p>
+                                </div>
+                            ) : (
+                                recentOrders.map((order: any) => (
+                                    <div key={order.id} className="group grid grid-cols-[1.5fr_1fr_1fr_1fr_auto] gap-4 p-3 mx-2 items-center rounded-lg border border-transparent hover:bg-white/5 hover:border-white/10 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-default">
+                                        <div className="font-medium">
+                                            <Link href={`/orders/${order.id}`} className="text-[var(--gold)] hover:text-[var(--gold-light)] transition-colors">{order.orderNumber}</Link>
+                                        </div>
+                                        <div className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{formatDate(order.createdAt)}</div>
+                                        <div className="text-sm text-right font-bold tracking-tight group-hover:text-[var(--green-bright)] transition-colors" style={{ fontFamily: "var(--font-mono)" }}>
+                                            {formatINR(order.netAmount)}
+                                        </div>
+                                        <div className="text-center">
+                                            <span className={`inline-block px-2.5 py-1 text-[10px] font-bold uppercase rounded-md tracking-widest border ${order.status === 'DELIVERED' ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)] border-[var(--green-bright)]/20 shadow-[inset_0_0_10px_rgba(0,255,100,0.1)]' :
+                                                order.status === 'CANCELLED' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                                    order.status === 'DRAFT' ? 'bg-white/5 text-[var(--text-secondary)] border-white/10' :
+                                                        'bg-[var(--gold)]/10 text-[var(--gold)] border-[var(--gold)]/20 shadow-[inset_0_0_10px_rgba(251,191,36,0.1)]'
+                                                }`}>
+                                                {order.status}
+                                            </span>
+                                        </div>
+                                        <div className="text-right w-20 flex justify-end">
+                                            {order.invoiceId && customer.phone && (
+                                                <a href={buildWhatsAppInvoiceLink({
+                                                    customerPhone: customer.phone, customerName: customer.name, invoiceNumber: order.orderNumber, invoiceAmount: order.netAmount, invoiceId: order.invoiceId,
+                                                })} target="_blank" rel="noopener noreferrer"
+                                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[var(--whatsapp)]/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)] hover:text-black hover:shadow-[0_0_12px_rgba(37,211,102,0.4)] hover:-translate-y-0.5 transition-all duration-300" title="Send Invoice">
+                                                    <Send size={14} className="ml-[-1px]" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Recent Payments */}
+                    <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-[var(--radius-lg)] overflow-hidden">
+                        <div className="p-5 border-b border-white/5 bg-gradient-to-r from-transparent to-white/[0.01]">
+                            <h2 className="font-semibold text-lg" style={{ fontFamily: "var(--font-playfair)" }}>Recent Payments</h2>
+                        </div>
+                        <div className="p-2 space-y-1">
+                            <div className="grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-4 p-3 text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold border-b border-white/5 mx-2">
+                                <div>Date</div>
+                                <div>Method</div>
+                                <div className="text-right">Amount</div>
+                                <div className="text-right">Reference</div>
+                            </div>
+                            {recentPayments.length === 0 ? (
+                                <div className="p-10 text-center text-[var(--text-muted)]">
+                                    <CreditCard size={40} className="mx-auto mb-3 opacity-20" />
+                                    <p>No payments recorded</p>
+                                </div>
+                            ) : (
+                                recentPayments.map((p: any) => (
+                                    <div key={p.id} className="group grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-4 p-3 mx-2 items-center rounded-lg border border-transparent hover:bg-white/5 hover:border-white/10 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-default">
+                                        <div className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{formatDate(p.paidAt ?? p.createdAt)}</div>
+                                        <div><span className="px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-widest bg-[var(--gold)]/10 text-[var(--gold)] border border-[var(--gold)]/20">{p.method?.replace("_", " ")}</span></div>
+                                        <div className="text-sm text-right font-bold tracking-tight text-[var(--green-bright)] group-hover:drop-shadow-[0_0_8px_rgba(0,255,100,0.3)] transition-all" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(p.amount ?? 0)}</div>
+                                        <div className="text-sm text-right text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] truncate transition-colors">{p.referenceNumber ?? "—"}</div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Customer Activity Feed */}
+                    <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-[var(--radius-lg)] p-8 mt-8 relative overflow-hidden">
+                        <div className="absolute top-0 right-1/4 w-96 h-96 opacity-10 pointer-events-none blur-[100px] bg-[var(--gold)] rounded-full mix-blend-screen" />
+                        <h2 className="font-semibold text-lg mb-8 flex items-center gap-3 relative z-10" style={{ fontFamily: "var(--font-playfair)" }}>
+                            <div className="w-8 h-8 rounded-lg bg-[var(--gold)]/10 flex items-center justify-center border border-[var(--gold)]/20 shadow-[0_0_15px_rgba(251,191,36,0.15)]">
+                                <Clock className="text-[var(--gold)]" size={16} />
+                            </div>
+                            Activity Timeline
+                        </h2>
+
+                        <div className="space-y-6 relative z-10">
+                            {activityLoading ? (
+                                <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading activity trace...</p>
+                            ) : activities.length === 0 ? (
+                                <div className="text-center py-10 text-[var(--text-muted)]">
+                                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 border border-white/10 shadow-inner">
+                                        <Clock size={24} className="opacity-40" />
+                                    </div>
+                                    <p className="text-sm tracking-widest uppercase">No temporal traces found</p>
+                                </div>
+                            ) : (
+                                <div className="relative before:absolute before:inset-0 before:ml-[1.125rem] before:-translate-x-px before:h-full before:w-[2px] before:bg-gradient-to-b before:from-[var(--gold)] before:via-[var(--gold)]/20 before:to-transparent">
+                                    {activities.map((act: any, i: number) => {
+                                        const isOrder = act.type.includes('ORDER');
+                                        const isLocation = act.type === 'LOCATION_SHARED';
+                                        const colorVar = isOrder ? (act.type === 'ORDER_RETURNED' ? 'var(--orange)' : 'var(--gold)') : isLocation ? 'var(--whatsapp)' : 'var(--green-bright)';
+                                        return (
+                                            <div key={act.id} className="group relative flex items-start gap-5 mb-8 last:mb-0">
+                                                <div className="relative z-10 flex shrink-0 items-center justify-center w-9 h-9 rounded-full bg-[var(--bg-primary)] border-2 transition-transform duration-500 group-hover:scale-110" style={{ borderColor: `${colorVar}40`, boxShadow: `0 0 15px ${colorVar}40` }}>
+                                                    {isOrder ? <Package size={14} style={{ color: colorVar }} /> : isLocation ? <MapPin size={14} style={{ color: colorVar }} /> : <CreditCard size={14} style={{ color: colorVar }} />}
+                                                </div>
+                                                <div className="flex-1 bg-[var(--bg-card)] rounded-[var(--radius-lg)] p-5 border border-[var(--border)] shadow-sm hover:bg-[var(--bg-card-hover)] hover:-translate-y-0.5 transition-all duration-300">
+                                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
+                                                        <h4 className="font-semibold text-white/90 text-sm tracking-wide">{act.title}</h4>
+                                                        <time className="text-[10px] uppercase tracking-widest text-[var(--gold)]/70 font-medium bg-[var(--gold)]/5 px-2 py-1 rounded border border-[var(--gold)]/10">
+                                                            {formatDistanceToNow(new Date(act.createdAt), { addSuffix: true })}
+                                                        </time>
+                                                    </div>
+                                                    <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4">
+                                                        <p className="text-sm text-[var(--text-muted)] leading-relaxed">{act.description}</p>
+                                                        {(act.amount !== null && act.amount > 0) ? (
+                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-sm bg-black/40 border border-white/10 uppercase tracking-widest text-[#a1a1aa]">
+                                                                    {act.status}
+                                                                </span>
+                                                                <span className="text-sm font-bold tracking-tight" style={{ fontFamily: "var(--font-mono)", color: colorVar, textShadow: `0 0 10px ${colorVar}40` }}>
+                                                                    {act.type.includes('PAYMENT') ? '+' : ''}{formatINR(act.amount)}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-sm bg-black/40 border border-white/10 uppercase tracking-widest" style={{ color: colorVar }}>
+                                                                    {act.status}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -76,23 +76,48 @@ export class AnalyticsService {
 
     async getSales(orgId: string, from: string, to: string, groupBy: string) {
         const where = { orgId, createdAt: { gte: new Date(from), lte: new Date(to) }, status: { not: 'CANCELLED' as const } };
-        const orders = await this.prisma.order.findMany({ where, include: { items: { include: { product: { select: { category: true, brand: true } } } }, customer: true, salesman: true } });
+        const orders = await this.prisma.order.findMany({ where, include: { items: { include: { product: { select: { name: true, category: true, brand: true } } } }, customer: true, salesman: true } });
 
         const grouped = new Map<string, { label: string; revenue: number; orders: number }>();
         for (const order of orders) {
-            let key: string;
-            if (groupBy === 'customer') key = order.customer?.name ?? 'Unknown';
-            else if (groupBy === 'day') key = order.createdAt.toISOString().split('T')[0];
-            else if (groupBy === 'month') key = `${order.createdAt.getFullYear()}-${order.createdAt.getMonth() + 1}`;
-            else key = 'All';
+            if (groupBy === 'category' || groupBy === 'product') {
+                const uniqueGroupsInOrder = new Set<string>();
+                for (const item of order.items) {
+                    const key = groupBy === 'category' ? (item.product?.category ?? 'Other') : (item.product?.name ?? 'Unknown');
+                    const existing = grouped.get(key) ?? { label: key, revenue: 0, orders: 0 };
+                    existing.revenue += item.totalAmount ?? 0;
+                    if (!uniqueGroupsInOrder.has(key)) {
+                        existing.orders++;
+                        uniqueGroupsInOrder.add(key);
+                    }
+                    grouped.set(key, existing);
+                }
+            } else {
+                let key: string;
+                if (groupBy === 'customer') key = order.customer?.name ?? 'Unknown';
+                else if (groupBy === 'region') key = order.customer?.city ?? 'Unknown';
+                else if (groupBy === 'day') key = order.createdAt.toISOString().split('T')[0];
+                else if (groupBy === 'week') {
+                    const d = new Date(order.createdAt);
+                    d.setDate(d.getDate() - d.getDay());
+                    key = d.toISOString().split('T')[0];
+                }
+                else if (groupBy === 'month') key = `${order.createdAt.getFullYear()}-${String(order.createdAt.getMonth() + 1).padStart(2, '0')}`;
+                else key = 'All';
 
-            const existing = grouped.get(key) ?? { label: key, revenue: 0, orders: 0 };
-            existing.revenue += order.netAmount;
-            existing.orders++;
-            grouped.set(key, existing);
+                const existing = grouped.get(key) ?? { label: key, revenue: 0, orders: 0 };
+                existing.revenue += order.netAmount;
+                existing.orders++;
+                grouped.set(key, existing);
+            }
         }
 
-        return { data: Array.from(grouped.values()), total: orders.reduce((s, o) => s + o.netAmount, 0) };
+        let data = Array.from(grouped.values());
+        if (['customer', 'product', 'category', 'region'].includes(groupBy)) {
+            data = data.sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+        }
+
+        return { data, total: orders.reduce((s, o) => s + o.netAmount, 0) };
     }
 
     async getCollections(orgId: string, from: string, to: string) {

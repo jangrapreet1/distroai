@@ -89,9 +89,9 @@ export const createRunReportTool = (orgId: string, prisma: PrismaService) => {
                 const top = await prisma.$queryRaw`
           SELECT p.name, SUM(oi.quantity) as qty, SUM(oi."totalAmount") as revenue
           FROM "OrderItem" oi
-          JOIN "Order" o ON oi.order_id = o.id
-          JOIN "Product" p ON oi.product_id = p.id
-          WHERE o.org_id = ${orgId} AND o.status IN ('DELIVERED', 'DISPATCHED')
+          JOIN "Order" o ON oi."orderId" = o.id
+          JOIN "Product" p ON oi."productId" = p.id
+          WHERE o."orgId" = ${orgId} AND o.status IN ('DELIVERED', 'DISPATCHED')
           GROUP BY p.name
           ORDER BY revenue DESC
           LIMIT 5

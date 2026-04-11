@@ -19,7 +19,7 @@ export function greeting(): string {
     return "Good evening";
 }
 
-export function formatINRShared(n: number): string {
+export function formatINR(n: number): string {
     return "₹" + n.toLocaleString("en-IN");
 }
 
@@ -38,7 +38,7 @@ export function buildWhatsAppInvoiceLink(opts: {
     const invoiceUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/invoices/${opts.invoiceId}`;
     const message = `Hello ${opts.customerName},
 
-Your invoice *${opts.invoiceNumber}* for *${formatINRShared(opts.invoiceAmount)}* is ready.
+Your invoice *${opts.invoiceNumber}* for *${formatINR(opts.invoiceAmount)}* is ready.
 
 View invoice: ${invoiceUrl}
 
@@ -119,4 +119,43 @@ export function parseGstin(gstin: string): { valid: boolean; stateCode?: string;
     const stateName = STATE_CODES[stateCode];
 
     return { valid: !!stateName, stateCode, stateName, pan };
+}
+
+/**
+ * Generic utility to export an array of objects to a CSV file.
+ * @param filename Name of the exported file (without .csv extension)
+ * @param data Array of objects (keys become headers)
+ */
+export function exportToCSV<T extends Record<string, any>>(filename: string, data: T[]) {
+    if (!data || !data.length) return;
+
+    // Extract headers (keys of the first object)
+    const headers = Object.keys(data[0]);
+
+    // Build CSV string
+    const csvContent = [
+        headers.join(","), // Header row
+        ...data.map((row) =>
+            headers
+                .map((header) => {
+                    let cell = row[header] === null || row[header] === undefined ? "" : String(row[header]);
+                    // Escape quotes and handle commas
+                    if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+                        cell = `"${cell.replace(/"/g, '""')}"`;
+                    }
+                    return cell;
+                })
+                .join(",")
+        ),
+    ].join("\n");
+
+    // Create a Blob and trigger download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }

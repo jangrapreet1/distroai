@@ -163,6 +163,7 @@ model Organization {
   demandForecasts DemandForecast[]
   shelfAudits     ShelfAudit[]
   aiQueries       AIQuery[]
+  ledgerEntries   LedgerEntry[]
   whatsappConfig  WhatsAppConfig?
   waSessions      WhatsAppSession[]
   waMessages      WhatsAppMessage[]
@@ -354,6 +355,7 @@ model Customer {
   tier             CustomerTier @default(BRONZE)
   creditLimit      Float        @default(0)
   creditDays       Int          @default(0)
+  gracePeriodDays  Int          @default(7) // Allowed days past due date before blocking
   outstandingAmount Float       @default(0)
   paymentScore     Float        @default(100) // 0-100 AI computed
   routeId          String?
@@ -379,6 +381,7 @@ model Customer {
   paymentScoreLogs PaymentScoreLog[]
   shelfAudits      ShelfAudit[]
   locationRequests LocationRequest[]
+  ledgerEntries    LedgerEntry[]
 
   @@index([orgId])
   @@index([salesmanId])
@@ -636,6 +639,39 @@ model PaymentAllocation {
 
   @@index([paymentId])
   @@index([invoiceId])
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerReferenceType {
+  INVOICE
+  PAYMENT
+  MANUAL_ADJUSTMENT
+  RETURN
+  CANCELLATION
+}
+
+model LedgerEntry {
+  id            String              @id @default(cuid())
+  orgId         String
+  customerId    String
+  type          LedgerEntryType
+  amount        Float
+  balance       Float               // Running balance after this entry
+  referenceId   String?
+  referenceType LedgerReferenceType
+  notes         String?
+  createdAt     DateTime            @default(now())
+
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer      Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([referenceId])
 }
 
 model Salesman {

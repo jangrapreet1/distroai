@@ -53,7 +53,17 @@ export class PaymentsService {
     }
 
     async create(orgId: string, dto: CreatePaymentDto) {
-        return this.prisma.$transaction(async (tx: any) => {
+        const payment = await this.prisma.$transaction(async (tx: any) => {
+            await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${dto.customerId} FOR UPDATE`;
+
+            // Guard: reject payment if the target invoice is already fully paid
+            if (dto.invoiceId) {
+                const targetInv = await tx.invoice.findFirst({ where: { id: dto.invoiceId, orgId } });
+                if (targetInv && targetInv.balanceAmount <= 0) {
+                    throw new BadRequestException({ code: 'ALREADY_PAID', message: 'This invoice is already fully paid' });
+                }
+            }
+
             const payment = await tx.payment.create({
                 data: { orgId, customerId: dto.customerId, invoiceId: dto.invoiceId, amount: dto.amount, method: dto.method, referenceNumber: dto.referenceNumber, notes: dto.notes, paidAt: dto.paidAt ? new Date(dto.paidAt) : new Date(), status: 'COMPLETED' },
             });
@@ -74,6 +84,19 @@ export class PaymentsService {
                     await tx.paymentAllocation.create({
                         data: { paymentId: payment.id, invoiceId: invoice.id, amountAllocated: allocate }
                     });
+
+                    // Sync payment to the linked Order (Order.invoiceId → Invoice.id)
+                    const linkedOrder = await tx.order.findFirst({ where: { invoiceId: invoice.id } });
+                    if (linkedOrder) {
+                        await tx.order.update({
+                            where: { id: linkedOrder.id },
+                            data: {
+                                paidAmount: newPaid,
+                                balanceAmount: newBalance,
+                            }
+                        });
+                    }
+
                     remainingAmount -= allocate;
                 }
             }
@@ -97,6 +120,19 @@ export class PaymentsService {
                     await tx.paymentAllocation.create({
                         data: { paymentId: payment.id, invoiceId: inv.id, amountAllocated: allocate }
                     });
+
+                    // Sync payment to the linked Order (Order.invoiceId → Invoice.id)
+                    const linkedOrder = await tx.order.findFirst({ where: { invoiceId: inv.id } });
+                    if (linkedOrder) {
+                        await tx.order.update({
+                            where: { id: linkedOrder.id },
+                            data: {
+                                paidAmount: newPaid,
+                                balanceAmount: newBalance,
+                            }
+                        });
+                    }
+
                     remainingAmount -= allocate;
                 }
             }
@@ -109,18 +145,40 @@ export class PaymentsService {
                 });
             }
 
-            await tx.customer.update({ where: { id: dto.customerId }, data: { outstandingAmount: { decrement: dto.amount } } });
+            // Decrement outstanding mathematically by the FULL payment amount
+            // Advance portion is just money we owe them (negative outstanding)
+            const customer = await tx.customer.update({
+                where: { id: dto.customerId },
+                data: { outstandingAmount: { decrement: dto.amount } },
+                select: { outstandingAmount: true }
+            });
+
+            await tx.ledgerEntry.create({
+                data: {
+                    orgId,
+                    customerId: dto.customerId,
+                    type: 'CREDIT',
+                    amount: dto.amount,
+                    balance: customer.outstandingAmount,
+                    referenceId: payment.id,
+                    referenceType: 'PAYMENT',
+                    notes: `Payment received: ${dto.method}`
+                }
+            });
 
             // Async: trigger payment score recalculation (log for now)
             this.logger.log(`[TODO] Recalculate payment score for customer ${dto.customerId}`);
 
-            await Promise.all([
-                this.redis.del(`analytics:dashboard:${orgId}`),
-                this.redis.del(`analytics:sales:${orgId}`)
-            ]);
-
             return payment;
         });
+
+        // Invalidate analytics cache AFTER transaction commits (#9)
+        await Promise.all([
+            this.redis.del(`analytics:dashboard:${orgId}`),
+            this.redis.del(`analytics:sales:${orgId}`)
+        ]);
+
+        return payment;
     }
 
 
@@ -162,6 +220,15 @@ export class PaymentsService {
                 // amount is in paise, convert to actual
                 const amount = entity.amount / 100;
                 const referenceNumber = entity.id;
+
+                // Idempotency check: skip if this Razorpay payment was already processed (#2)
+                const existing = await this.prisma.payment.findFirst({
+                    where: { referenceNumber, orgId },
+                });
+                if (existing) {
+                    this.logger.warn(`[Razorpay Webhook] Duplicate payment skipped: ${referenceNumber}`);
+                    return { received: true, duplicate: true };
+                }
 
                 // Create payment
                 const payment = await this.create(orgId, {
@@ -220,10 +287,10 @@ export class PaymentsService {
             }
 
             // If outstandingAmount is higher than the sum of unpaid invoices (e.g. Opening Balance without invoice),
-            // add it to 'current' bucket so the math matches.
+            // add it to 'overdue90' bucket since unaccounted debt is usually migrated old debt.
             const unaccounted = c.outstandingAmount - totalInvoiced;
             if (unaccounted > 0) {
-                buckets.current += unaccounted;
+                buckets.overdue90 += unaccounted;
             }
 
             // Calculate pseudo avgDaysOverdue from the oldest invoice

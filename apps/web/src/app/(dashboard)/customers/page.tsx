@@ -1,4 +1,5 @@
 "use client";
+import { formatINR, exportToCSV } from "@/lib/utils";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -8,7 +9,6 @@ import toast from "react-hot-toast";
 import { AddCustomerModal } from "@/components/AddCustomerModal";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 const TABS = ["All", "GOLD", "SILVER", "BRONZE", "High Risk", "Dormant"];
 const CUSTOMER_TYPES = ["RETAILER", "WHOLESALER", "INSTITUTION"];
@@ -62,7 +62,7 @@ export default function CustomersPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                 <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{t('customers')}</h1>
                 <div className="flex gap-2">
-                    <button onClick={() => toast(t('csv_import_soon'), { icon: "📁" })} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Upload size={14} /> {t('import')}</button>
+                    <button onClick={() => exportToCSV("customers", customers)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Upload size={14} /> Export</button>
                     <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] transition"><Plus size={16} /> {t('add_customer')}</button>
                 </div>
             </div>

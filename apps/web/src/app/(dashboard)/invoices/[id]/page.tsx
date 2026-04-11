@@ -5,11 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, Send, Download, CreditCard, CheckCircle, X, Link as LinkIcon, Receipt } from "lucide-react";
 import { useInvoice, useRecordPayment } from "@/hooks/api-hooks";
-import { formatDate, buildWhatsAppInvoiceLink } from "@/lib/utils";
+import { formatDate, buildWhatsAppInvoiceLink , formatINR } from "@/lib/utils";
 import apiClient from "@/lib/api-client";
 import toast from "react-hot-toast";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 const statusClass: Record<string, string> = { DRAFT: "badge-draft", SENT: "badge-sent", PARTIAL: "badge-partial", PAID: "badge-paid", OVERDUE: "badge-overdue", CANCELLED: "badge-cancelled" };
 

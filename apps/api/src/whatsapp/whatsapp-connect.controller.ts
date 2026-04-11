@@ -13,6 +13,8 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { encrypt } from '../common/utils/crypto.util';
+import { PlanLimitGuard } from '../common/guards/plan-limit.guard';
+import { RequiresFeature } from '../common/decorators/plan.decorator';
 
 const GRAPH_API = 'https://graph.facebook.com/v19.0';
 
@@ -22,7 +24,8 @@ class ConnectWhatsAppDto {
 
 @ApiTags('whatsapp')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PlanLimitGuard)
+@RequiresFeature('whatsappBot')
 @Controller('whatsapp')
 export class WhatsAppConnectController {
     private readonly logger = new Logger(WhatsAppConnectController.name);

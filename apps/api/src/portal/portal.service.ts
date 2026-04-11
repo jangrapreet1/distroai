@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { OrderSource, CustomerType } from '@distroai/db';
+import { PLAN_LIMITS, PlanName } from '../common/config/plan-limits.config';
 
 @Injectable()
 export class PortalService {
@@ -19,28 +20,62 @@ export class PortalService {
                     { slug: orgIdOrSlug }
                 ]
             },
-            select: { id: true, name: true, logoUrl: true, phone: true, email: true, address: true, city: true, state: true, slug: true }
+            select: { id: true, plan: true, name: true, logoUrl: true, phone: true, email: true, address: true, city: true, state: true, slug: true, businessType: true }
         });
         if (!org) throw new NotFoundException('Storefront not found or inactive');
+
+        if (!PLAN_LIMITS[org.plan as PlanName].features.customerPortal) {
+            throw new HttpException(
+                {
+                    code: 'PLAN_LIMIT_REACHED',
+                    feature: 'customerPortal',
+                    message: 'B2B Customer Portal is only available on the Starter plan and above.',
+                },
+                HttpStatus.PAYMENT_REQUIRED
+            );
+        }
+
         return org;
     }
 
     async getCatalog(orgId: string, customerId?: string) {
+        // Resolve customer type for tiered pricing
+        let customerType: string | null = null;
+        if (customerId) {
+            const customer = await this.prisma.customer.findUnique({
+                where: { id: customerId },
+                select: { type: true }
+            });
+            customerType = customer?.type ?? null;
+        }
+
         // Fetch active products with their current inventory
         const products = await this.prisma.product.findMany({
             where: { orgId, isActive: true },
             select: {
                 id: true, name: true, category: true, brand: true, imageUrl: true, imageUrls: true,
-                description: true, mrp: true, sellingPrice: true, unit: true, minStockLevel: true,
+                description: true, mrp: true, sellingPrice: true, purchasePrice: true, unit: true, minStockLevel: true,
                 inventories: {
                     select: { quantity: true, reservedQty: true }
                 }
             }
         });
 
-        // If customer is logged in (B2B), they get wholesale price (sellingPrice). Public gets MRP.
+        // Type-aware pricing:
+        //   WHOLESALER   → purchasePrice (deepest wholesale)
+        //   RETAILER     → sellingPrice  (standard trade price)
+        //   INSTITUTION  → sellingPrice  (same as retailer)
+        //   Guest/INDIVIDUAL → mrp       (retail price)
         return products.map(p => {
             const totalStock = p.inventories.reduce((sum, inv) => sum + (inv.quantity - inv.reservedQty), 0);
+
+            let price = p.mrp;
+            if (customerType === 'WHOLESALER') {
+                price = p.purchasePrice || p.sellingPrice || p.mrp;
+            } else if (customerType === 'RETAILER' || customerType === 'INSTITUTION') {
+                price = p.sellingPrice || p.mrp;
+            }
+
             return {
                 id: p.id,
                 name: p.name,
@@ -51,9 +86,10 @@ export class PortalService {
                 description: p.description,
                 unit: p.unit,
                 minStockLevel: p.minStockLevel,
-                price: customerId ? (p.sellingPrice || p.mrp) : p.mrp,
+                price,
                 originalPrice: p.mrp,
                 isB2B: !!customerId,
+                customerType: customerType || 'GUEST',
                 stock: totalStock,
                 inStock: totalStock > 0
             };

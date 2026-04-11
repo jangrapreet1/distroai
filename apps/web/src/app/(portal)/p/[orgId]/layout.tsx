@@ -46,7 +46,7 @@ export default function PortalOrgLayout({
     const realOrgId = storeInfo.id;
 
     return (
-        <PortalProvider orgId={realOrgId}>
+        <PortalProvider orgId={realOrgId} businessType={storeInfo.businessType ?? null}>
             <div className="min-h-screen bg-[#000000] text-[#f4f4f5] antialiased flex flex-col font-sans">
                 <PortalHeader storeInfo={storeInfo} />
                 <main className="flex-1 pb-20 md:pb-0">{children}</main>

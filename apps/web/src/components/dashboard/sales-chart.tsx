@@ -30,7 +30,7 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                 </div>
                 <div className="flex gap-1 bg-[var(--bg-secondary)] p-1 rounded-full border border-[var(--border)] shadow-inner">
                     {(["7D", "30D", "90D"] as const).map((r) => (
-                        <button key={r} onClick={() => onRangeChange(r)} className={`px-4 py-1.5 text-xs rounded-full transition ${chartRange === r ? "bg-[var(--gold)] text-[#1a1625] font-semibold shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}>
+                        <button key={r} onClick={() => onRangeChange(r)} className={`px-4 py-1.5 text-xs rounded-full transition ${chartRange === r ? "bg-[var(--gold)] text-[var(--bg-primary)] font-semibold shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}>
                             {r}
                         </button>
                     ))}
@@ -49,7 +49,7 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                             <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#5A5040" }} axisLine={false} tickLine={false} />
                             <YAxis domain={[0, 'auto']} tick={{ fontSize: 11, fill: "#5A5040" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                             <Tooltip
-                                contentStyle={{ background: "#1a1625", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "#F0E8D5" }}
+                                contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 12, color: "var(--tooltip-text)" }}
                                 labelStyle={{ color: "var(--text-muted)", marginBottom: 4 }}
                                 formatter={(value: number | undefined) => [<span className="font-semibold text-[var(--gold)]">{formatINR(value ?? 0)}</span>, "Revenue"]}
                                 labelFormatter={(label) => `Date: ${label}`}

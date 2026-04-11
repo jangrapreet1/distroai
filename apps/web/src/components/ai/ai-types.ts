@@ -85,12 +85,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     },
 ];
 
-export const EXAMPLE_PROMPTS = [
-    { icon: "Package" as const, text: "Which products will stock out this week?" },
-    { icon: "Users" as const, text: "Show me top 5 defaulters" },
-    { icon: "BarChart3" as const, text: "Compare sales this vs last month" },
-    { icon: "Clock" as const, text: "Collection plan for today" },
-];
 
 export const API_BASE = "/api/v1";
 export const COLORS = ["#a855f7", "#f59e0b", "#10b981", "#3b82f6", "#ef4444"];

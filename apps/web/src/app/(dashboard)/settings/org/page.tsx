@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { CheckCircle2 } from "lucide-react";
-import { useOrg, useUpdateOrg, useWarehouses } from "@/hooks/api-hooks";
+import { useOrg, useUpdateOrg, useWarehouses, useUploadFile } from "@/hooks/api-hooks";
 import toast from "react-hot-toast";
 import { parseGstin } from "@/lib/utils";
 import { SettingsLayout } from "@/components/ui/settings-layout";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 const INDIAN_STATES = [
     "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
@@ -31,6 +32,7 @@ function GeneralTab() {
     const { data: orgData } = useOrg();
     const { data: warehousesData } = useWarehouses();
     const updateOrg = useUpdateOrg();
+    const uploadFile = useUploadFile();
     const org = orgData?.data ?? orgData ?? {};
     const warehouses = warehousesData?.data ?? warehousesData ?? [];
 
@@ -110,7 +112,24 @@ function GeneralTab() {
                     <p className="text-xs text-[var(--text-muted)] mt-2">These IDs are required for API integrations or bulk uploads.</p>
                 </div>
             )}
-            <InputField label="Logo URL" value={form.logoUrl} onChange={(v) => set("logoUrl", v)} placeholder="https://..." />
+
+            <div className="pt-2 border-t border-[var(--border)] mt-4">
+                <span className="block text-sm font-medium mb-4">Organization Logo</span>
+                <div className="flex flex-col sm:flex-row gap-6 items-start">
+                    <div className="w-full sm:w-48 shrink-0">
+                        <ImageUpload
+                            value={form.logoUrl}
+                            onChange={(v) => set("logoUrl", v)}
+                            onUpload={(f) => uploadFile.mutateAsync(f)}
+                            disabled={updateOrg.isPending || uploadFile.isPending}
+                        />
+                    </div>
+                    <div className="flex-1 w-full space-y-2">
+                        <InputField label="Or Paste External Logo URL directly" value={form.logoUrl} onChange={(v) => set("logoUrl", v)} placeholder="https://..." />
+                        <p className="text-xs text-[var(--text-muted)] mt-2">Upload a transparent PNG for the best result on dark backgrounds.</p>
+                    </div>
+                </div>
+            </div>
 
             {/* Storefront Link */}
             {org?.id && (

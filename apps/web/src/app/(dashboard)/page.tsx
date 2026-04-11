@@ -33,7 +33,10 @@ export default function DashboardPage() {
 
     const { data: salesData } = useQuery({
         queryKey: ["analytics", "sales", from, to, "day"],
-        queryFn: () => apiClient.get("/api/v1/analytics/sales", { params: { from, to, groupBy: "day" } }).then((r) => r.data),
+        queryFn: () => apiClient.get("/api/v1/analytics/sales", {
+            params: { from, to, groupBy: "day" },
+            headers: { 'x-suppress-upgrade-modal': 'true' }
+        }).then((r) => r.data).catch(() => null),
         retry: false,
     });
 
@@ -64,8 +67,8 @@ export default function DashboardPage() {
     }, [salesData]);
 
     const alerts = useMemo(() => {
-        const items: { type: string; message: string; action: string; color: string; href?: string }[] = [];
-        if (lowStock > 0) items.push({ type: "stockout", message: `${lowStock} ${t('products_below_reorder')}`, action: t('view'), color: "var(--red)", href: "/inventory" });
+        const items: { type: string; message: string; action: string; color: string; href?: string; secondaryAction?: any }[] = [];
+        if (lowStock > 0) items.push({ type: "stockout", message: `${lowStock} ${t('products_below_reorder')}`, action: t('view'), color: "var(--red)", href: "/inventory", secondaryAction: { label: "Create PO", href: "/purchase-orders/new", icon: Plus } });
         if (outstanding > 0) items.push({ type: "overdue", message: `${formatINR(outstanding)} ${t('total_outstanding_from_customers')}`, action: t('collect'), color: "var(--warning)", href: "/customers" });
         recentOrders.slice(0, 3).forEach((o) => {
             items.push({ type: "order", message: `${o.orderNumber} — ${formatINR(o.netAmount)} from ${o.customer?.name ?? t('unknown')}`, action: t('view'), color: "var(--gold)", href: `/orders/${o.id}` });

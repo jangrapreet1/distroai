@@ -4,9 +4,8 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, Package, Truck, MapPin, XCircle, RotateCcw, Clock, Send, Edit, Plus, Trash2, Search } from "lucide-react";
 import { useOrder, useOrderAction, useUpdateDraftOrder, useProducts } from "@/hooks/api-hooks";
-import { formatDate, formatDateTime, buildWhatsAppInvoiceLink } from "@/lib/utils";
+import { formatDate, formatDateTime, buildWhatsAppInvoiceLink , formatINR } from "@/lib/utils";
 
-function formatINR(n: number): string { return "₹" + n.toLocaleString("en-IN"); }
 
 const statusClass: Record<string, string> = {
     DRAFT: "badge-draft", CONFIRMED: "badge-confirmed", PACKED: "badge-packed",

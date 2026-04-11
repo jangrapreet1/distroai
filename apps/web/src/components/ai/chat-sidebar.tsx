@@ -2,6 +2,33 @@
 
 import { Sparkles, MessageSquare, X } from "lucide-react";
 import type { ChatSession } from "./ai-types";
+import { useAiUsage } from "@/hooks/api-hooks";
+
+function AiUsageMeter() {
+    const { data: usage, isLoading } = useAiUsage();
+    if (isLoading || !usage || usage.limit === 0) return null;
+
+    const { current, limit } = usage;
+    const percentage = Math.min((current / limit) * 100, 100);
+    const isNearingLimit = percentage > 85;
+
+    return (
+        <div className="space-y-2 p-4 border-t border-[var(--border)] bg-[var(--bg-secondary)] relative">
+            <div className="flex justify-between text-xs">
+                <span className="text-[var(--text-secondary)] font-medium">Monthly AI Usage</span>
+                <span className={isNearingLimit ? "text-[var(--red)] font-semibold" : "text-[var(--text-muted)] font-mono"}>
+                    {current} / {limit}
+                </span>
+            </div>
+            <div className="h-1.5 w-full bg-[var(--bg-card)] rounded-full overflow-hidden border border-[var(--border)]">
+                <div
+                    className={`h-full rounded-full transition-all duration-1000 ${isNearingLimit ? 'bg-[var(--red)] shadow-[0_0_8px_var(--red)]' : 'bg-[var(--gold)] shadow-[0_0_8px_var(--gold)]'}`}
+                    style={{ width: `${percentage}%` }}
+                />
+            </div>
+        </div>
+    );
+}
 
 interface ChatSidebarProps {
     sessions: ChatSession[];
@@ -52,6 +79,7 @@ export function ChatSidebar({ sessions, activeSessionId, showHistoryMenu, onSele
                         ))
                     )}
                 </div>
+                <AiUsageMeter />
             </div>
         </>
     );

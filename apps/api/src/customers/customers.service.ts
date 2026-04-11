@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
     CreateCustomerDto, UpdateCustomerDto,
     ListCustomersQueryDto, DormantQueryDto,
 } from './dto/customers.dto';
+import { PLAN_LIMITS } from '../common/config/plan-limits.config';
 
 @Injectable()
 export class CustomersService {
@@ -40,6 +41,16 @@ export class CustomersService {
     }
 
     async create(orgId: string, dto: CreateCustomerDto) {
+        const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
+        if (!org) throw new NotFoundException('Organization not found');
+        const planKey = org.plan as keyof typeof PLAN_LIMITS;
+        const currentCount = await this.prisma.customer.count({ where: { orgId } });
+        const limit = PLAN_LIMITS[planKey]?.maxCustomers || 100;
+
+        if (currentCount >= limit) {
+            throw new BadRequestException({ code: 'PLAN_LIMIT_REACHED', message: `Your plan allows a maximum of ${limit} customers.` });
+        }
+
         // Prevent duplicate customers with the same phone in the same org
         if (dto.phone) {
             const existing = await this.prisma.customer.findFirst({

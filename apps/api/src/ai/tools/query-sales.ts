@@ -44,9 +44,9 @@ export const createQuerySalesTool = (orgId: string, prisma: PrismaService) => {
                 const topProducts = await prisma.$queryRaw`
           SELECT p.name, SUM(oi.quantity) as quantity, SUM(oi."totalAmount") as revenue
           FROM "OrderItem" oi
-          JOIN "Order" o ON oi.order_id = o.id
-          JOIN "Product" p ON oi.product_id = p.id
-          WHERE o.org_id = ${orgId} AND o.status IN ('DELIVERED', 'DISPATCHED')
+          JOIN "Order" o ON oi."orderId" = o.id
+          JOIN "Product" p ON oi."productId" = p.id
+          WHERE o."orgId" = ${orgId} AND o.status IN ('DELIVERED', 'DISPATCHED')
           GROUP BY p.name
           ORDER BY revenue DESC
           LIMIT 10
@@ -62,10 +62,10 @@ export const createQuerySalesTool = (orgId: string, prisma: PrismaService) => {
                 if (dimension === 'month') dateTrunc = 'month';
 
                 const raw = await prisma.$queryRawUnsafe(`
-          SELECT DATE_TRUNC('${dateTrunc}', o.created_at) as date, SUM(o.net_amount) as revenue
+          SELECT DATE_TRUNC('${dateTrunc}', o."createdAt") as date, SUM(o."netAmount") as revenue
           FROM "Order" o
-          WHERE o.org_id = $1 AND o.status IN ('DELIVERED', 'DISPATCHED')
-          GROUP BY DATE_TRUNC('${dateTrunc}', o.created_at)
+          WHERE o."orgId" = $1 AND o.status IN ('DELIVERED', 'DISPATCHED')
+          GROUP BY DATE_TRUNC('${dateTrunc}', o."createdAt")
           ORDER BY date DESC
           LIMIT 30
         `, orgId);

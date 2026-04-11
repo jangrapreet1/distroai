@@ -50,3 +50,7 @@ export class UpdateDraftOrderDto {
     @IsOptional() @IsString() notes?: string;
     @IsOptional() @IsDateString() deliveryDate?: string;
 }
+
+export class MarkPaidDto {
+    @IsOptional() @IsEnum(['CASH', 'UPI', 'CHEQUE', 'BANK_TRANSFER', 'CREDIT']) method?: 'CASH' | 'UPI' | 'CHEQUE' | 'BANK_TRANSFER' | 'CREDIT';
+}

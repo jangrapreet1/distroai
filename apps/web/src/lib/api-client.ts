@@ -1,5 +1,6 @@
 import axios from "axios";
 import { useAuthStore } from "@/stores/auth.store";
+import { useUpgradeStore } from "@/stores/upgrade.store";
 
 const apiClient = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL || "",
@@ -39,6 +40,23 @@ apiClient.interceptors.response.use(
     },
     async (error) => {
         const originalRequest = error.config;
+        const errorCode = error.response?.data?.code;
+
+        // Catch explicitly defined plan limits — but ONLY on user-initiated mutations (POST/PUT/PATCH/DELETE),
+        // never on background GET fetches (React Query) which would cause the modal to pop on page load.
+        const isGetRequest = originalRequest?.method?.toLowerCase() === 'get';
+        if (
+            (errorCode === 'PLAN_LIMIT_REACHED' || error.response?.status === 402)
+            && !originalRequest.headers?.['x-suppress-upgrade-modal']
+            && !isGetRequest
+        ) {
+            const featureName = error.response?.data?.feature?.replace(/([A-Z])/g, " $1").toLowerCase()
+                || error.response?.data?.message
+                || "this feature";
+
+            useUpgradeStore.getState().openModal(featureName);
+            return Promise.reject(error);
+        }
 
         if (error.response?.status === 401 && !originalRequest._retry) {
             if (isRefreshing) {

@@ -40,14 +40,21 @@ export class PaymentProcessor extends WorkerHost {
         const orgName = invoice.organization.name;
         const upiId = (invoice.organization.settings as any)?.upiId;
 
-        let message = `⚠️ *Payment Reminder*\n\nHi ${invoice.customer.name},\nYour invoice *${invoice.invoiceNumber}* from ${orgName} is *${data.daysOverdue} days overdue*.\n\nPending Amount: *₹${Number(invoice.balanceAmount).toLocaleString('en-IN')}*`;
+        let message = ``;
+        if (data.daysOverdue < 0) {
+            message = `💡 *Upcoming Payment Reminder*\n\nHi ${invoice.customer.name},\nThis is a friendly reminder that your invoice *${invoice.invoiceNumber}* from ${orgName} is due in *${Math.abs(data.daysOverdue)} days*.\n\nPending Amount: *₹${Number(invoice.balanceAmount).toLocaleString('en-IN')}*`;
+        } else if (data.daysOverdue === 0) {
+            message = `⚠️ *Payment Due Today*\n\nHi ${invoice.customer.name},\nYour invoice *${invoice.invoiceNumber}* from ${orgName} is *due today*.\n\nPending Amount: *₹${Number(invoice.balanceAmount).toLocaleString('en-IN')}*`;
+        } else {
+            message = `🚨 *Payment Overdue Alert*\n\nHi ${invoice.customer.name},\nYour invoice *${invoice.invoiceNumber}* from ${orgName} is *${data.daysOverdue} days overdue*.\n\nPending Amount: *₹${Number(invoice.balanceAmount).toLocaleString('en-IN')}*`;
+        }
 
         if (upiId) {
             const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(orgName)}&am=${Number(invoice.balanceAmount)}&cu=INR`;
             message += `\n\nPay via UPI: ${upiLink}`;
         }
 
-        message += `\n\nPlease clear the dues at the earliest. Reply 'balance' to this chat to check your total outstanding.`;
+        message += `\n\nPlease ignore if already paid. Reply 'balance' to this chat to check your total outstanding.`;
 
         await this.whatsappService.sendText(data.orgId, invoice.customer.phone, message);
         this.logger.log(`Sent payment reminder for invoice ${invoice.invoiceNumber} to ${invoice.customer.phone}`);
