@@ -794,33 +794,87 @@ export class OrdersService {
         }
       }
 
-      // Reverse financials on linked invoice (#1)
+      // ── GST Credit Note + Financial Reversal ──
       if (original.invoiceId && returnValue > 0) {
-        const invoice = await tx.invoice.findUnique({ where: { id: original.invoiceId } });
+        const invoice = await tx.invoice.findUnique({
+          where: { id: original.invoiceId },
+          include: { items: true },
+        });
         if (invoice) {
-          // Reduce the invoice balance (credit back the return value)
-          const newBalance = r2(Math.max(0, invoice.balanceAmount - returnValue));
-          const adjustedPaid = r2(Math.max(0, invoice.paidAmount - returnValue));
+          // Calculate proportional GST from original InvoiceItems
+          let cnCgst = 0, cnSgst = 0, cnIgst = 0, cnCess = 0, cnSubtotal = 0;
+
+          for (const ri of dto.items) {
+            const origOrderItem = original.items.find((i: any) => i.id === ri.orderItemId);
+            if (!origOrderItem) continue;
+
+            // Find matching InvoiceItem by productId
+            const invoiceItem = invoice.items.find(
+              (ii: any) => ii.productId === origOrderItem.productId,
+            );
+            if (!invoiceItem) continue;
+
+            // Pro-rate tax amounts: (returnQty / originalQty) * taxAmount
+            const ratio = ri.returnQty / invoiceItem.quantity;
+            cnCgst += r2(invoiceItem.cgstAmount * ratio);
+            cnSgst += r2(invoiceItem.sgstAmount * ratio);
+            cnIgst += r2(invoiceItem.igstAmount * ratio);
+            cnCess += r2((invoiceItem.cessRate * invoiceItem.taxableAmt / 100) * ratio);
+            cnSubtotal += r2(invoiceItem.taxableAmt * ratio);
+          }
+
+          cnCgst = r2(cnCgst);
+          cnSgst = r2(cnSgst);
+          cnIgst = r2(cnIgst);
+          cnCess = r2(cnCess);
+          cnSubtotal = r2(cnSubtotal);
+          const cnTotal = r2(cnSubtotal + cnCgst + cnSgst + cnIgst + cnCess);
+
+          // Generate credit note number
+          const cnCount = await tx.creditNote.count({ where: { orgId } });
+          const creditNoteNumber = `CN-${String(cnCount + 1).padStart(5, '0')}`;
+
+          // Mint the CreditNote
+          const creditNote = await tx.creditNote.create({
+            data: {
+              orgId,
+              creditNoteNumber,
+              customerId: original.customerId,
+              invoiceId: original.invoiceId,
+              returnOrderId: returnOrder.id,
+              creditNoteDate: new Date(),
+              originalInvoiceDate: invoice.invoiceDate,
+              reason: dto.reason ?? 'Goods returned',
+              subtotal: cnSubtotal,
+              cgstAmount: cnCgst,
+              sgstAmount: cnSgst,
+              igstAmount: cnIgst,
+              cessAmount: cnCess,
+              totalAmount: cnTotal,
+              status: 'ISSUED',
+            },
+          });
+
+          // Adjust the invoice balance
+          const newBalance = r2(Math.max(0, invoice.balanceAmount - cnTotal));
+          const adjustedPaid = r2(Math.max(0, invoice.paidAmount - cnTotal));
           const newStatus = newBalance <= 0 ? 'PAID' : (adjustedPaid > 0 ? 'PARTIAL' : invoice.status);
 
           await tx.invoice.update({
             where: { id: original.invoiceId },
             data: {
               balanceAmount: newBalance,
-              totalAmount: r2(invoice.totalAmount - returnValue),
+              totalAmount: r2(invoice.totalAmount - cnTotal),
               paidAmount: adjustedPaid,
               status: newStatus,
             },
           });
 
-          // Decrement customer outstanding by the return value natively (like a credit note)
-          const outstandingReduction = returnValue;
-          if (outstandingReduction > 0) {
-            await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${original.customerId} FOR UPDATE`;
-
+          // Decrement customer outstanding
+          if (cnTotal > 0) {
             const customer = await tx.customer.update({
               where: { id: original.customerId },
-              data: { outstandingAmount: { decrement: outstandingReduction } },
+              data: { outstandingAmount: { decrement: cnTotal } },
               select: { outstandingAmount: true },
             });
 
@@ -829,11 +883,11 @@ export class OrdersService {
                 orgId,
                 customerId: original.customerId,
                 type: 'CREDIT',
-                amount: outstandingReduction,
+                amount: cnTotal,
                 balance: customer.outstandingAmount,
-                referenceId: returnOrder.id,
-                referenceType: 'RETURN',
-                notes: `Return against order ${original.orderNumber}`,
+                referenceId: creditNote.id,
+                referenceType: 'CREDIT_NOTE',
+                notes: `Credit Note ${creditNoteNumber} against invoice ${invoice.invoiceNumber}`,
               },
             });
           }

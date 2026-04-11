@@ -395,4 +395,18 @@ export class InvoicesService {
                 : 'All data is consistent — no fixes needed',
         };
     }
+
+    async findCreditNotes(orgId: string, invoiceId?: string) {
+        const where: any = { orgId };
+        if (invoiceId) where.invoiceId = invoiceId;
+
+        return this.prisma.creditNote.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            include: {
+                customer: { select: { name: true, phone: true } },
+                returnOrder: { select: { orderNumber: true } },
+            },
+        });
+    }
 }

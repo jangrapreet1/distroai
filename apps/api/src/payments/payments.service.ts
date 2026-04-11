@@ -256,87 +256,53 @@ export class PaymentsService {
     }
 
     async getOutstanding(orgId: string) {
-        const now = new Date();
-        const nowTime = now.getTime();
+        // Read pre-computed aging buckets from Customer (populated by nightly cron)
         const customers = await this.prisma.customer.findMany({
             where: { orgId, outstandingAmount: { gt: 0 } },
-            // Fetch ALL unpaid invoices to properly calculate AR Aging buckets
-            include: { invoices: { where: { balanceAmount: { gt: 0 } }, orderBy: { dueDate: 'asc' } } },
+            select: {
+                id: true, name: true, phone: true, paymentScore: true,
+                outstandingAmount: true,
+                currentBilled: true, overdue30: true, overdue60: true, overdue90: true,
+                avgDaysOverdue: true, oldestDueDate: true, lastAgingCalculatedAt: true,
+            },
         });
 
-        return customers.map((c) => {
-            const oldestInvoice = c.invoices[0];
-            const buckets = { current: 0, overdue30: 0, overdue60: 0, overdue90: 0 };
-
-            // Distribute invoice balances into aging buckets
-            let totalInvoiced = 0;
-            for (const inv of c.invoices) {
-                totalInvoiced += inv.balanceAmount;
-                const diffMs = nowTime - inv.dueDate.getTime();
-                const daysOverdue = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-                if (daysOverdue <= 0) {
-                    buckets.current += inv.balanceAmount;
-                } else if (daysOverdue <= 30) {
-                    buckets.overdue30 += inv.balanceAmount;
-                } else if (daysOverdue <= 60) {
-                    buckets.overdue60 += inv.balanceAmount;
-                } else {
-                    buckets.overdue90 += inv.balanceAmount;
-                }
-            }
-
-            // If outstandingAmount is higher than the sum of unpaid invoices (e.g. Opening Balance without invoice),
-            // add it to 'overdue90' bucket since unaccounted debt is usually migrated old debt.
-            const unaccounted = c.outstandingAmount - totalInvoiced;
-            if (unaccounted > 0) {
-                buckets.overdue90 += unaccounted;
-            }
-
-            // Calculate pseudo avgDaysOverdue from the oldest invoice
-            let avgDaysOverdue = 0;
-            if (oldestInvoice && oldestInvoice.dueDate) {
-                const diffTime = Math.max(0, nowTime - oldestInvoice.dueDate.getTime());
-                avgDaysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            }
-
-            return {
-                customer: { id: c.id, name: c.name, phone: c.phone, paymentScore: c.paymentScore },
-                total: c.outstandingAmount,
-                avgDaysOverdue,
-                buckets,
-                oldestInvoice: oldestInvoice ? { invoiceNumber: oldestInvoice.invoiceNumber, dueDate: oldestInvoice.dueDate, amount: oldestInvoice.balanceAmount } : null,
-                paymentLinkUrl: null,
-            };
-        }).sort((a, b) => b.total - a.total);
+        return customers.map((c) => ({
+            customer: { id: c.id, name: c.name, phone: c.phone, paymentScore: c.paymentScore },
+            total: c.outstandingAmount,
+            avgDaysOverdue: c.avgDaysOverdue,
+            buckets: {
+                current: c.currentBilled,
+                overdue30: c.overdue30,
+                overdue60: c.overdue60,
+                overdue90: c.overdue90,
+            },
+            oldestDueDate: c.oldestDueDate,
+            lastAgingCalculatedAt: c.lastAgingCalculatedAt,
+            paymentLinkUrl: null,
+        })).sort((a, b) => b.total - a.total);
     }
 
     async getCollectionPlan(orgId: string) {
-        const nowTime = new Date().getTime();
+        // Read pre-computed aging data from Customer (populated by nightly cron)
         const customers = await this.prisma.customer.findMany({
             where: { orgId, outstandingAmount: { gt: 0 } },
-            include: {
-                payments: { orderBy: { createdAt: 'desc' }, take: 1 },
-                invoices: { where: { balanceAmount: { gt: 0 } }, orderBy: { dueDate: 'asc' }, take: 1 }
+            select: {
+                id: true, name: true, phone: true, whatsappNumber: true,
+                outstandingAmount: true, paymentScore: true, avgDaysOverdue: true,
+                lastAgingCalculatedAt: true,
             },
         });
 
         const scored = customers.map((c) => {
-            const oldestInvoice = c.invoices[0];
-            let daysOverdue = 0;
-            if (oldestInvoice && oldestInvoice.dueDate) {
-                const diffTime = Math.max(0, nowTime - oldestInvoice.dueDate.getTime());
-                daysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            }
-
-            const priorityScore = daysOverdue * 0.4 + (c.outstandingAmount / 1000) * 0.3 + ((100 - c.paymentScore) * 0.3);
+            const priorityScore = c.avgDaysOverdue * 0.4 + (c.outstandingAmount / 1000) * 0.3 + ((100 - c.paymentScore) * 0.3);
             return {
                 customer: { id: c.id, name: c.name, phone: c.phone, whatsappNumber: c.whatsappNumber },
                 outstandingAmount: c.outstandingAmount,
                 paymentScore: c.paymentScore,
                 priorityScore: Math.round(priorityScore * 100) / 100,
-                lastPaymentDate: c.payments[0]?.createdAt ?? null,
                 suggestedCollectionAmount: c.outstandingAmount,
+                lastAgingCalculatedAt: c.lastAgingCalculatedAt,
             };
         });
 

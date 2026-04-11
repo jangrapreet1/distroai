@@ -122,4 +122,83 @@ export class CronService {
             await this.queueService.addToQueue('ai', 'generate-weekly-digest', { orgId: org.id });
         }
     }
+
+    // AR Aging bucket recalculation — Midnight IST
+    @Cron('30 18 * * *') // 18:30 UTC = 00:00 IST
+    async recalculateAgingBuckets() {
+        this.logger.log('Running AR aging bucket recalculation...');
+        const now = new Date();
+        const nowTime = now.getTime();
+        const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+        // DRIFT-SAFE: Query unpaid invoices directly, never trust outstandingAmount
+        const unpaidInvoices = await this.prisma.invoice.findMany({
+            where: {
+                balanceAmount: { gt: 0 },
+                status: { notIn: ['CANCELLED', 'PAID'] },
+            },
+            select: {
+                customerId: true,
+                balanceAmount: true,
+                dueDate: true,
+            },
+        });
+
+        // Group by customerId
+        const customerBuckets = new Map<string, {
+            current: number; overdue30: number; overdue60: number; overdue90: number;
+            oldestDueDate: Date | null; totalDaysOverdue: number; overdueCount: number;
+        }>();
+
+        for (const inv of unpaidInvoices) {
+            if (!customerBuckets.has(inv.customerId)) {
+                customerBuckets.set(inv.customerId, {
+                    current: 0, overdue30: 0, overdue60: 0, overdue90: 0,
+                    oldestDueDate: null, totalDaysOverdue: 0, overdueCount: 0,
+                });
+            }
+            const b = customerBuckets.get(inv.customerId)!;
+            const daysOverdue = Math.floor((nowTime - inv.dueDate.getTime()) / MS_PER_DAY);
+
+            if (daysOverdue <= 0) {
+                b.current += inv.balanceAmount;
+            } else if (daysOverdue <= 30) {
+                b.overdue30 += inv.balanceAmount;
+            } else if (daysOverdue <= 60) {
+                b.overdue60 += inv.balanceAmount;
+            } else {
+                b.overdue90 += inv.balanceAmount;
+            }
+
+            if (daysOverdue > 0) {
+                b.totalDaysOverdue += daysOverdue;
+                b.overdueCount++;
+            }
+
+            if (!b.oldestDueDate || inv.dueDate < b.oldestDueDate) {
+                b.oldestDueDate = inv.dueDate;
+            }
+        }
+
+        // Batch update each customer
+        let updated = 0;
+        for (const [customerId, b] of customerBuckets) {
+            const r2 = (n: number) => Math.round(n * 100) / 100;
+            await this.prisma.customer.update({
+                where: { id: customerId },
+                data: {
+                    currentBilled: r2(b.current),
+                    overdue30: r2(b.overdue30),
+                    overdue60: r2(b.overdue60),
+                    overdue90: r2(b.overdue90),
+                    avgDaysOverdue: b.overdueCount > 0 ? Math.round(b.totalDaysOverdue / b.overdueCount) : 0,
+                    oldestDueDate: b.oldestDueDate,
+                    lastAgingCalculatedAt: now,
+                },
+            });
+            updated++;
+        }
+
+        this.logger.log(`AR aging recalculated for ${updated} customers from ${unpaidInvoices.length} unpaid invoices`);
+    }
 }

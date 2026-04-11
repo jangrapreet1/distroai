@@ -174,6 +174,7 @@ model Organization {
   settings        OrgSettings?
   purchaseOrders  PurchaseOrder[]
   expenses        Expense[]
+  creditNotes     CreditNote[]
 }
 
 model User {
@@ -368,6 +369,14 @@ model Customer {
   whatsappNumber   String?
   lastOrderDate    DateTime?
   lastVisitDate    DateTime?
+  // AR Aging cache (populated by nightly cron)
+  currentBilled          Float    @default(0)
+  overdue30              Float    @default(0)
+  overdue60              Float    @default(0)
+  overdue90              Float    @default(0)
+  avgDaysOverdue         Int      @default(0)
+  oldestDueDate          DateTime?
+  lastAgingCalculatedAt  DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -382,6 +391,7 @@ model Customer {
   shelfAudits      ShelfAudit[]
   locationRequests LocationRequest[]
   ledgerEntries    LedgerEntry[]
+  creditNotes      CreditNote[]
 
   @@index([orgId])
   @@index([salesmanId])
@@ -446,6 +456,7 @@ model Order {
   invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
   items        OrderItem[]
   statusHistory OrderStatusHistory[]
+  creditNotes  CreditNote[]
 
   @@unique([orgId, orderNumber])
   @@index([orgId, status])
@@ -563,6 +574,7 @@ model Invoice {
   items        InvoiceItem[]
   payments     Payment[]
   allocations  PaymentAllocation[]
+  creditNotes  CreditNote[]
 
   @@unique([orgId, invoiceNumber])
   @@index([orgId])
@@ -652,6 +664,7 @@ enum LedgerReferenceType {
   MANUAL_ADJUSTMENT
   RETURN
   CANCELLATION
+  CREDIT_NOTE
 }
 
 model LedgerEntry {
@@ -672,6 +685,46 @@ model LedgerEntry {
   @@index([orgId])
   @@index([customerId])
   @@index([referenceId])
+}
+
+model CreditNote {
+  id                  String           @id @default(cuid())
+  orgId               String
+  creditNoteNumber    String
+  customerId          String
+  invoiceId           String
+  returnOrderId       String
+  creditNoteDate      DateTime         @default(now())
+  originalInvoiceDate DateTime
+  reason              String           @default("Goods returned")
+  subtotal            Float            @default(0)
+  cgstAmount          Float            @default(0)
+  sgstAmount          Float            @default(0)
+  igstAmount          Float            @default(0)
+  cessAmount          Float            @default(0)
+  totalAmount         Float            @default(0)
+  status              CreditNoteStatus @default(ISSUED)
+  appliedToInvoiceId  String?
+  appliedAt           DateTime?
+  notes               String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id])
+  returnOrder  Order        @relation(fields: [returnOrderId], references: [id])
+
+  @@unique([orgId, creditNoteNumber])
+  @@index([orgId])
+  @@index([customerId])
+  @@index([invoiceId])
+}
+
+enum CreditNoteStatus {
+  ISSUED
+  APPLIED
+  VOID
 }
 
 model Salesman {

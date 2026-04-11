@@ -14,10 +14,12 @@ export class InvoicesController {
     @Post() create(@CurrentUser() u: JwtPayload, @Body() dto: CreateInvoiceDto) { return this.invoices.create(u.orgId, dto); }
     @Post('reconcile') reconcile(@CurrentUser() u: JwtPayload) { return this.invoices.reconcile(u.orgId); }
     @Get('gstr1') getGstr1(@CurrentUser() u: JwtPayload, @Query() q: GstrQueryDto) { return this.invoices.getGstr1(u.orgId, q.from, q.to); }
+    @Get('credit-notes') findCreditNotes(@CurrentUser() u: JwtPayload) { return this.invoices.findCreditNotes(u.orgId); }
     @Get(':id') findOne(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.invoices.findOne(u.orgId, id); }
     @Post(':id/send') send(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: SendInvoiceDto) { return this.invoices.send(u.orgId, id, dto.channels); }
     @Post(':id/pdf') pdf(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.invoices.generatePdf(u.orgId, id); }
     @Post(':id/e-invoice') eInvoice(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.invoices.eInvoice(u.orgId, id); }
     @Post(':id/e-waybill') eWaybill(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.invoices.eWaybill(u.orgId, id); }
     @Post(':id/payment-link') paymentLink(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.invoices.createPaymentLink(u.orgId, id); }
+    @Get(':id/credit-notes') findInvoiceCreditNotes(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.invoices.findCreditNotes(u.orgId, id); }
 }

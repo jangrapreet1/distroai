@@ -27,6 +27,7 @@ export class ReturnItemDto {
 
 export class ReturnOrderDto {
     @IsArray() @ValidateNested({ each: true }) @Type(() => ReturnItemDto) items!: ReturnItemDto[];
+    @IsOptional() @IsString() reason?: string;
 }
 
 export class DispatchOrderDto {
