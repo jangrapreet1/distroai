@@ -1,4 +1,6 @@
 # ── Ignore for Docker builds ──
+.env
+.env.*
 node_modules
 .git
 .github

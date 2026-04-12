@@ -22,11 +22,11 @@ export class CreateOrderDto {
 export class ReturnItemDto {
     @IsString() orderItemId!: string;
     @IsNumber() @Min(1) returnQty!: number;
-    @IsString() reason!: string;
+    @IsOptional() @IsString() reason?: string;
 }
 
 export class ReturnOrderDto {
-    @IsArray() @ValidateNested({ each: true }) @Type(() => ReturnItemDto) items!: ReturnItemDto[];
+    @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ReturnItemDto) items?: ReturnItemDto[];
     @IsOptional() @IsString() reason?: string;
 }
 

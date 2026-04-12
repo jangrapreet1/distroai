@@ -723,9 +723,22 @@ export class OrdersService {
       const r2 = (n: number) => Math.round(n * 100) / 100;
       const returnNumber = await this.generateOrderNumber(orgId);
 
+      // If items weren't provided, default to returning everything
+      const itemsToReturn = dto.items && dto.items.length > 0
+        ? dto.items
+        : original.items.map((i: any) => ({
+          orderItemId: i.id,
+          returnQty: i.quantity,
+          reason: dto.reason ?? "Returned entirely",
+        }));
+
       // Build return items and calculate return value
-      let returnValue = 0;
-      const returnItems = dto.items.map((ri) => {
+      let returnTotalAmount = 0;
+      let returnDiscountAmount = 0;
+      let returnTaxAmount = 0;
+      let returnNetAmount = 0;
+
+      const returnItems = itemsToReturn.map((ri) => {
         const origItem = original.items.find(
           (i: any) => i.id === ri.orderItemId,
         );
@@ -739,17 +752,34 @@ export class OrdersService {
             code: "CONFLICT",
             message: "Return qty exceeds ordered qty",
           });
-        const lineReturn = r2(origItem.price * ri.returnQty);
-        returnValue += lineReturn;
+
+        const ratio = ri.returnQty / origItem.quantity;
+        const lineTotal = r2((origItem.price * origItem.quantity) * ratio); // Tax-exclusive
+        const lineDiscount = r2((origItem.discount || 0) * ratio);
+        const lineTax = r2((origItem.taxAmount || 0) * ratio);
+        const lineNet = r2(lineTotal - lineDiscount + lineTax);
+
+        returnTotalAmount += lineTotal;
+        returnDiscountAmount += lineDiscount;
+        returnTaxAmount += lineTax;
+        returnNetAmount += lineNet;
+
         return {
           productId: origItem.productId,
           quantity: ri.returnQty,
           unit: origItem.unit,
           price: origItem.price,
-          totalAmount: lineReturn,
+          discount: lineDiscount,
+          taxRate: origItem.taxRate,
+          taxAmount: lineTax,
+          totalAmount: lineNet,
         };
       });
-      returnValue = r2(returnValue);
+
+      returnTotalAmount = r2(returnTotalAmount);
+      returnDiscountAmount = r2(returnDiscountAmount);
+      returnTaxAmount = r2(returnTaxAmount);
+      returnNetAmount = r2(returnNetAmount);
 
       const returnOrder = await tx.order.create({
         data: {
@@ -759,15 +789,17 @@ export class OrdersService {
           warehouseId: original.warehouseId,
           status: "RETURNED",
           type: "RETURN",
-          netAmount: returnValue,
-          totalAmount: returnValue,
+          totalAmount: returnTotalAmount,
+          discountAmount: returnDiscountAmount,
+          taxAmount: returnTaxAmount,
+          netAmount: returnNetAmount,
           items: { create: returnItems },
         },
         include: { items: true },
       });
 
       // Restore inventory
-      for (const ri of dto.items) {
+      for (const ri of itemsToReturn) {
         const origItem = original.items.find((i: any) => i.id === ri.orderItemId);
         if (!origItem) continue;
         const inv = await tx.inventory.findFirst({
@@ -795,7 +827,7 @@ export class OrdersService {
       }
 
       // ── GST Credit Note + Financial Reversal ──
-      if (original.invoiceId && returnValue > 0) {
+      if (original.invoiceId && returnNetAmount > 0) {
         const invoice = await tx.invoice.findUnique({
           where: { id: original.invoiceId },
           include: { items: true },
@@ -804,7 +836,7 @@ export class OrdersService {
           // Calculate proportional GST from original InvoiceItems
           let cnCgst = 0, cnSgst = 0, cnIgst = 0, cnCess = 0, cnSubtotal = 0;
 
-          for (const ri of dto.items) {
+          for (const ri of itemsToReturn) {
             const origOrderItem = original.items.find((i: any) => i.id === ri.orderItemId);
             if (!origOrderItem) continue;
 

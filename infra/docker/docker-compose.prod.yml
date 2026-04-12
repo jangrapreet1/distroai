@@ -22,8 +22,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: distroai_redis
-    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:-changeme}
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-changeme}
     volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
       - redis_data:/data
     networks:
       - distroai
@@ -40,7 +41,7 @@ services:
       context: ../../
       dockerfile: infra/docker/Dockerfile.api
     container_name: distroai_api
-    env_file: .env.production
+    env_file: /etc/distroai/.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-distroai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-distroai}?schema=public}
       REDIS_HOST: redis
@@ -63,7 +64,7 @@ services:
       context: ../../
       dockerfile: infra/docker/Dockerfile.worker
     container_name: distroai_worker
-    env_file: .env.production
+    env_file: /etc/distroai/.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-distroai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-distroai}?schema=public}
       REDIS_HOST: redis
@@ -99,7 +100,7 @@ services:
   caddy:
     image: caddy:2-alpine
     container_name: distroai_caddy
-    env_file: .env.production
+    env_file: /etc/distroai/.env
     ports:
       - "80:80"
       - "443:443"

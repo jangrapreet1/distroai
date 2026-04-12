@@ -104,70 +104,31 @@ jobs:
           docker push $ECR_REGISTRY/distroai-${{ matrix.service }}:$IMAGE_TAG
           docker push $ECR_REGISTRY/distroai-${{ matrix.service }}:latest
 
-  # ─── Deploy to EKS ────────────────────────────────────
+  # ─── Deploy to Hetzner ────────────────────────────────────
   deploy:
     name: Deploy to Production
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
-
-      - name: Login to ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Run database migrations
-        env:
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Setup SSH
         run: |
-          sed -i "s|\${ECR_REGISTRY}|$ECR_REGISTRY|g; s|\${IMAGE_TAG}|$IMAGE_TAG|g" infra/k8s/jobs/db-migrate.yaml
-          kubectl apply -f infra/k8s/jobs/db-migrate.yaml
-          kubectl wait --for=condition=complete job/db-migrate-$IMAGE_TAG -n distroai --timeout=300s
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.HETZNER_HOST }} >> ~/.ssh/known_hosts
+          
+          # Write environment SECRETS directly to the server as requested
+          ssh root@${{ secrets.HETZNER_HOST }} "mkdir -p /etc/distroai && echo '${{ secrets.PRODUCTION_ENV }}' > /etc/distroai/.env"
+        
+      - name: Pull updated images
+        run: ssh root@${{ secrets.HETZNER_HOST }} "cd /opt/distroai && docker compose pull"
 
-      - name: Deploy manifests
-        env:
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          # Replace image placeholders in all deployment manifests
-          for f in infra/k8s/api/deployment.yaml infra/k8s/web/deployment.yaml \
-                   infra/k8s/ai-service/deployment.yaml infra/k8s/worker/deployment.yaml; do
-            sed -i "s|\${ECR_REGISTRY}|$ECR_REGISTRY|g; s|\${IMAGE_TAG}|$IMAGE_TAG|g" "$f"
-          done
+      - name: Run DB migrations
+        run: ssh root@${{ secrets.HETZNER_HOST }} "cd /opt/distroai && docker compose run --rm api npx prisma migrate deploy"
 
-          # Apply all manifests
-          kubectl apply -f infra/k8s/namespace.yaml
-          kubectl apply -f infra/k8s/api/
-          kubectl apply -f infra/k8s/web/
-          kubectl apply -f infra/k8s/ai-service/
-          kubectl apply -f infra/k8s/worker/
-          kubectl apply -f infra/k8s/ingress/
-
-      - name: Wait for rollout
-        run: |
-          kubectl rollout status deployment/api -n distroai --timeout=300s
-          kubectl rollout status deployment/web -n distroai --timeout=300s
-          kubectl rollout status deployment/worker -n distroai --timeout=300s
-
-      - name: Smoke test
-        run: |
-          sleep 30
-          curl -sf https://api.distroai.in/health || exit 1
-          echo "✅ Smoke test passed"
+      - name: Deploy containers
+        run: ssh root@${{ secrets.HETZNER_HOST }} "cd /opt/distroai && docker compose up -d"
 
       - name: Notify Slack
         if: always()
@@ -176,6 +137,6 @@ jobs:
           status: ${{ job.status }}
           fields: repo,message,commit,author,action,eventName,ref
           text: |
-            Deploy ${{ job.status == 'success' && '✅' || '❌' }} — ${{ github.sha }}
+            Hetzner Deploy ${{ job.status == 'success' && '✅' || '❌' }} — ${{ github.sha }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
