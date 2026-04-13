@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ShoppingCart, LogIn, Search, X, User, LogOut, FileText, LayoutDashboard } from "lucide-react";
 import { usePortalCart, usePortalAuth, usePortalOrgId, usePortalBusinessType } from "@/contexts/portal-context";
 import { PortalAuthModal } from "./portal-auth-modal";
+import { SlideOverCart } from "./slide-over-cart";
 
 interface StoreInfo {
     id: string;
@@ -22,6 +23,7 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
     const [showSearch, setShowSearch] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const [isCartOpen, setIsCartOpen] = useState(false);
 
     const itemCount = cart.getItemCount();
 
@@ -135,9 +137,9 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
                         ) : null}
 
                         {/* Cart */}
-                        <Link
-                            href={`/p/${orgId}/cart`}
-                            className="relative p-2 text-zinc-300 hover:text-white transition-colors"
+                        <button
+                            onClick={() => setIsCartOpen(true)}
+                            className="relative p-2 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                         >
                             <ShoppingCart className="w-6 h-6" />
                             {itemCount > 0 && (
@@ -145,7 +147,7 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
                                     {itemCount > 99 ? "99+" : itemCount}
                                 </span>
                             )}
-                        </Link>
+                        </button>
                     </div>
                 </div>
 
@@ -175,6 +177,8 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
                     onClose={() => setShowAuthModal(false)}
                 />
             )}
+
+            <SlideOverCart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
         </>
     );
 }

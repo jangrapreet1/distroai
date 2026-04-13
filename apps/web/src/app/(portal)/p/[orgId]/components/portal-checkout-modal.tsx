@@ -25,7 +25,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
     const [guestAddress, setGuestAddress] = useState("");
     // Retailer orgs are B2C — no LEDGER. Distributor/Manufacturer orgs allow LEDGER for authenticated users.
     const allowLedger = businessType !== 'Retailer' && auth.isAuthenticated;
-    const [paymentMethod, setPaymentMethod] = useState(allowLedger ? "LEDGER" : "RAZORPAY");
+    const [paymentMethod, setPaymentMethod] = useState(allowLedger ? "LEDGER" : "COD");
 
     const checkoutMutation = useMutation({
         mutationFn: async () => {
@@ -45,12 +45,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
     });
 
     const handlePlaceOrder = () => {
-        if (paymentMethod === "RAZORPAY") {
-            toast.loading("Redirecting to payment gateway...", { duration: 1500 });
-            setTimeout(() => checkoutMutation.mutate(), 1500);
-        } else {
-            checkoutMutation.mutate();
-        }
+        checkoutMutation.mutate();
     };
 
     return (
@@ -105,11 +100,11 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
                                     </div>
                                 </label>
                             )}
-                            <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${paymentMethod === "RAZORPAY" ? "border-[var(--gold)] bg-[var(--gold)]/5" : "border-[#333] bg-[#1a1a1a] hover:border-zinc-500"}`}>
-                                <input type="radio" name="payment" value="RAZORPAY" checked={paymentMethod === "RAZORPAY"} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 accent-[var(--gold)]" />
+                            <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${paymentMethod === "COD" ? "border-[var(--green)] bg-[var(--green)]/5" : "border-[#333] bg-[#1a1a1a] hover:border-zinc-500"}`}>
+                                <input type="radio" name="payment" value="COD" checked={paymentMethod === "COD"} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 accent-[var(--green)]" />
                                 <div>
-                                    <p className="font-medium text-white text-sm">Pay Instantly (Razorpay)</p>
-                                    <p className="text-xs text-zinc-500">UPI, Cards, or Netbanking</p>
+                                    <p className="font-medium text-white text-sm">Cash on Delivery (COD)</p>
+                                    <p className="text-xs text-zinc-500">Pay using Cash or UPI on delivery</p>
                                 </div>
                             </label>
                         </div>
@@ -143,7 +138,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
                                 ) : paymentMethod === "LEDGER" ? (
                                     <>Confirm B2B Order <ArrowRight className="w-4 h-4" /></>
                                 ) : (
-                                    <>Pay & Place Order <ArrowRight className="w-4 h-4" /></>
+                                    <>Place Order (COD) <ArrowRight className="w-4 h-4" /></>
                                 )}
                             </button>
                         </div>

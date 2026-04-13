@@ -4,10 +4,12 @@ import { PortalController } from './portal.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { OrdersModule } from '../orders/orders.module';
 
 @Module({
     imports: [
         PrismaModule,
+        OrdersModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
             inject: [ConfigService],

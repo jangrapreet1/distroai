@@ -4,11 +4,14 @@ import { JwtService } from '@nestjs/jwt';
 import { OrderSource, CustomerType } from '@distroai/db';
 import { PLAN_LIMITS, PlanName } from '../common/config/plan-limits.config';
 
+import { OrdersService } from '../orders/orders.service';
+
 @Injectable()
 export class PortalService {
     constructor(
         private prisma: PrismaService,
-        private jwtService: JwtService
+        private jwtService: JwtService,
+        private ordersService: OrdersService
     ) { }
 
     async getStorefrontInfo(orgIdOrSlug: string) {
@@ -168,85 +171,19 @@ export class PortalService {
             }
         }
 
-        // Get a default warehouse
-        const warehouse = await this.prisma.warehouse.findFirst({ where: { orgId } });
-        if (!warehouse) throw new BadRequestException('Organization has no warehouses configured');
+        // Delegate entire creation, tax calculation, and pricing logic to central orders service
+        const draftOrder = await this.ordersService.create(orgId, {
+            customerId: orderCustomerId,
+            source: OrderSource.PORTAL,
+            items: data.items,
+        }, 'SYSTEM_PORTAL');
 
-        // ── Stock Availability Check ──
-        // Validate that every item has sufficient inventory BEFORE creating the order.
-        // This prevents negative inventory and maintains data integrity.
-        const shortages: { productName: string; requested: number; available: number }[] = [];
+        // Note: For paymentMethod === 'ONLINE', we might hold off confirming until payment succeeds, 
+        // but since RazorPay implies B2B mostly goes through LEDGER or standard deferred terms, 
+        // we'll confirm immediately to match previous logic and trigger the Invoice + WhatsApp.
+        await this.ordersService.confirm(orgId, draftOrder.id, 'SYSTEM_PORTAL');
 
-        for (const item of data.items) {
-            const inv = await this.prisma.inventory.findFirst({
-                where: { productId: item.productId, warehouseId: warehouse.id },
-                include: { product: { select: { name: true } } },
-            });
-            const available = (inv?.quantity ?? 0) - (inv?.reservedQty ?? 0);
-            if (available < item.quantity) {
-                shortages.push({
-                    productName: (inv as any)?.product?.name ?? item.productId,
-                    requested: item.quantity,
-                    available: Math.max(0, available),
-                });
-            }
-        }
-
-        if (shortages.length > 0) {
-            const msg = shortages.map(s =>
-                `${s.productName}: requested ${s.requested}, only ${s.available} available`
-            ).join('; ');
-            throw new BadRequestException(`Insufficient stock: ${msg}`);
-        }
-
-        // Create the order
-        const totalAmount = data.items.reduce((acc: number, item: any) => acc + (item.quantity * item.price), 0);
-
-        const order = await this.prisma.$transaction(async (tx: any) => {
-            const created = await tx.order.create({
-                data: {
-                    orgId,
-                    orderNumber: `PORTAL-${Date.now()}`,
-                    customerId: orderCustomerId,
-                    warehouseId: warehouse.id,
-                    totalAmount,
-                    netAmount: totalAmount,
-                    status: 'CONFIRMED',
-                    source: OrderSource.PORTAL,
-                    deliveryDate: new Date(Date.now() + 48 * 60 * 60 * 1000),
-                    items: {
-                        create: data.items.map((item: any) => ({
-                            productId: item.productId,
-                            quantity: item.quantity,
-                            unit: 'UNIT',
-                            price: item.price,
-                            totalAmount: item.quantity * item.price,
-                        }))
-                    }
-                },
-                include: { customer: true }
-            });
-
-            // Reserve inventory for confirmed orders (matches OrdersService.confirm behavior)
-            for (const item of data.items) {
-                await tx.inventory.updateMany({
-                    where: { productId: item.productId, warehouseId: warehouse.id },
-                    data: { reservedQty: { increment: item.quantity } },
-                });
-            }
-
-            return created;
-        });
-
-        // If it was a B2B "Add to Ledger" order, we should increase their outstanding
-        if (customerId && data.paymentMethod === 'LEDGER') {
-            await this.prisma.customer.update({
-                where: { id: customerId },
-                data: { outstandingAmount: { increment: totalAmount } }
-            });
-        }
-
-        return order;
+        return await this.prisma.order.findUnique({ where: { id: draftOrder.id } });
     }
 
     async getLedger(orgId: string, customerId: string) {
@@ -284,7 +221,7 @@ export class PortalService {
                 deliveryDate: true,
                 createdAt: true,
                 items: {
-                    select: { id: true }
+                    select: { id: true, productId: true }
                 }
             }
         });

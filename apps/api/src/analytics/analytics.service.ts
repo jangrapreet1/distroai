@@ -25,13 +25,13 @@ export class AnalyticsService {
             newCustomers, collections, topProducts, topCustomers, recentOrders,
             inventory, recentLocationUpdates
         ] = await Promise.all([
-            this.prisma.order.count({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' } } }),
-            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' } }, _sum: { netAmount: true } }),
-            this.prisma.order.count({ where: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' } } }),
-            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' } }, _sum: { netAmount: true } }),
+            this.prisma.order.count({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }),
+            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' }, _sum: { netAmount: true } }),
+            this.prisma.order.count({ where: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }),
+            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' }, type: 'SALE' }, _sum: { netAmount: true } }),
             this.prisma.customer.count({ where: { orgId, createdAt: { gte: monthStart } } }),
             this.prisma.payment.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: 'COMPLETED' }, _sum: { amount: true } }),
-            this.prisma.orderItem.groupBy({ by: ['productId'], where: { order: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' } } }, _sum: { totalAmount: true }, orderBy: { _sum: { totalAmount: 'desc' } }, take: 5 }),
+            this.prisma.orderItem.groupBy({ by: ['productId'], where: { order: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }, _sum: { totalAmount: true }, orderBy: { _sum: { totalAmount: 'desc' } }, take: 5 }),
             this.prisma.customer.findMany({ where: { orgId }, orderBy: { outstandingAmount: 'desc' }, take: 5, select: { id: true, name: true, outstandingAmount: true, paymentScore: true } }),
             this.prisma.order.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' }, take: 10, include: { customer: { select: { name: true } } } }),
             this.prisma.inventory.findMany({ where: { orgId }, include: { product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
@@ -75,7 +75,7 @@ export class AnalyticsService {
     }
 
     async getSales(orgId: string, from: string, to: string, groupBy: string) {
-        const where = { orgId, createdAt: { gte: new Date(from), lte: new Date(to) }, status: { not: 'CANCELLED' as const } };
+        const where = { orgId, createdAt: { gte: new Date(from), lte: new Date(to) }, status: { not: 'CANCELLED' as const }, type: 'SALE' as const };
         const orders = await this.prisma.order.findMany({ where, include: { items: { include: { product: { select: { name: true, category: true, brand: true } } } }, customer: true, salesman: true } });
 
         const grouped = new Map<string, { label: string; revenue: number; orders: number }>();
