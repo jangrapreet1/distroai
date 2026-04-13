@@ -10,11 +10,22 @@ export class AiController {
     constructor(private readonly aiService: AiService) { }
 
     @Post('query')
-    async handleQuery(@Req() req: Request, @Body() body: { query: string; sessionId?: string }) {
+    async handleQuery(@Req() req: Request, @Res() res: any, @Body() body: { query: string; sessionId?: string }) {
         const orgId = (req.user as any).orgId;
         const userId = (req.user as any).sub;
-        await this.aiService.checkAndIncrementAIUsage(orgId);
-        return this.aiService.query(orgId, userId, body.query, body.sessionId);
+
+        try {
+            await this.aiService.checkAndIncrementAIUsage(orgId, userId);
+        } catch (err: any) {
+            if (err.status === 429) {
+                res.setHeader('Retry-After', '60');
+                return res.status(429).json(err.response);
+            }
+            throw err;
+        }
+
+        const result = await this.aiService.query(orgId, userId, body.query, body.sessionId);
+        return res.status(201).json(result);
     }
 
     @Get('history')
@@ -35,10 +46,13 @@ export class AiController {
         const orgId = (req.user as any).orgId;
         const userId = (req.user as any).sub;
 
-        // Check quota BEFORE setting SSE headers so we can return a proper error
         try {
-            await this.aiService.checkAndIncrementAIUsage(orgId);
+            await this.aiService.checkAndIncrementAIUsage(orgId, userId);
         } catch (err: any) {
+            if (err.status === 429) {
+                res.setHeader('Retry-After', '60');
+                res.status(429);
+            }
             // Send quota error as SSE so the frontend can display it gracefully
             res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
@@ -69,12 +83,23 @@ export class AiController {
 
     @Post('voice-query')
     @UseInterceptors(FileInterceptor('audio'))
-    async handleVoiceQuery(@Req() req: Request, @Body('sessionId') sessionId: string, @UploadedFile() file: any) {
+    async handleVoiceQuery(@Req() req: Request, @Res() res: any, @Body('sessionId') sessionId: string, @UploadedFile() file: any) {
         if (!file) throw new Error("Audio file required");
         const orgId = (req.user as any).orgId;
         const userId = (req.user as any).sub;
-        await this.aiService.checkAndIncrementAIUsage(orgId);
-        return this.aiService.voiceQuery(orgId, userId, file.buffer, file.mimetype, sessionId || undefined);
+
+        try {
+            await this.aiService.checkAndIncrementAIUsage(orgId, userId);
+        } catch (err: any) {
+            if (err.status === 429) {
+                res.setHeader('Retry-After', '60');
+                return res.status(429).json(err.response);
+            }
+            throw err;
+        }
+
+        const result = await this.aiService.voiceQuery(orgId, userId, file.buffer, file.mimetype, sessionId || undefined);
+        return res.status(201).json(result);
     }
 
     @Get('insights/customer/:id')

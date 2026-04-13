@@ -5,9 +5,14 @@ import { AiService } from './ai.service';
 import { StorageModule } from '../storage/storage.module';
 import { AiProcessor } from './ai.processor';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
-    imports: [StorageModule, WhatsAppModule],
+    imports: [
+        StorageModule,
+        WhatsAppModule,
+        BullModule.registerQueue({ name: 'ai' })
+    ],
     controllers: [AiController],
     providers: [AiService, AiProcessor],
     exports: [AiService],

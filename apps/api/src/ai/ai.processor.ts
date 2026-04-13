@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import OpenAI from 'openai';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 
-@Processor('ai')
+@Processor('ai', { concurrency: 2 })
 export class AiProcessor extends WorkerHost {
     private readonly logger = new Logger(AiProcessor.name);
     private openaiClient = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
@@ -23,6 +23,8 @@ export class AiProcessor extends WorkerHost {
         switch (job.name) {
             case 'generate-briefing':
                 return this.handleGenerateBriefing(job.data.orgId);
+            case 'process-embedding':
+                return this.handleProcessEmbedding(job.data.productId);
             // Other AI jobs like run-forecast, compute-payment-scores are handled by Python microservice or separate crons
             default:
                 this.logger.warn(`Unknown AI job name: ${job.name}`);
@@ -94,5 +96,49 @@ Data: ${JSON.stringify(data)}`;
     @OnWorkerEvent('failed')
     onFailed(job: Job, error: Error) {
         this.logger.error(`AI Job ${job.id} failed: ${error.message}`, error.stack);
+    }
+
+    private async handleProcessEmbedding(productId: string) {
+        const product = await this.prisma.product.findUnique({ where: { id: productId } });
+        if (!product) return;
+
+        try {
+            if (!process.env.OPENROUTER_API_KEY) {
+                // Failsafe if env var missing; marks FAILED to release PENDING lock.
+                await this.prisma.product.update({ where: { id: productId }, data: { embeddingStatus: 'FAILED' } });
+                return;
+            }
+
+            const { GoogleGenerativeAIEmbeddings } = await import('@langchain/google-genai');
+            const embeddings = new GoogleGenerativeAIEmbeddings({
+                apiKey: process.env.OPENROUTER_API_KEY,
+                model: "text-embedding-004",
+            });
+
+            // Feed vital stats to the RAG vector map
+            const textToEmbed = `Product Name: ${product.name}
+SKU: ${product.sku}
+Brand: ${product.brand || 'N/A'}
+Category: ${product.category || 'N/A'}
+Description: ${product.description || 'No description'}`;
+
+            const vector = await embeddings.embedQuery(textToEmbed);
+
+            await this.prisma.$executeRawUnsafe(
+                `UPDATE "Product" SET embedding = $1::vector, "embeddingStatus" = 'COMPLETED' WHERE id = $2`,
+                `[${vector.join(',')}]`,
+                productId
+            );
+
+            this.logger.log(`Successfully embedded product ${productId}`);
+        } catch (error: any) {
+            this.logger.error(`Failed to embed product ${productId}`, error);
+            // Mark as FAILED so fallback ILIKE logic knows it's offline
+            await this.prisma.product.update({
+                where: { id: productId },
+                data: { embeddingStatus: 'FAILED' },
+            });
+            throw error; // Let BullMQ capture the retry parameters
+        }
     }
 }

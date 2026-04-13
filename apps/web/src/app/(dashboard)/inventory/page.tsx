@@ -365,7 +365,10 @@ export default function InventoryPage() {
                                                 <div className="w-12 h-12 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={20} /></div>
                                             )}
                                             <div className="flex-1 overflow-hidden">
-                                                <p className="text-sm font-medium mb-0.5 truncate">{p.name as string}</p>
+                                                <p className="text-sm font-medium mb-0.5 truncate flex items-center gap-1.5">
+                                                    {p.name as string}
+                                                    {p.embeddingStatus === 'PENDING' && <span title="AI Indexing" className="w-1.5 h-1.5 rounded-full bg-[var(--gold)] animate-pulse shadow-[0_0_8px_var(--gold)] inline-block shrink-0" />}
+                                                </p>
                                                 <p className="text-xs text-[var(--text-muted)] truncate">{(p.brand as string) ?? ""} · {p.sku as string}</p>
                                             </div>
                                         </div>
@@ -409,6 +412,7 @@ export default function InventoryPage() {
                                                     <div className="w-8 h-8 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={14} /></div>
                                                 )}
                                                 <Link href={`/inventory/products/${p.id}`} className="text-[var(--gold)] hover:underline truncate">{p.name as string}</Link>
+                                                {p.embeddingStatus === 'PENDING' && <span title="AI Indexing" className="w-1.5 h-1.5 rounded-full bg-[var(--gold)] animate-pulse shadow-[0_0_8px_var(--gold)] inline-block shrink-0 ml-1.5" />}
                                             </td>
                                             <td className="p-4 text-left">{(p.sku as string) || "-"}</td>
                                             <td className="p-4 text-right">

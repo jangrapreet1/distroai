@@ -4,6 +4,7 @@ import {
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/services/redis.service';
+import { AiService } from '../ai/ai.service';
 import { PLAN_LIMITS } from '../common/config/plan-limits.config';
 import { CreateProductDto, UpdateProductDto, ListProductsQueryDto, ExpiringQueryDto } from './dto/products.dto';
 
@@ -14,6 +15,7 @@ export class ProductsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly redis: RedisService,
+        private readonly aiService: AiService,
     ) { }
 
     private generateSku(brand?: string, category?: string): string {
@@ -88,6 +90,12 @@ export class ProductsService {
         });
 
         await this.redis.del(`products:${orgId}:*`);
+
+        // Dispatch to background AI embedding queue
+        this.aiService.generateAndSaveEmbedding(product.id).catch(err =>
+            this.logger.error(`Failed to queue embedding for new product ${product.id}`, err)
+        );
+
         return product;
     }
 
@@ -123,9 +131,10 @@ export class ProductsService {
                             brand: row['brand'] as string,
                         },
                     });
+                    this.aiService.generateAndSaveEmbedding(existing.id).catch(() => { });
                     updated++;
                 } else {
-                    await this.prisma.product.create({
+                    const newProduct = await this.prisma.product.create({
                         data: {
                             orgId, sku, name: row['name'] as string,
                             sellingPrice: Number(row['sellingPrice']),
@@ -140,6 +149,7 @@ export class ProductsService {
                             }),
                         },
                     });
+                    this.aiService.generateAndSaveEmbedding(newProduct.id).catch(() => { });
                     created++;
                 }
             } catch (err) {
@@ -171,6 +181,13 @@ export class ProductsService {
         const product = await this.prisma.product.findFirst({ where: { id, orgId } });
         if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Product not found' });
         const updated = await this.prisma.product.update({ where: { id }, data: dto });
+
+        if (dto.name || dto.description || dto.category || dto.brand) {
+            this.aiService.generateAndSaveEmbedding(id).catch(err =>
+                this.logger.error(`Failed to queue embedding update for product ${id}`, err)
+            );
+        }
+
         return updated;
     }
 
