@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { LogOut, Settings, ArrowUpCircle, ChevronUp, Globe, ChevronRight } from "lucide-react";
 import clsx from "clsx";
@@ -48,12 +48,28 @@ export function SidebarContent({ navGroups, userRole, userName, orgName, orgPlan
         { code: 'id', name: 'Bahasa Indonesia' },
     ];
 
+    const filteredNav = getFilteredNav(userRole, navGroups);
+
+    const allHrefs = useMemo(() =>
+        filteredNav.flatMap(g => g.items.map(i => i.href)),
+        [filteredNav]
+    );
+
     const isActive = (href: string) => {
         if (href === "/") return pathname === "/";
-        return pathname.startsWith(href);
+        // Exact match always wins
+        if (pathname === href) return true;
+        // For prefix matching (e.g., /orders matches /orders/abc),
+        // only allow if no OTHER nav item is a more specific match
+        if (pathname.startsWith(href + "/")) {
+            // Check if a more specific nav item exists that also matches
+            const hasMoreSpecificItem = allHrefs.some(
+                h => h !== href && h.startsWith(href + "/") && pathname.startsWith(h)
+            );
+            return !hasMoreSpecificItem;
+        }
+        return false;
     };
-
-    const filteredNav = getFilteredNav(userRole, navGroups);
 
     return (
         <>

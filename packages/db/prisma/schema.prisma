@@ -462,6 +462,9 @@ model Order {
   schemeId       String?
   invoiceId      String?     @unique
   utmCampaignId  String?     // nullable — set when order originates from an ad
+  commissionTo   String?     // Recipient label: "Salesman", "Mistri", "Contractor", or custom
+  commissionType String?     // "FIXED" or "PERCENTAGE"
+  commissionValue Float?     // Amount (₹) or percentage (%)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 

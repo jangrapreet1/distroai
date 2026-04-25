@@ -41,6 +41,13 @@ export default function NewOrderPage() {
     const [productSearch, setProductSearch] = useState("");
     const [showProductPicker, setShowProductPicker] = useState(false);
 
+    // Commission state
+    const [showCommission, setShowCommission] = useState(false);
+    const [commissionTo, setCommissionTo] = useState("");
+    const [commissionToCustom, setCommissionToCustom] = useState("");
+    const [commissionType, setCommissionType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+    const [commissionValue, setCommissionValue] = useState<number>(0);
+
     // Only pass search if it has actual text, otherwise pass undefined so we fetch all customers
     const { data: customersData } = useCustomers({ search: customerSearch.trim() || undefined, limit: 100 });
     const customersRaw = customersData?.data ?? [];
@@ -131,12 +138,21 @@ export default function NewOrderPage() {
         e.preventDefault();
         if (!customerId || items.length === 0) return;
 
+        const resolvedCommissionTo = commissionTo === "Other"
+            ? (commissionToCustom.trim() || "Custom")
+            : (commissionToCustom.trim() ? `${commissionTo} (${commissionToCustom.trim()})` : commissionTo);
+
         const payload: Record<string, unknown> = {
             customerId,
             warehouseId: warehouseId || undefined,
             source: "WEB",
             notes: notes || undefined,
             deliveryDate: deliveryDate || undefined,
+            ...(showCommission && resolvedCommissionTo && commissionValue > 0 ? {
+                commissionTo: resolvedCommissionTo,
+                commissionType,
+                commissionValue,
+            } : {}),
             items: items.map((i) => ({
                 productId: i.productId,
                 quantity: i.quantity,
@@ -150,7 +166,10 @@ export default function NewOrderPage() {
         if (!payload.warehouseId) delete payload.warehouseId;
 
         createOrder.mutate(payload, {
-            onSuccess: () => router.push("/orders"),
+            onSuccess: (res: any) => {
+                const newId = res?.id || res?.data?.id;
+                router.push(newId ? `/orders/${newId}` : "/orders");
+            },
         });
     };
 
@@ -405,6 +424,100 @@ export default function NewOrderPage() {
                                 className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition resize-none" />
                         </label>
                     </div>
+                </div>
+
+                {/* Force turbopack recompile */}
+                {/* Commission (Internal Only) */}
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden">
+                    <button
+                        type="button"
+                        onClick={() => setShowCommission(!showCommission)}
+                        className="w-full flex items-center justify-between p-4 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition"
+                    >
+                        <span>💰 Add Commission <span className="font-normal text-xs text-[var(--text-muted)]">(internal — not visible to customer)</span></span>
+                        <span className={`text-[var(--text-muted)] transition-transform ${showCommission ? 'rotate-180' : ''}`}>▾</span>
+                    </button>
+                    {showCommission && (
+                        <div className="px-5 pb-5 pt-2 border-t border-[var(--border)] space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <label>
+                                    <span className="text-xs text-[var(--text-muted)] mb-1 block">Recipient</span>
+                                    <select
+                                        value={commissionTo}
+                                        onChange={(e) => setCommissionTo(e.target.value)}
+                                        className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition appearance-none"
+                                    >
+                                        <option value="">Select recipient…</option>
+                                        <option value="Salesman">Salesman</option>
+                                        <option value="Mistri">Mistri / Mason</option>
+                                        <option value="Contractor">Contractor</option>
+                                        <option value="Dealer">Sub-Dealer</option>
+                                        <option value="Other">Other (custom)</option>
+                                    </select>
+                                </label>
+                                {commissionTo && (
+                                    <label>
+                                        <span className="text-xs text-[var(--text-muted)] mb-1 block">
+                                            {commissionTo === "Other" ? "Custom Role / Name *" : "Person's Name (Optional)"}
+                                        </span>
+                                        <input
+                                            type="text"
+                                            value={commissionToCustom}
+                                            onChange={(e) => setCommissionToCustom(e.target.value)}
+                                            placeholder={commissionTo === "Other" ? "e.g. Plumber, Architect" : "e.g. Ramesh Singh"}
+                                            className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
+                                        />
+                                    </label>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <label>
+                                    <span className="text-xs text-[var(--text-muted)] mb-1 block">Type</span>
+                                    <div className="flex bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] p-0.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCommissionType("FIXED")}
+                                            className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${commissionType === "FIXED" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}
+                                        >
+                                            Fixed ₹
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCommissionType("PERCENTAGE")}
+                                            className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${commissionType === "PERCENTAGE" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}
+                                        >
+                                            Percentage %
+                                        </button>
+                                    </div>
+                                </label>
+                                <label>
+                                    <span className="text-xs text-[var(--text-muted)] mb-1 block">
+                                        {commissionType === "FIXED" ? "Amount (₹)" : "Percentage (%)"}
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step={commissionType === "FIXED" ? 1 : 0.5}
+                                        max={commissionType === "PERCENTAGE" ? 100 : undefined}
+                                        value={commissionValue || ""}
+                                        onChange={(e) => setCommissionValue(parseFloat(e.target.value) || 0)}
+                                        placeholder={commissionType === "FIXED" ? "e.g. 500" : "e.g. 2.5"}
+                                        className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
+                                    />
+                                </label>
+                            </div>
+                            {commissionTo && commissionValue > 0 && (
+                                <div className="text-xs text-[var(--text-muted)] bg-[var(--bg-secondary)] rounded-lg px-3 py-2">
+                                    Commission: <strong className="text-[var(--text-primary)]">
+                                        {commissionType === "FIXED"
+                                            ? formatINR(commissionValue)
+                                            : `${commissionValue}% of net amount`
+                                        }
+                                    </strong> → {commissionTo === "Other" ? (commissionToCustom || "Custom") : (commissionToCustom ? `${commissionTo} (${commissionToCustom})` : commissionTo)}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Actions */}

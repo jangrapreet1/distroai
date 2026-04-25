@@ -6,12 +6,32 @@ import { Loader2, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Receipt as
 import apiClient from "@/lib/api-client";
 import { formatINR } from "@/lib/utils";
 
-export default function PnLReportPage() {
+type RangePreset = "30D" | "60D" | "90D" | "1Y" | "MTD" | "CUSTOM";
+
+function getPresetDates(preset: RangePreset): { start: string; end: string } {
     const now = new Date();
-    const [startDate, setStartDate] = useState(
-        new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-    );
-    const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
+    const end = now.toISOString().split('T')[0];
+    const d = new Date();
+    switch (preset) {
+        case "MTD": d.setDate(1); break;
+        case "30D": d.setDate(d.getDate() - 30); break;
+        case "60D": d.setDate(d.getDate() - 60); break;
+        case "90D": d.setDate(d.getDate() - 90); break;
+        case "1Y": d.setFullYear(d.getFullYear() - 1); break;
+        default: return { start: end, end };
+    }
+    return { start: d.toISOString().split('T')[0], end };
+}
+
+export default function PnLReportPage() {
+    const [preset, setPreset] = useState<RangePreset>("MTD");
+    const defaults = getPresetDates("MTD");
+    const [customStart, setCustomStart] = useState(defaults.start);
+    const [customEnd, setCustomEnd] = useState(defaults.end);
+
+    const { start: startDate, end: endDate } = preset === "CUSTOM"
+        ? { start: customStart, end: customEnd }
+        : getPresetDates(preset);
 
     const { data, isLoading } = useQuery({
         queryKey: ['pnl-report', startDate, endDate],
@@ -31,6 +51,15 @@ export default function PnLReportPage() {
 
     const maxExpense = expenseCategories.length > 0 ? expenseCategories[0].amount : 0;
 
+    const PRESETS: { label: string; value: RangePreset }[] = [
+        { label: "This Month", value: "MTD" },
+        { label: "30 Days", value: "30D" },
+        { label: "60 Days", value: "60D" },
+        { label: "90 Days", value: "90D" },
+        { label: "1 Year", value: "1Y" },
+        { label: "Custom", value: "CUSTOM" },
+    ];
+
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
             {/* Header */}
@@ -39,12 +68,26 @@ export default function PnLReportPage() {
                     <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Profit & Loss</h1>
                     <p className="text-[var(--text-muted)] text-sm mt-1">Revenue, costs, and net profit for the selected period.</p>
                 </div>
-                <div className="flex gap-2 items-center">
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                        className="input-field text-sm" />
-                    <span className="text-[var(--text-muted)]">to</span>
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                        className="input-field text-sm" />
+                <div className="flex flex-col items-end gap-2">
+                    <div className="flex gap-1 flex-wrap justify-end">
+                        {PRESETS.map(p => (
+                            <button key={p.value} onClick={() => setPreset(p.value)}
+                                className={`px-3 py-1.5 text-xs rounded-full border transition-all ${preset === p.value
+                                    ? 'bg-[var(--gold)]/15 text-[var(--gold)] border-[var(--gold)]/30 font-medium'
+                                    : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)]'}`}>
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+                    {preset === "CUSTOM" && (
+                        <div className="flex gap-2 items-center animate-in fade-in slide-in-from-top-2 duration-200">
+                            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+                                className="input-field text-xs py-1" />
+                            <span className="text-[var(--text-muted)] text-xs">to</span>
+                            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+                                className="input-field text-xs py-1" />
+                        </div>
+                    )}
                 </div>
             </div>
 

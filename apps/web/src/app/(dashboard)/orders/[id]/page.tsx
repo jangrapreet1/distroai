@@ -224,7 +224,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         </a>
                     )}
                     {actions.map((a) => (
-                        <button key={a.action} onClick={() => orderAction.mutate({ id, action: a.action })}
+                        <button key={a.action} onClick={() => {
+                            if (a.action === "return") {
+                                if (!window.confirm("Are you sure you want to create a return for this order? This action cannot be undone and will affect inventory.")) return;
+                            }
+                            orderAction.mutate({ id, action: a.action });
+                        }}
                             className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${a.action === "cancel" ? "border border-[var(--border)] text-[var(--red)] hover:bg-[var(--red)]/10" : "bg-[var(--gold)] text-[var(--bg-primary)] font-semibold hover:bg-[var(--gold-light)]"}`}>
                             <a.icon size={14} /> {a.label}
                         </button>

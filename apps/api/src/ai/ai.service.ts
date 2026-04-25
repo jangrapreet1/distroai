@@ -118,9 +118,9 @@ The user may also use natural language instead of commands (e.g., "create order 
 If they provide partial info, use \`<ask_input>\` to collect the remaining required steps. Skip steps they already answered.
 
 ## AFTER WORKFLOW COMPLETION
-- Show a clean confirmation message using the Markdown format below.
-- Mention what was created/updated (e.g., "✅ Order #1043 created for Ramesh Kirana — ₹3,550")
-- Offer next logical action using \`<ask_input>\` with ["Yes", "No"]. (e.g., "Want to send the invoice on WhatsApp?")
+- Show a summary of what was collected using the Markdown table format below.
+- For action workflows (/order, /payment, /remind, /return): You can ONLY collect information and show a summary. You CANNOT actually create orders, send reminders, record payments, or perform any write action. Always say "**📋 Summary Prepared**" (NOT "Sent", "Created", or "Completed"). Clearly state: "This is a draft — the action has not been executed yet."
+- For data queries (/report, /customer): Show the data directly since these are read-only.
 
 ## OUTPUT FORMATTING
 Language: Respond in ${langInstruction}.
@@ -130,16 +130,19 @@ When showing data, use visualization XML tags:
 - <chart type="bar|line|pie" title="...">JSON data array</chart>
 - <table headers="col1,col2,...">JSON rows array</table>
 
-For action confirmations, use this markdown format:
-**✅ Action Completed**
+For workflow summaries, use this markdown format:
+**📋 Summary Prepared**
 | Field | Value |
 |---|---|
 | Key | Value |
+
+⚠️ *This is a draft — action not yet executed.*
 
 For errors or warnings, prefix with ⚠️.
 
 ## RULES
 - NEVER make up data. If a tool returns no results, say so clearly.
+- NEVER claim you performed an action (sent, created, deleted, updated) when you only collected input. You are READ-ONLY.
 - For greetings or general questions, respond directly without tools.
 - Be concise and actionable. Indian distributors are busy — respect their time.
 - Current date: ${today}`;
@@ -250,6 +253,21 @@ export class AiService {
             createGetCustomerBalanceTool(orgId, this.prisma),
             createGetLedgerHistoryTool(orgId, this.prisma),
             createGetRestockRecommendationsTool(orgId, this.prisma),
+            // ask_input is used by the LLM during interactive workflows (/order, /remind, etc.)
+            // The actual card is rendered client-side from <ask_input> XML in the text stream.
+            // This tool registration prevents "tool not found" retry loops.
+            new DynamicStructuredTool({
+                name: "ask_input",
+                description: "Present an interactive input card to the user during a multi-step workflow. The card will be rendered in the chat UI automatically from your text output. Simply use this tool to signal you are waiting for user input.",
+                schema: z.object({
+                    step: z.string().describe("Step progress, e.g. 'Step 1 of 3'"),
+                    title: z.string().describe("The question to ask the user"),
+                    options: z.array(z.string()).describe("Array of option strings for the user to choose from"),
+                }),
+                func: async (input: any) => {
+                    return 'STOP. The interactive input card has been rendered to the user. Do NOT output any more text. Do NOT explain what you did. The user will select an option and their choice will arrive as the next message.';
+                }
+            }),
         ];
     }
 
@@ -449,8 +467,26 @@ export class AiService {
         // Bind tools to LLM — the LLM decides whether to use them (like ChatGPT/Claude)
         const llmWithTools = getLlm()!.bindTools(tools);
 
+        // Load previous session messages from Redis for multi-turn context
+        let previousMessages: BaseMessage[] = [];
+        const redisKey = sessionId ? `aiHistory:${sessionId}` : null;
+        if (redisKey && this.redis) {
+            try {
+                const cached = await this.redis.get(redisKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    previousMessages = parsed.map((m: any) =>
+                        m.role === 'human' ? new HumanMessage(m.content) : new AIMessage(m.content)
+                    );
+                }
+            } catch (err) {
+                this.logger.warn('Failed to load AI stream history from Redis', err);
+            }
+        }
+
         const messages: BaseMessage[] = [
             new SystemMessage(systemPrompt),
+            ...previousMessages,
             new HumanMessage(userQuery + imageContext),
         ];
 
@@ -513,6 +549,20 @@ export class AiService {
                         }));
                     }
                 }
+
+                // If ask_input was called, synthesize the XML for client rendering,
+                // but save clean question text to history so the LLM has context on next turn.
+                const askInputCall = toolCalls.find((tc: any) => tc.name === 'ask_input');
+                if (askInputCall) {
+                    const { step, title, options } = askInputCall.args;
+                    // XML for client rendering
+                    const xml = `<ask_input step="${step || ''}" title="${title || ''}">${JSON.stringify(options || [])}</ask_input>`;
+                    yield { data: JSON.stringify({ token: xml, done: false }) };
+                    // Clean text for history — this is what the LLM sees on the next turn
+                    const optionsList = (options || []).map((o: string, i: number) => `${i + 1}. ${o}`).join('\n');
+                    finalOutput += `${title}\n${optionsList}`;
+                    break;
+                }
                 // Loop back: send tool results to LLM for the final response
             }
 
@@ -521,6 +571,19 @@ export class AiService {
             this.logger.error('AI Stream Error', error);
             yield { data: JSON.stringify({ token: '\n[Error processing query]', done: true }) };
         } finally {
+            // Save session history to Redis for multi-turn context
+            if (redisKey && this.redis) {
+                try {
+                    const updatedHistory = [
+                        ...previousMessages.map(m => ({ role: m instanceof HumanMessage ? 'human' : 'ai', content: typeof m.content === 'string' ? m.content : '' })),
+                        { role: 'human', content: userQuery },
+                        { role: 'ai', content: finalOutput }
+                    ].slice(-10); // Keep last 10 turns
+                    await this.redis.setex(redisKey, 1800, JSON.stringify(updatedHistory));
+                } catch (err) {
+                    this.logger.warn('Failed to save AI stream history to Redis', err);
+                }
+            }
             if (aiQueryRecordId) {
                 await this.prisma.aIQuery.update({
                     where: { id: aiQueryRecordId },

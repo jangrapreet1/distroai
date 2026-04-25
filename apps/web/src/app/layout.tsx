@@ -51,7 +51,7 @@ export default function RootLayout({
             {children}
           </ThemeProvider>
           <Toaster
-            position="top-right"
+            position="bottom-right"
             toastOptions={{
               style: {
                 background: "var(--tooltip-bg)",

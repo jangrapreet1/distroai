@@ -165,17 +165,23 @@ export class ReportsService {
         const nextYear = month === 12 ? year + 1 : year;
         const endIst = new Date(`${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00+05:30`);
 
-        // Get all delivered orders for the period with items and product commission info
+        // Get all valid orders for the period (including estimated pending/confirmed)
         const orders = await this.prisma.order.findMany({
             where: {
                 orgId,
-                status: 'DELIVERED',
-                salesmanId: { not: null },
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                OR: [
+                    { salesmanId: { not: null } },
+                    { commissionTo: { not: null } }
+                ],
                 createdAt: { gte: startIst, lt: endIst },
             },
             select: {
                 salesmanId: true,
                 netAmount: true,
+                commissionTo: true,
+                commissionType: true,
+                commissionValue: true,
                 items: {
                     select: {
                         quantity: true,
@@ -200,7 +206,7 @@ export class ReportsService {
         });
         const salesmanMap = new Map(salesmen.map(s => [s.id, s]));
 
-        // Aggregate per salesman
+        // Aggregate per salesman/recipient
         const commissionData: Record<string, {
             salesmanId: string;
             name: string;
@@ -213,51 +219,102 @@ export class ReportsService {
         }> = {};
 
         for (const order of orders) {
-            const sid = order.salesmanId!;
-            const sm = salesmanMap.get(sid);
-            if (!sm) continue;
+            // Process formal salesmen (product-level commissions)
+            if (order.salesmanId) {
+                const sid = order.salesmanId;
+                const sm = salesmanMap.get(sid);
 
-            if (!commissionData[sid]) {
-                commissionData[sid] = {
-                    salesmanId: sid,
-                    name: sm.name,
-                    territory: sm.territory,
-                    targetMonthly: sm.targetMonthly,
-                    totalSales: 0,
-                    totalCommission: 0,
-                    orderCount: 0,
-                    productBreakdown: {},
-                };
+                if (sm) {
+                    if (!commissionData[sid]) {
+                        commissionData[sid] = {
+                            salesmanId: sid,
+                            name: sm.name,
+                            territory: sm.territory,
+                            targetMonthly: sm.targetMonthly,
+                            totalSales: 0,
+                            totalCommission: 0,
+                            orderCount: 0,
+                            productBreakdown: {},
+                        };
+                    }
+
+                    commissionData[sid].totalSales += order.netAmount;
+                    commissionData[sid].orderCount += 1;
+
+                    for (const item of order.items) {
+                        const product = item.product;
+                        let itemCommission = 0;
+
+                        if (product.commissionType === 'FIXED') {
+                            itemCommission = item.quantity * (product.commissionValue ?? 0);
+                        } else if (product.commissionType === 'PERCENTAGE') {
+                            itemCommission = item.totalAmount * ((product.commissionValue ?? 0) / 100);
+                        }
+
+                        commissionData[sid].totalCommission += itemCommission;
+
+                        if (itemCommission > 0) {
+                            const pid = product.id;
+                            if (!commissionData[sid].productBreakdown[pid]) {
+                                commissionData[sid].productBreakdown[pid] = {
+                                    productName: product.name,
+                                    quantity: 0,
+                                    lineTotal: 0,
+                                    commission: 0,
+                                };
+                            }
+                            commissionData[sid].productBreakdown[pid].quantity += item.quantity;
+                            commissionData[sid].productBreakdown[pid].lineTotal += item.totalAmount;
+                            commissionData[sid].productBreakdown[pid].commission += itemCommission;
+                        }
+                    }
+                }
             }
 
-            commissionData[sid].totalSales += order.netAmount;
-            commissionData[sid].orderCount += 1;
+            // Process order-level custom commissions (Mistri, Contractor, etc)
+            if (order.commissionTo && order.commissionValue) {
+                const customId = `custom_${order.commissionTo}`;
 
-            for (const item of order.items) {
-                const product = item.product;
-                let itemCommission = 0;
-
-                if (product.commissionType === 'FIXED') {
-                    itemCommission = item.quantity * (product.commissionValue ?? 0);
-                } else if (product.commissionType === 'PERCENTAGE') {
-                    itemCommission = item.totalAmount * ((product.commissionValue ?? 0) / 100);
+                if (!commissionData[customId]) {
+                    commissionData[customId] = {
+                        salesmanId: customId,
+                        name: order.commissionTo,
+                        territory: 'Custom Recipient',
+                        targetMonthly: 0,
+                        totalSales: 0,
+                        totalCommission: 0,
+                        orderCount: 0,
+                        productBreakdown: {},
+                    };
                 }
 
-                commissionData[sid].totalCommission += itemCommission;
+                // If this order isn't already counted by a formal salesman, count its sales
+                if (!order.salesmanId) {
+                    commissionData[customId].totalSales += order.netAmount;
+                    commissionData[customId].orderCount += 1;
+                }
 
-                if (itemCommission > 0) {
-                    const pid = product.id;
-                    if (!commissionData[sid].productBreakdown[pid]) {
-                        commissionData[sid].productBreakdown[pid] = {
-                            productName: product.name,
+                let orderCommission = 0;
+                if (order.commissionType === 'FIXED') {
+                    orderCommission = order.commissionValue;
+                } else if (order.commissionType === 'PERCENTAGE') {
+                    orderCommission = order.netAmount * (order.commissionValue / 100);
+                }
+
+                commissionData[customId].totalCommission += orderCommission;
+
+                if (orderCommission > 0) {
+                    if (!commissionData[customId].productBreakdown['custom_order']) {
+                        commissionData[customId].productBreakdown['custom_order'] = {
+                            productName: 'Order-Level Custom Commission',
                             quantity: 0,
                             lineTotal: 0,
                             commission: 0,
                         };
                     }
-                    commissionData[sid].productBreakdown[pid].quantity += item.quantity;
-                    commissionData[sid].productBreakdown[pid].lineTotal += item.totalAmount;
-                    commissionData[sid].productBreakdown[pid].commission += itemCommission;
+                    commissionData[customId].productBreakdown['custom_order'].quantity += 1;
+                    commissionData[customId].productBreakdown['custom_order'].lineTotal += order.netAmount;
+                    commissionData[customId].productBreakdown['custom_order'].commission += orderCommission;
                 }
             }
         }

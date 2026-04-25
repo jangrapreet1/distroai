@@ -191,7 +191,11 @@ export class PortalService {
             });
         }
 
-        return await this.prisma.order.findUnique({ where: { id: draftOrder.id } });
+        const fullOrder = await this.prisma.order.findUnique({ where: { id: draftOrder.id } });
+        if (!fullOrder) return draftOrder;
+        // Strip internal commission fields from customer-facing response
+        const { commissionTo, commissionType, commissionValue, ...safeOrder } = fullOrder;
+        return safeOrder;
     }
 
     async getLedger(orgId: string, customerId: string) {
@@ -259,7 +263,9 @@ export class PortalService {
         });
 
         if (!order) throw new NotFoundException('Order not found');
-        return order;
+        // Strip internal commission fields from customer-facing response
+        const { commissionTo, commissionType, commissionValue, ...safeOrder } = order;
+        return safeOrder;
     }
 
     async getReorderItems(orgId: string, customerId: string, orderId: string) {

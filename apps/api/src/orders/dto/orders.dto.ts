@@ -17,6 +17,9 @@ export class CreateOrderDto {
     @IsOptional() @IsString() notes?: string;
     @IsOptional() @IsDateString() deliveryDate?: string;
     @IsOptional() @IsEnum(['APP', 'WHATSAPP', 'PHONE', 'WEB', 'PORTAL']) source?: string;
+    @IsOptional() @IsString() commissionTo?: string;
+    @IsOptional() @IsEnum(['FIXED', 'PERCENTAGE']) commissionType?: string;
+    @IsOptional() @IsNumber() @Min(0) commissionValue?: number;
 }
 
 export class ReturnItemDto {

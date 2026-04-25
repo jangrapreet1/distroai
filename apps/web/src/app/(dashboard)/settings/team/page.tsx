@@ -53,7 +53,15 @@ function TeamTab() {
                 setShowAdd(false);
                 setForm({ firstName: '', lastName: '', phone: '', email: '', role: 'SALESMAN' });
             },
-            onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to add member'),
+            onError: (err: any) => {
+                const msg =
+                    err?.response?.data?.error?.message ||
+                    err?.response?.data?.message ||
+                    err?.response?.data?.error ||
+                    err?.message ||
+                    'Failed to add member';
+                toast.error(typeof msg === 'string' ? msg : 'Failed to add member');
+            },
         });
     };
 

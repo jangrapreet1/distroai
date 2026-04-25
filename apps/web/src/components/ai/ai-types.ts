@@ -108,6 +108,15 @@ export function parseAIResponse(text: string): { cleanText: string; charts: Char
     for (const match of text.matchAll(askInputRegex)) {
         try { askInputs.push({ step: match[1], title: match[2], options: JSON.parse(match[3]) }); } catch { }
     }
-    const cleanText = text.replace(chartRegex, "").replace(tableRegex, "").replace(askInputRegex, "").trim();
+    // Strip any raw XML tags that shouldn't be shown to users
+    const toolCallRegex = /<\/?tool_call[^>]*>/g;
+    const thinkRegex = /<\/?think[^>]*>/g;
+    const cleanText = text
+        .replace(chartRegex, "")
+        .replace(tableRegex, "")
+        .replace(askInputRegex, "")
+        .replace(toolCallRegex, "")
+        .replace(thinkRegex, "")
+        .trim();
     return { cleanText, charts, tables, askInputs };
 }
