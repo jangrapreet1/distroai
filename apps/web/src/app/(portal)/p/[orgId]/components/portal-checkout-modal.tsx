@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { X, CheckCircle2, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { useSearchParams } from "next/navigation";
 import { usePortalOrgId, usePortalCart, usePortalAuth, usePortalBusinessType, portalApi } from "@/contexts/portal-context";
 
 interface CheckoutModalProps {
@@ -16,6 +17,8 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
     const cart = usePortalCart();
     const auth = usePortalAuth();
     const businessType = usePortalBusinessType();
+    const searchParams = useSearchParams();
+    const utmCampaignId = searchParams.get("utm_campaign") || undefined;
 
     const items = cart.getItems();
     const total = cart.getTotal();
@@ -34,7 +37,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
                 quantity: c.quantity,
                 price: c.product.price,
             }));
-            const body = { items: orderItems, paymentMethod, guestName, guestPhone, guestAddress };
+            const body = { items: orderItems, paymentMethod, guestName, guestPhone, guestAddress, utmCampaignId };
             return portalApi.post(`/api/v1/portal/${orgId}/orders`, body, auth.token);
         },
         onSuccess: () => {

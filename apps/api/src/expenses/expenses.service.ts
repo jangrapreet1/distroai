@@ -16,16 +16,20 @@ export class ExpensesService {
         }
     }
 
-    async findAll(orgId: string, query: { status?: string, category?: string, page: number, limit: number }) {
-        const { status, category, page, limit } = query;
+    async findAll(orgId: string, query: { status?: string, category?: string, type?: string, page: number, limit: number }) {
+        const { status, category, type, page, limit } = query;
         const skip = (page - 1) * limit;
 
         const where: any = { orgId };
         if (status) where.status = status;
         if (category) where.category = category;
+        if (type && (type === 'OPERATIONAL' || type === 'PURCHASE')) where.type = type;
 
         const [items, total] = await Promise.all([
-            this.prisma.expense.findMany({ where, skip, take: limit, orderBy: { date: 'desc' } }),
+            this.prisma.expense.findMany({
+                where, skip, take: limit, orderBy: { date: 'desc' },
+                include: { purchaseOrder: { select: { id: true, poNumber: true } } },
+            }),
             this.prisma.expense.count({ where }),
         ]);
 
@@ -36,14 +40,31 @@ export class ExpensesService {
     }
 
     async create(orgId: string, data: any) {
+        // Validate PO ownership if linking to a purchase order
+        if (data.purchaseOrderId) {
+            const po = await this.prisma.purchaseOrder.findFirst({
+                where: { id: data.purchaseOrderId, orgId },
+            });
+            if (!po) {
+                throw new NotFoundException('Purchase order not found or does not belong to your organization');
+            }
+        }
+
         return this.prisma.expense.create({
             data: {
-                ...data,
                 orgId,
-                date: new Date(data.date),
+                type: data.type === 'PURCHASE' ? 'PURCHASE' : 'OPERATIONAL',
+                vendorName: data.vendorName,
                 amount: Number(data.amount),
                 taxAmount: data.taxAmount ? Number(data.taxAmount) : null,
-            }
+                date: new Date(data.date),
+                category: data.category || null,
+                paymentMethod: data.paymentMethod || null,
+                purchaseOrderId: data.purchaseOrderId || null,
+                receiptUrl: data.receiptUrl || null,
+                notes: data.notes || null,
+            },
+            include: { purchaseOrder: { select: { id: true, poNumber: true } } },
         });
     }
 
@@ -91,7 +112,7 @@ export class ExpensesService {
 - "amount" (number, the final total amount)
 - "taxAmount" (number, total tax if visible, else 0)
 - "date" (string, ISO format YYYY-MM-DD, try to guess the year if missing based on current context)
-- "category" (string, pick one closest match: TRAVEL, FOOD, FUEL, UTILITIES, SUPPLIES, MAINTENANCE, SOFTWARE, OTHER)
+- "category" (string, pick one closest match: TRAVEL, FOOD, FUEL, UTILITIES, SUPPLIES, MAINTENANCE, SOFTWARE, SALARY, WAGES, RENT, FREIGHT, LOADING, VEHICLE, COMMISSION, PACKAGING, INSURANCE, INTEREST, WASTAGE, OTHER)
 
 If you cannot read a value confidently, leave it null (except category, default to OTHER).`
                             },

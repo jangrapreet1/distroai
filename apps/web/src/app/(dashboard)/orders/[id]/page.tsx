@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, Package, Truck, MapPin, XCircle, RotateCcw, Clock, Send, Edit, Plus, Trash2, Search } from "lucide-react";
 import { useOrder, useOrderAction, useUpdateDraftOrder, useProducts } from "@/hooks/api-hooks";
-import { formatDate, formatDateTime, buildWhatsAppInvoiceLink , formatINR } from "@/lib/utils";
+import { formatDate, formatDateTime, buildWhatsAppInvoiceLink, formatINR } from "@/lib/utils";
 
 
 const statusClass: Record<string, string> = {
@@ -120,8 +120,8 @@ function EditDraftModal({ order, open, onClose }: { order: any; open: boolean; o
                                         <tr key={idx} className="border-t border-[var(--border)]">
                                             <td className="p-3 text-sm font-medium">{item.productName}</td>
                                             <td className="p-3"><input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
-                                            <td className="p-3"><input type="number" min={0} step={0.01} value={item.price} onChange={(e) => updateItem(idx, "price", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
-                                            <td className="p-3"><input type="number" min={0} step={0.01} value={item.discount} onChange={(e) => updateItem(idx, "discount", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
+                                            <td className="p-3"><input type="number" min={0} step="1" value={item.price} onChange={(e) => updateItem(idx, "price", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
+                                            <td className="p-3"><input type="number" min={0} step="1" value={item.discount} onChange={(e) => updateItem(idx, "discount", Number(e.target.value))} className="w-full text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] outline-none" /></td>
                                             <td className="p-3 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(lineTotal + lineTax)}</td>
                                             <td className="p-3"><button onClick={() => removeItem(idx)} className="text-[var(--red)] hover:bg-[var(--red)]/10 rounded p-1 transition"><Trash2 size={14} /></button></td>
                                         </tr>

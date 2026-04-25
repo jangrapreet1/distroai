@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -34,6 +35,8 @@ import { SyncModule } from './sync/sync.module';
 import { BillingModule } from './billing/billing.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { PortalModule } from './portal/portal.module';
+import { MarketingModule } from './marketing/marketing.module';
+import { CreditNotesModule } from './credit-notes/credit-notes.module';
 
 @Module({
     imports: [
@@ -87,8 +90,17 @@ import { PortalModule } from './portal/portal.module';
         BillingModule,
         ExpensesModule,
         PortalModule,
+        MarketingModule,
+        CreditNotesModule,
     ],
     controllers: [AppController],
-    providers: [AppService, PaymentProcessor],
+    providers: [
+        AppService,
+        PaymentProcessor,
+        // Global rate limiting guard — enforces 100 req/60s on all routes by default.
+        // Individual controllers/routes can override with @Throttle() or skip with @SkipThrottle().
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
+    ],
 })
 export class AppModule { }
+

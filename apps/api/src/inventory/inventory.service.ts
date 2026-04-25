@@ -192,4 +192,51 @@ export class InventoryService {
         const grandTotal = rows.reduce((s, r) => s + r.totalValue, 0);
         return { warehouses: rows, grandTotal, totalUnits };
     }
+
+    // ─── Low Stock Summary (for dashboard) ─────────
+    async getLowStockSummary(orgId: string) {
+        const inventories = await this.prisma.inventory.findMany({
+            where: { orgId },
+            include: {
+                product: { select: { id: true, name: true, sku: true, unit: true, minStockLevel: true, isActive: true } },
+                warehouse: { select: { name: true } },
+            },
+        });
+
+        // Group by product and sum quantities across warehouses
+        const productMap = new Map<string, { product: any; totalQty: number; warehouses: string[] }>();
+        for (const inv of inventories) {
+            if (!inv.product.isActive || (inv.product.minStockLevel ?? 0) <= 0) continue;
+            const existing = productMap.get(inv.productId);
+            if (existing) {
+                existing.totalQty += inv.quantity;
+                existing.warehouses.push(inv.warehouse.name);
+            } else {
+                productMap.set(inv.productId, {
+                    product: inv.product,
+                    totalQty: inv.quantity,
+                    warehouses: [inv.warehouse.name],
+                });
+            }
+        }
+
+        const lowStockItems = Array.from(productMap.values())
+            .filter(p => p.totalQty <= p.product.minStockLevel)
+            .map(p => ({
+                productId: p.product.id,
+                name: p.product.name,
+                sku: p.product.sku,
+                unit: p.product.unit,
+                currentStock: p.totalQty,
+                minStockLevel: p.product.minStockLevel,
+                deficit: p.product.minStockLevel - p.totalQty,
+                warehouses: p.warehouses,
+            }))
+            .sort((a, b) => b.deficit - a.deficit);
+
+        return {
+            count: lowStockItems.length,
+            items: lowStockItems,
+        };
+    }
 }

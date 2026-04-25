@@ -201,4 +201,37 @@ export class CronService {
 
         this.logger.log(`AR aging recalculated for ${updated} customers from ${unpaidInvoices.length} unpaid invoices`);
     }
+
+    // Marketing Metrics Sync — every 6 hours (Rule 5)
+    @Cron('0 */6 * * *')
+    async syncMarketingMetrics() {
+        this.logger.log('Running marketing metrics sync cron...');
+        await this.queueService.addToQueue('marketing', 'sync-metrics', {});
+        this.logger.log('Marketing metrics sync job dispatched');
+
+        // ── Proactive Token Expiry Alert (Fix 3) ──
+        // Warn orgs 7 days before Meta token expires so campaigns don't silently die
+        const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const expiringOrgs: any[] = await this.prisma.orgSettings.findMany({
+            where: {
+                metaTokenExpiresAt: {
+                    lte: sevenDaysFromNow,
+                    gte: new Date(),
+                },
+                metaAccessToken: { not: null },
+            } as any,
+            select: { orgId: true },
+        });
+
+        for (const org of expiringOrgs) {
+            await this.queueService.addToQueue('whatsapp', 'send-owner-alert', {
+                orgId: org.orgId,
+                message: '⚠️ Aapka Facebook connection 7 din mein expire hoga. Dashboard pe jaake Ads → Reconnect karein warna aapke ads band ho jayenge.',
+            });
+        }
+
+        if (expiringOrgs.length > 0) {
+            this.logger.warn(`Token expiry alerts dispatched for ${expiringOrgs.length} orgs`);
+        }
+    }
 }

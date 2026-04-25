@@ -77,7 +77,7 @@ function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerN
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Record Payment</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
                 </div>
-                <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                <form onSubmit={handleSubmit} noValidate className="p-5 space-y-4">
                     {error && (
                         <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-md text-sm">
                             {error}
@@ -120,7 +120,7 @@ function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerN
 
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)] mb-1 block">Amount (₹)</span>
-                        <input type="number" min={0.01} step={0.01} value={amount || ''} onChange={(e) => { setAmount(Number(e.target.value)); setError(""); }} placeholder="0.00" className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                        <input type="number" min={0.01} step="1" value={amount || ''} onChange={(e) => { setAmount(Number(e.target.value)); setError(""); }} placeholder="0.00" className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
                     </label>
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)] mb-1 block">Method</span>

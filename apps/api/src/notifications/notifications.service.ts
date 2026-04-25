@@ -5,6 +5,7 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { EmailService } from './email.service';
 import { SMSService } from './sms.service';
 import { PushService } from './push.service';
+import { EventsGateway } from './events.gateway';
 
 export type NotificationEvent =
     | { type: 'NEW_WHATSAPP_ORDER'; orgId: string; orderId: string; customerId: string }
@@ -28,6 +29,7 @@ export class NotificationsService {
         private email: EmailService,
         private sms: SMSService,
         private push: PushService,
+        private events: EventsGateway,
     ) { }
 
     async notify(orgId: string, event: NotificationEvent): Promise<void> {
@@ -44,6 +46,9 @@ export class NotificationsService {
                 channel: [],
             },
         });
+
+        // Push to SSE stream for real-time dashboard updates
+        this.events.emit(orgId, event.type, { notificationId: notification.id, ...event });
 
         // 2. Queue channel-specific sends
         try {

@@ -55,6 +55,7 @@
         "ioredis": "^5.3.2",
         "joi": "^17.13.1",
         "langchain": "^1.2.29",
+        "nanoid": "3",
         "openai": "^6.25.0",
         "passport": "^0.7.0",
         "passport-google-oauth20": "^2.0.0",

@@ -4,6 +4,8 @@ import {
     ConflictException,
     BadRequestException,
     Logger,
+    HttpException,
+    HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -11,6 +13,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/services/redis.service';
+import { EmailService } from '../notifications/email.service';
 import {
     RegisterDto,
     LoginDto,
@@ -23,11 +26,15 @@ import {
 export class AuthService {
     private readonly logger = new Logger(AuthService.name);
 
+    private static readonly MAX_LOGIN_ATTEMPTS = 5;
+    private static readonly LOCKOUT_TTL_SECONDS = 900; // 15 minutes
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
         private readonly config: ConfigService,
         private readonly redis: RedisService,
+        private readonly emailService: EmailService,
     ) { }
 
     async register(dto: RegisterDto) {
@@ -104,12 +111,26 @@ export class AuthService {
     }
 
     async login(dto: LoginDto) {
+        // --- Account lockout check ---
+        const lockoutKey = `login_attempts:${dto.email}`;
+        const attemptsStr = await this.redis.get(lockoutKey);
+        const attempts = attemptsStr ? parseInt(attemptsStr, 10) : 0;
+
+        if (attempts >= AuthService.MAX_LOGIN_ATTEMPTS) {
+            this.logger.warn(`Account locked out for ${dto.email} — ${attempts} failed attempts`);
+            throw new HttpException(
+                { code: 'AUTH_ACCOUNT_LOCKED', message: 'Too many failed login attempts. Please try again after 15 minutes.' },
+                HttpStatus.TOO_MANY_REQUESTS,
+            );
+        }
+
         const users = await this.prisma.user.findMany({
             where: { email: dto.email, isActive: true },
             include: { organization: { include: { subscription: true } } },
         });
 
         if (users.length === 0) {
+            await this.incrementLoginAttempts(lockoutKey);
             throw new UnauthorizedException({ code: 'AUTH_INVALID_CREDENTIALS', message: 'Invalid credentials' });
         }
 
@@ -123,6 +144,7 @@ export class AuthService {
 
         const user = dto.orgId ? users.find((u) => u.orgId === dto.orgId) : users[0];
         if (!user) {
+            await this.incrementLoginAttempts(lockoutKey);
             throw new UnauthorizedException({ code: 'AUTH_INVALID_CREDENTIALS', message: 'Invalid credentials' });
         }
 
@@ -131,8 +153,12 @@ export class AuthService {
         }
         const valid = await bcrypt.compare(dto.password, user.passwordHash);
         if (!valid) {
+            await this.incrementLoginAttempts(lockoutKey);
             throw new UnauthorizedException({ code: 'AUTH_INVALID_CREDENTIALS', message: 'Invalid credentials' });
         }
+
+        // --- Success: clear lockout counter ---
+        await this.redis.del(lockoutKey);
 
         await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
@@ -142,6 +168,14 @@ export class AuthService {
             user: { id: user.id, email: user.email, firstName: user.firstName, role: user.role },
             org: { id: user.orgId, name: user.organization.name, plan: user.organization.plan },
         };
+    }
+
+    private async incrementLoginAttempts(key: string): Promise<void> {
+        const count = await this.redis.incr(key);
+        if (count === 1) {
+            // First failure — set TTL
+            await this.redis.expire(key, AuthService.LOCKOUT_TTL_SECONDS);
+        }
     }
 
     async refresh(dto: RefreshTokenDto) {
@@ -192,7 +226,14 @@ export class AuthService {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         await this.redis.set(`otp:${identifier}`, otp, 600); // 10 minutes
 
-        // TODO: send via MSG91 / Resend in Phase 4
+        // Send OTP via email if email was provided
+        if (dto.email) {
+            await this.emailService.sendOTP(dto.email, otp);
+            this.logger.log(`OTP sent to email for ${dto.email.slice(0, 3)}***`);
+        } else {
+            // SMS delivery via MSG91 — log for now
+            this.logger.log(`[SMS STUB] OTP for ${dto.phone!.slice(-4)}: ${otp}`);
+        }
 
         return { message: 'OTP sent' };
     }

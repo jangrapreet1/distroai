@@ -434,3 +434,68 @@ export function useWhatsAppDisconnect() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+
+// ===== MARKETING / ADS =====
+export function useMarketingStatus() {
+    return useQuery({ queryKey: ["marketing-status"], queryFn: () => apiClient.get("/api/v1/marketing/status").then((r) => r.data) });
+}
+export function useCampaigns() {
+    return useQuery({ queryKey: ["campaigns"], queryFn: () => apiClient.get("/api/v1/marketing/campaigns").then((r) => r.data) });
+}
+export function useCampaign(id: string) {
+    return useQuery({ queryKey: ["campaigns", id], queryFn: () => apiClient.get(`/api/v1/marketing/campaigns/${id}`).then((r) => r.data), enabled: !!id });
+}
+export function useCreateCampaign() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/marketing/campaigns", data).then((r) => r.data),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ["campaigns"] }); toast.success("Campaign launched! 🚀"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useUpdateCampaign() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, action }: { id: string; action: string }) => apiClient.patch(`/api/v1/marketing/campaigns/${id}`, { action }).then((r) => r.data),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ["campaigns"] }); toast.success("Campaign updated"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useDeleteCampaign() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete(`/api/v1/marketing/campaigns/${id}`).then((r) => r.data),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ["campaigns"] }); toast.success("Campaign deleted"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useGenerateCreatives() {
+    return useMutation({
+        mutationFn: (data: { productId: string; userType: string }) => apiClient.post("/api/v1/marketing/creatives/generate", data).then((r) => r.data),
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useUploadAudience() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () => apiClient.post("/api/v1/marketing/audiences/upload").then((r) => r.data),
+        onSuccess: () => { toast.success("Customer audience uploaded to Meta"); qc.invalidateQueries({ queryKey: ["campaigns"] }); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useMetaConnect() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: { code: string; redirectUri: string }) => apiClient.post("/api/v1/marketing/connect", data).then((r) => r.data),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ["marketing-status"] }); toast.success("Meta account connected!"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useMetaDisconnect() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () => apiClient.delete("/api/v1/marketing/disconnect").then((r) => r.data),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ["marketing-status"] }); qc.invalidateQueries({ queryKey: ["campaigns"] }); toast.success("Meta disconnected"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}

@@ -183,6 +183,14 @@ export class PortalService {
         // we'll confirm immediately to match previous logic and trigger the Invoice + WhatsApp.
         await this.ordersService.confirm(orgId, draftOrder.id, 'SYSTEM_PORTAL');
 
+        // Closed-loop UTM tracking: if the order originated from a marketing ad, stamp it
+        if (data.utmCampaignId) {
+            await this.prisma.order.update({
+                where: { id: draftOrder.id },
+                data: { utmCampaignId: data.utmCampaignId },
+            });
+        }
+
         return await this.prisma.order.findUnique({ where: { id: draftOrder.id } });
     }
 

@@ -14,10 +14,11 @@ export class ExpensesController {
         @CurrentUser() u: JwtPayload,
         @Query('status') status?: string,
         @Query('category') category?: string,
+        @Query('type') type?: string,
         @Query('page') page = 1,
         @Query('limit') limit = 20
     ) {
-        return this.expensesService.findAll(u.orgId, { status, category, page: +page, limit: +limit });
+        return this.expensesService.findAll(u.orgId, { status, category, type, page: +page, limit: +limit });
     }
 
     @Post()

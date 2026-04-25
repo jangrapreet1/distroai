@@ -59,7 +59,14 @@ export class PurchaseOrdersService {
     }
 
     async findOne(orgId: string, id: string) {
-        const po = await this.prisma.purchaseOrder.findFirst({ where: { id, orgId }, include: { items: { include: { product: { select: { name: true, sku: true } } } }, supplier: true } });
+        const po = await this.prisma.purchaseOrder.findFirst({
+            where: { id, orgId },
+            include: {
+                items: { include: { product: { select: { name: true, sku: true } } } },
+                supplier: true,
+                expenses: { orderBy: { date: 'desc' } },
+            },
+        });
         if (!po) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Purchase order not found' });
         return po;
     }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AiController } from './ai.controller';
 import { ShelfAuditController } from './shelf-audit.controller';
 import { AiService } from './ai.service';
@@ -10,7 +10,7 @@ import { BullModule } from '@nestjs/bullmq';
 @Module({
     imports: [
         StorageModule,
-        WhatsAppModule,
+        forwardRef(() => WhatsAppModule),
         BullModule.registerQueue({ name: 'ai' })
     ],
     controllers: [AiController],

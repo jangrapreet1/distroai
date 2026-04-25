@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from './whatsapp.service';
 import { QueueService } from '../queue/queue.service';
+import { AiService } from '../ai/ai.service';
 
 // Bot states
 type BotState =
@@ -43,6 +44,7 @@ export class BotHandler {
         private prisma: PrismaService,
         private wa: WhatsAppService,
         private queueService: QueueService,
+        @Inject(forwardRef(() => AiService)) private aiService: AiService,
     ) { }
 
     async handleIncoming(phoneNumberId: string, msg: Record<string, unknown>) {
@@ -117,7 +119,24 @@ export class BotHandler {
                         ]);
                         await this.updateSession(session.id, 'MAIN_MENU', { ...context, orgId });
                     } else {
-                        await this.wa.sendText(orgId, from, "Hi! I'm the DistroAI ordering assistant. Type 'order' to get started or say 'hi' for the menu.");
+                        // Pass off to Langchain RAG
+                        if (text.length > 1000) {
+                            await this.wa.sendText(orgId, from, 'Message too long. Please keep queries short.');
+                            break;
+                        }
+
+                        // Send typing indicator immediately for UX
+                        await this.wa.sendAction(orgId, from, 'typing_on');
+
+                        try {
+                            // Composite Session Key preventing tenant bleed
+                            const aiSessionId = `session:${orgId}:${from}`;
+                            const res = await this.aiService.query(orgId, from, text, aiSessionId);
+                            await this.wa.sendText(orgId, from, res.response);
+                        } catch (err) {
+                            this.logger.error(`AI Service failed for WA ${from}`, (err as Error).message);
+                            await this.wa.sendText(orgId, from, "Sorry, I couldn't process that right now. Try again in a moment or use 'order' to see available commands.");
+                        }
                     }
                     break;
 

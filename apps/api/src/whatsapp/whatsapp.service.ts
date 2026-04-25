@@ -208,4 +208,18 @@ export class WhatsAppService {
             this.logger.error(`Failed to mark read: ${messageId} (org ${orgId})`, (err as Error).message);
         }
     }
+
+    async sendAction(orgId: string, to: string, action: 'typing_on' | 'typing_off'): Promise<void> {
+        const resolved = await this.getClient(orgId);
+        if (!resolved) return;
+        try {
+            await resolved.client.post('/messages', {
+                messaging_product: 'whatsapp',
+                to,
+                action,
+            });
+        } catch (err) {
+            this.logger.error(`Failed to send ${action} to ${to} (org ${orgId})`, (err as Error).message);
+        }
+    }
 }

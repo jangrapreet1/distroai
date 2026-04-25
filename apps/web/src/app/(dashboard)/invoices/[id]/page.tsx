@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, Send, Download, CreditCard, CheckCircle, X, Link as LinkIcon, Receipt } from "lucide-react";
 import { useInvoice, useRecordPayment } from "@/hooks/api-hooks";
-import { formatDate, buildWhatsAppInvoiceLink , formatINR } from "@/lib/utils";
+import { formatDate, buildWhatsAppInvoiceLink, formatINR } from "@/lib/utils";
 import apiClient from "@/lib/api-client";
 import toast from "react-hot-toast";
 
@@ -39,10 +39,10 @@ function RecordPaymentModal({ open, onClose, invoiceId, customerId, maxAmount }:
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Record Payment</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
                 </div>
-                <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                <form onSubmit={handleSubmit} noValidate className="p-5 space-y-4">
                     <label>
                         <span className="text-xs text-[var(--text-muted)] mb-1 block">Amount (₹)</span>
-                        <input type="number" min={0.01} max={maxAmount} step={0.01} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                        <input type="number" min={0.01} max={maxAmount} step="1" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
                         <p className="text-[10px] text-[var(--text-muted)] mt-1">Max: {formatINR(maxAmount)}</p>
                     </label>
                     <label>

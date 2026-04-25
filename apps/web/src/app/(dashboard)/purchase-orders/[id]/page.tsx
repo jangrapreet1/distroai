@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { usePurchaseOrder, useReceivePurchaseOrder } from "@/hooks/api-hooks";
-import { ArrowLeft, CheckCircle2, ChevronDown, Package } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, Package, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatINR } from "@/lib/utils";
 import { toast } from "react-hot-toast";
@@ -181,10 +181,76 @@ export default function PurchaseOrderDetailPage() {
                             </table>
                         </div>
                         <div className="bg-[var(--bg-secondary)] p-4 text-right">
-                            <span className="text-[var(--text-muted)] text-sm mr-4">Total Amount:</span>
+                            <span className="text-[var(--text-muted)] text-sm mr-4">Items Total:</span>
                             <span className="text-lg font-bold text-[var(--gold)] font-mono">{formatINR(po.totalAmount)}</span>
                         </div>
                     </div>
+
+                    {/* Additional Costs (Linked Expenses) */}
+                    {(() => {
+                        const expenses: any[] = po.expenses ?? [];
+                        const expensesTotal = expenses.reduce((s: number, e: any) => s + (e.amount ?? 0) + (e.taxAmount ?? 0), 0);
+                        const landedCost = po.totalAmount + expensesTotal;
+
+                        return (
+                            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
+                                <div className="p-5 border-b border-[var(--border)] flex items-center justify-between">
+                                    <h2 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                                        <Truck size={16} className="text-purple-400" /> Additional Costs
+                                    </h2>
+                                    <Link
+                                        href={`/expenses?addForPO=${po.id}`}
+                                        className="text-sm font-medium text-[var(--gold)] hover:text-[var(--gold-light)] flex items-center gap-1 transition"
+                                    >
+                                        <Plus size={14} /> Add Cost
+                                    </Link>
+                                </div>
+
+                                {expenses.length === 0 ? (
+                                    <div className="p-6 text-center text-sm text-[var(--text-muted)]">
+                                        No additional costs recorded. Add freight, delivery charges, or loading fees.
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-[var(--border)]">
+                                        {expenses.map((exp: any) => (
+                                            <div key={exp.id} className="px-5 py-3 flex items-center justify-between text-sm">
+                                                <div>
+                                                    <p className="font-medium">{exp.vendorName}</p>
+                                                    <p className="text-xs text-[var(--text-muted)]">
+                                                        {exp.category || "OTHER"} • {exp.paymentMethod ? exp.paymentMethod.replace('_', ' ') : '—'} • {new Date(exp.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right font-mono">
+                                                    <p className="font-medium">{formatINR(exp.amount)}</p>
+                                                    {exp.taxAmount > 0 && (
+                                                        <p className="text-[10px] text-[var(--text-muted)]">+{formatINR(exp.taxAmount)} tax</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Landed Cost */}
+                                <div className="bg-[var(--bg-secondary)] p-4 border-t border-[var(--border)]">
+                                    <div className="flex justify-between items-center text-sm mb-1">
+                                        <span className="text-[var(--text-muted)]">Items Total</span>
+                                        <span className="font-mono">{formatINR(po.totalAmount)}</span>
+                                    </div>
+                                    {expensesTotal > 0 && (
+                                        <div className="flex justify-between items-center text-sm mb-1">
+                                            <span className="text-[var(--text-muted)]">Additional Costs (incl. tax)</span>
+                                            <span className="font-mono text-purple-400">+{formatINR(expensesTotal)}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
+                                        <span className="font-semibold">Landed Cost</span>
+                                        <span className="text-lg font-bold text-[var(--gold)] font-mono">{formatINR(landedCost)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Right Column: Receive Form (if active) */}

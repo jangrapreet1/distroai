@@ -8,6 +8,7 @@ const PlaceOrderSchema = z.object({
     guestName: z.string().optional(),
     guestPhone: z.string().optional(),
     guestAddress: z.string().optional(),
+    utmCampaignId: z.string().optional(),
     items: z.array(
         z.object({
             productId: z.string(),

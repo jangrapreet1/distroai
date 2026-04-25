@@ -181,7 +181,7 @@ export default function NewOrderPage() {
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} noValidate className="space-y-6">
                 {/* Customer Selection */}
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5">
                     <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3">Customer</h3>
@@ -332,11 +332,11 @@ export default function NewOrderPage() {
                                                     className="w-20 text-center px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none" />
                                             </td>
                                             <td className="py-3 text-right">
-                                                <input type="number" min={0} step={0.01} value={item.price} onChange={(e) => updateItem(idx, "price", Number(e.target.value))}
+                                                <input type="number" min={0} step="1" value={item.price} onChange={(e) => updateItem(idx, "price", Number(e.target.value))}
                                                     className="w-24 text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none" />
                                             </td>
                                             <td className="py-3 text-right">
-                                                <input type="number" min={0} step={0.01} value={item.discount} onChange={(e) => updateItem(idx, "discount", Number(e.target.value))}
+                                                <input type="number" min={0} step="1" value={item.discount} onChange={(e) => updateItem(idx, "discount", Number(e.target.value))}
                                                     className="w-20 text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none" />
                                             </td>
                                             <td className="py-3 text-right font-medium" style={{ fontFamily: "var(--font-mono)" }}>

@@ -128,6 +128,11 @@ enum SubStatus {
   TRIAL
 }
 
+enum ExpenseType {
+  OPERATIONAL
+  PURCHASE
+}
+
 enum EmbeddingStatus {
   PENDING
   COMPLETED
@@ -181,6 +186,7 @@ model Organization {
   purchaseOrders  PurchaseOrder[]
   expenses        Expense[]
   creditNotes     CreditNote[]
+  marketingCampaigns MarketingCampaign[]
 }
 
 model User {
@@ -272,6 +278,8 @@ model Product {
   isActive         Boolean  @default(true)
   imageUrl         String?
   imageUrls        String[] @default([])
+  commissionType   String?          // "FIXED" | "PERCENTAGE" | null (no commission)
+  commissionValue  Float    @default(0)  // ₹ amount if FIXED, % if PERCENTAGE
   description      String?
   tags             String[]
   embedding        Unsupported("vector(768)")?
@@ -453,6 +461,7 @@ model Order {
   deliveryAddress String?
   schemeId       String?
   invoiceId      String?     @unique
+  utmCampaignId  String?     // nullable — set when order originates from an ad
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -520,6 +529,7 @@ model PurchaseOrder {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   supplier     Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   items        PurchaseOrderItem[]
+  expenses     Expense[]
 
   @@unique([orgId, poNumber])
   @@index([orgId])
@@ -1024,6 +1034,14 @@ model OrgSettings {
   bankBranch          String?
   upiId               String?
 
+  // Meta Marketing API integration (Phase 11)
+  metaAccessToken     String?   // AES-256-GCM encrypted
+  metaAdAccountId     String?
+  metaFbPageId        String?   // Required for Ad Creative object_story_spec
+  metaInstagramActorId String?  // IG business account linked to the FB Page
+  metaTokenExpiresAt  DateTime?
+  consentGivenAt      DateTime? // Must be set before audience upload
+
   updatedAt           DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -1052,21 +1070,71 @@ enum RequestStatus {
 }
 
 model Expense {
-  id          String   @id @default(cuid())
-  orgId       String
-  vendorName  String
-  amount      Float
-  taxAmount   Float?
-  date        DateTime
-  category    String?
-  receiptUrl  String?
-  notes       String?
-  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED, PAID
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String         @id @default(cuid())
+  orgId           String
+  type            ExpenseType    @default(OPERATIONAL)
+  vendorName      String
+  amount          Float
+  taxAmount       Float?
+  date            DateTime
+  category        String?
+  paymentMethod   PaymentMethod?
+  purchaseOrderId String?
+  receiptUrl      String?
+  notes           String?
+  status          String         @default("PENDING") // PENDING, APPROVED, REJECTED, PAID
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization  Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
 
   @@index([orgId])
   @@index([date])
+  @@index([purchaseOrderId])
+}
+
+// ─── Phase 11: Marketing & Ads ────────────────────────────────
+
+model MarketingCampaign {
+  id               String    @id @default(cuid())
+  orgId            String
+  metaCampaignId   String    @unique
+  metaAdsetId      String?
+  metaAdId         String?
+  objective        String    // MESSAGES | CATALOG_SALES | REACH
+  platform         String[]  // ["facebook", "instagram", "whatsapp"]
+  userType         String    // B2B | B2C
+  dailyBudget      Decimal
+  totalSpend       Decimal   @default(0)
+  status           String    // ACTIVE | PAUSED | DELETED | ERROR
+  errorReason      String?
+  utmCampaignId    String    @unique
+  customAudienceId String?   // Meta Custom Audience ID, if uploaded
+  startDate        DateTime
+  endDate          DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization     Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  metrics          CampaignMetrics[]
+
+  @@index([orgId])
+  @@index([status])
+}
+
+model CampaignMetrics {
+  id               String    @id @default(cuid())
+  campaignId       String
+  date             DateTime  @db.Date
+  impressions      Int       @default(0)
+  clicks           Int       @default(0)
+  messagesStarted  Int       @default(0)
+  spend            Decimal   @default(0)
+  ordersGenerated  Int       @default(0)
+  revenueGenerated Decimal   @default(0)
+
+  campaign         MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
 }

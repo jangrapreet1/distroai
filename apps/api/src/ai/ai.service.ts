@@ -267,7 +267,29 @@ export class AiService {
         const tools = this.buildTools(orgId, userId);
         const toolMap = new Map(tools.map(t => [t.name, t]));
         const llmWithTools = getLlm()!.bindTools(tools);
-        const messages: BaseMessage[] = [new SystemMessage(systemMsg), new HumanMessage(userQuery)];
+
+        let previousMessages: BaseMessage[] = [];
+        const redisKey = sessionId ? `aiHistory:${sessionId}` : null;
+        if (redisKey && this.redis) {
+            try {
+                const cached = await this.redis.get(redisKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    previousMessages = parsed.map((m: any) =>
+                        m.role === 'human' ? new HumanMessage(m.content) : new AIMessage(m.content)
+                    );
+                }
+            } catch (err) {
+                this.logger.warn('Failed to load AI history from Redis', err);
+            }
+        }
+
+        const messages: BaseMessage[] = [
+            new SystemMessage(systemMsg),
+            ...previousMessages,
+            new HumanMessage(userQuery)
+        ];
+
         const timeoutMs = 30000;
 
         try {
@@ -298,6 +320,21 @@ export class AiService {
             await this.prisma.aIQuery.create({
                 data: { orgId, userId, sessionId, query: userQuery, response: result, latencyMs: 0 }
             });
+
+            if (redisKey && this.redis) {
+                try {
+                    const updatedHistory = [
+                        ...previousMessages.map(m => ({ role: m instanceof HumanMessage ? 'human' : 'ai', content: m.content })),
+                        { role: 'human', content: userQuery },
+                        { role: 'ai', content: result }
+                    ].slice(-10); // Keep last 10 turns to respect token limits
+
+                    // 30 minute TTL (1800 seconds) - Resets on every new message
+                    await this.redis.setex(redisKey, 1800, JSON.stringify(updatedHistory));
+                } catch (err) {
+                    this.logger.warn('Failed to save AI history to Redis', err);
+                }
+            }
 
             return { response: result };
         } catch (error: any) {

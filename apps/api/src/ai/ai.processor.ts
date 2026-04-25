@@ -1,6 +1,6 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import OpenAI from 'openai';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
@@ -12,7 +12,7 @@ export class AiProcessor extends WorkerHost {
 
     constructor(
         private prisma: PrismaService,
-        private whatsappService: WhatsAppService
+        @Inject(forwardRef(() => WhatsAppService)) private whatsappService: WhatsAppService
     ) {
         super();
     }

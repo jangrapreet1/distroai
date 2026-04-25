@@ -40,6 +40,12 @@ export default function DashboardPage() {
         retry: false,
     });
 
+    const { data: lowStockData } = useQuery({
+        queryKey: ["inventory", "low-stock"],
+        queryFn: () => apiClient.get("/api/v1/inventory/low-stock").then((r) => r.data?.data || r.data).catch(() => null),
+        retry: false,
+    });
+
     const d = dashboard?.data ?? dashboard ?? {};
     const todayRevenue = d?.today?.revenue ?? 0;
     const todayOrders = d?.today?.orders ?? 0;
@@ -156,6 +162,36 @@ export default function DashboardPage() {
                     <KPICard title={t('low_stock')} value={String(lowStock)} change={0} changeLabel={t('products_below_min')} icon={Package} accentColor="var(--orange)" sparkData={sparkLowStock} />
                 </Link>
             </div>
+
+            {/* Low Stock Alert Card */}
+            {(lowStockData?.count ?? 0) > 0 && (
+                <div className="bg-gradient-to-r from-red-500/5 via-[var(--bg-card)] to-orange-500/5 border border-red-500/15 rounded-[var(--radius-lg)] p-5 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 fill-mode-both">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                            <h3 className="font-semibold text-sm">Low Stock Alert</h3>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">{lowStockData.count} items</span>
+                        </div>
+                        <Link href="/inventory?lowStock=true" className="text-xs text-red-400 hover:underline flex items-center gap-1 transition">
+                            View all <ArrowRight size={12} />
+                        </Link>
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                        {(lowStockData.items || []).slice(0, 5).map((item: any) => (
+                            <div key={item.productId} className="flex items-center justify-between p-2.5 bg-[var(--bg-secondary)]/50 rounded-lg border border-[var(--border)]">
+                                <div className="min-w-0 flex-1 mr-2">
+                                    <p className="text-xs font-medium truncate">{item.name}</p>
+                                    <p className="text-[10px] text-[var(--text-muted)] font-mono">{item.sku}</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <p className="text-xs font-bold text-red-400">{item.currentStock}<span className="font-normal text-[var(--text-muted)]">/{item.minStockLevel}</span></p>
+                                    <p className="text-[10px] text-[var(--text-muted)]">{item.unit}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Sales Chart + Alerts */}
             <div className="grid lg:grid-cols-5 gap-4">

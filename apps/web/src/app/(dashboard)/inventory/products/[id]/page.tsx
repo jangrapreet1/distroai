@@ -32,7 +32,8 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
     const [editData, setEditData] = useState({
         name: "", sku: "", brand: "", category: "",
         purchasePrice: 0, sellingPrice: 0, mrp: 0, gstRate: 0,
-        unit: "", secondaryUnit: "", conversionFactor: 1, minStockLevel: 0
+        unit: "", secondaryUnit: "", conversionFactor: 1, minStockLevel: 0,
+        commissionType: null as string | null, commissionValue: 0,
     });
 
     const handleEditOpen = () => {
@@ -50,6 +51,8 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 secondaryUnit: product.secondaryUnit || "",
                 conversionFactor: product.conversionFactor || 1,
                 minStockLevel: product.minStockLevel || 0,
+                commissionType: product.commissionType || null,
+                commissionValue: product.commissionValue || 0,
             });
             setEditImages(parsedImages);
             setIsEditing(true);
@@ -146,9 +149,17 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                             <dt className="text-[var(--text-muted)]">Purchase Price</dt>
                             <dd className="text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(product.purchasePrice || 0)}</dd>
                         </div>
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between border-b border-[var(--border)] pb-2 text-sm">
                             <dt className="text-[var(--text-muted)]">GST Rate</dt>
                             <dd className="text-right" style={{ fontFamily: "var(--font-mono)" }}>{product.gstRate || 0}%</dd>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <dt className="text-[var(--text-muted)]">Commission</dt>
+                            <dd className="text-right" style={{ fontFamily: "var(--font-mono)" }}>
+                                {product.commissionType === 'FIXED' ? `₹${product.commissionValue}/unit` :
+                                    product.commissionType === 'PERCENTAGE' ? `${product.commissionValue}%` :
+                                        <span className="text-[var(--text-muted)]">None</span>}
+                            </dd>
                         </div>
                     </dl>
                 </div>
@@ -263,6 +274,37 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Min. Stock Level</span>
                                             <input type="number" min="0" value={editData.minStockLevel} onChange={(e) => setEditData({ ...editData, minStockLevel: Number(e.target.value) })} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" />
                                         </label>
+                                    </div>
+                                </div>
+
+                                {/* Commission (Owner/Admin only) */}
+                                <div className="space-y-4 lg:col-span-3">
+                                    <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Commission Setup <span className="text-[10px] text-[var(--gold)] ml-1">(Owner Only)</span></h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <span className="text-xs text-[var(--text-muted)] mb-2 block">Commission Type</span>
+                                            <div className="flex gap-1">
+                                                {[{ label: 'None', value: null }, { label: 'Fixed ₹', value: 'FIXED' }, { label: 'Percentage %', value: 'PERCENTAGE' }].map(opt => (
+                                                    <button key={String(opt.value)} type="button"
+                                                        onClick={() => setEditData({ ...editData, commissionType: opt.value, commissionValue: opt.value ? editData.commissionValue : 0 })}
+                                                        className={`flex-1 px-2 py-1.5 text-xs rounded-[var(--radius-md)] border transition ${editData.commissionType === opt.value
+                                                            ? 'bg-[var(--gold)]/15 text-[var(--gold)] border-[var(--gold)]/30 font-medium'
+                                                            : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)]'}`}
+                                                    >{opt.label}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {editData.commissionType && (
+                                            <label className="block">
+                                                <span className="text-xs text-[var(--text-muted)] mb-1 block">
+                                                    {editData.commissionType === 'FIXED' ? 'Amount per unit (₹)' : 'Percentage (%)'}
+                                                </span>
+                                                <input type="number" step="0.01" min="0"
+                                                    value={editData.commissionValue}
+                                                    onChange={(e) => setEditData({ ...editData, commissionValue: Number(e.target.value) })}
+                                                    className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" />
+                                            </label>
+                                        )}
                                     </div>
                                 </div>
                             </div>

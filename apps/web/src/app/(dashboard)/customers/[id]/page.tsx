@@ -82,17 +82,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 {customer.phone && (
                     <>
                         <a href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-white/5 border border-white/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 hover:border-[var(--whatsapp)]/50 hover:shadow-[0_0_15px_rgba(37,211,102,0.15)] hover:-translate-y-0.5 transition-all duration-300">
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 hover:border-[var(--whatsapp)]/50 hover:shadow-[0_0_15px_rgba(37,211,102,0.15)] hover:-translate-y-0.5 transition-all duration-300">
                             <MessageCircle size={16} /> WhatsApp
                         </a>
                         <a href={`tel:${customer.phone}`}
-                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 hover:border-white/20 hover:shadow-[0_4px_15px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 transition-all duration-300">
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 hover:border-[var(--text-primary)]/20 hover:shadow-[0_4px_15px_rgba(0,0,0,0.2)] hover:-translate-y-0.5 transition-all duration-300">
                             <Phone size={16} /> Call
                         </a>
                         <button
                             onClick={handleRequestLocation}
                             disabled={isRequestingLocation}
-                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-white/5 border border-white/10 text-[var(--text-primary)] hover:border-[var(--gold)]/50 hover:shadow-[0_0_15px_rgba(251,191,36,0.15)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:transform-none"
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--text-primary)] hover:border-[var(--gold)]/50 hover:shadow-[0_0_15px_rgba(251,191,36,0.15)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:transform-none"
                         >
                             <MapPin size={16} className={isRequestingLocation ? "text-[var(--text-muted)] animate-pulse" : "text-[var(--gold)]"} />
                             {isRequestingLocation ? "Generating..." : "Request Location"}
@@ -108,19 +108,19 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     <div className="relative overflow-hidden bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-[var(--radius-lg)] p-6">
                         <div className="absolute top-0 right-0 w-64 h-64 opacity-20 pointer-events-none blur-[60px]" style={{ background: `radial-gradient(circle, ${tierColors[customer.tier] || "var(--gold)"} 0%, transparent 70%)` }} />
                         <div className="relative z-10 flex items-center justify-between mb-4">
-                            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70" style={{ fontFamily: "var(--font-playfair)" }}>{customer.name}</h1>
+                            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-muted)]" style={{ fontFamily: "var(--font-playfair)" }}>{customer.name}</h1>
                             <div className="flex gap-2">
                                 <span className="px-2 py-0.5 text-[10px] font-bold rounded-sm border" style={{ backgroundColor: `${tierColors[customer.tier] || "var(--gold)"}15`, color: tierColors[customer.tier] || "var(--gold)", borderColor: `${tierColors[customer.tier] || "var(--gold)"}30` }}>
                                     {customer.tier}
                                 </span>
-                                <span className="px-2 py-0.5 bg-white/10 text-white/80 border border-white/20 text-[10px] font-bold rounded-sm">{customer.type}</span>
+                                <span className="px-2 py-0.5 bg-[var(--text-primary)]/10 text-[var(--text-secondary)] border border-[var(--text-primary)]/20 text-[10px] font-bold rounded-sm">{customer.type}</span>
                             </div>
                         </div>
                         <div className="relative z-10 space-y-3">
-                            {customer.phone && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><Phone size={16} className="text-[var(--gold)]/70" />{customer.phone}</div>}
-                            {customer.email && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><Mail size={16} className="text-[var(--gold)]/70" />{customer.email}</div>}
-                            {(customer.city || customer.state) && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><MapPin size={16} className="text-[var(--gold)]/70" />{customer.city}{customer.state ? `, ${customer.state}` : ""}</div>}
-                            {customer.gstNumber && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-white transition-colors cursor-default"><ShieldCheck size={16} className="text-[var(--gold)]/70" />GSTIN: {customer.gstNumber}</div>}
+                            {customer.phone && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default"><Phone size={16} className="text-[var(--gold)]/70" />{customer.phone}</div>}
+                            {customer.email && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default"><Mail size={16} className="text-[var(--gold)]/70" />{customer.email}</div>}
+                            {(customer.city || customer.state) && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default"><MapPin size={16} className="text-[var(--gold)]/70" />{customer.city}{customer.state ? `, ${customer.state}` : ""}</div>}
+                            {customer.gstNumber && <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default"><ShieldCheck size={16} className="text-[var(--gold)]/70" />GSTIN: {customer.gstNumber}</div>}
                         </div>
                     </div>
 
@@ -224,7 +224,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                 </div>
                             ) : (
                                 recentOrders.map((order: any) => (
-                                    <div key={order.id} className="group grid grid-cols-[1.5fr_1fr_1fr_1fr_auto] gap-4 p-3 mx-2 items-center rounded-lg border border-transparent hover:bg-white/5 hover:border-white/10 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-default">
+                                    <div key={order.id} className="group grid grid-cols-[1.5fr_1fr_1fr_1fr_auto] gap-4 p-3 mx-2 items-center rounded-lg border border-transparent hover:bg-[var(--text-primary)]/5 hover:border-[var(--text-primary)]/10 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-default">
                                         <div className="font-medium">
                                             <Link href={`/orders/${order.id}`} className="text-[var(--gold)] hover:text-[var(--gold-light)] transition-colors">{order.orderNumber}</Link>
                                         </div>
@@ -235,7 +235,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                         <div className="text-center">
                                             <span className={`inline-block px-2.5 py-1 text-[10px] font-bold uppercase rounded-md tracking-widest border ${order.status === 'DELIVERED' ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)] border-[var(--green-bright)]/20 shadow-[inset_0_0_10px_rgba(0,255,100,0.1)]' :
                                                 order.status === 'CANCELLED' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                                                    order.status === 'DRAFT' ? 'bg-white/5 text-[var(--text-secondary)] border-white/10' :
+                                                    order.status === 'DRAFT' ? 'bg-[var(--text-primary)]/5 text-[var(--text-secondary)] border-[var(--text-primary)]/10' :
                                                         'bg-[var(--gold)]/10 text-[var(--gold)] border-[var(--gold)]/20 shadow-[inset_0_0_10px_rgba(251,191,36,0.1)]'
                                                 }`}>
                                                 {order.status}
@@ -276,7 +276,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                 </div>
                             ) : (
                                 recentPayments.map((p: any) => (
-                                    <div key={p.id} className="group grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-4 p-3 mx-2 items-center rounded-lg border border-transparent hover:bg-white/5 hover:border-white/10 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-default">
+                                    <div key={p.id} className="group grid grid-cols-[1fr_1fr_1fr_1.5fr] gap-4 p-3 mx-2 items-center rounded-lg border border-transparent hover:bg-[var(--text-primary)]/5 hover:border-[var(--text-primary)]/10 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-default">
                                         <div className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{formatDate(p.paidAt ?? p.createdAt)}</div>
                                         <div><span className="px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-widest bg-[var(--gold)]/10 text-[var(--gold)] border border-[var(--gold)]/20">{p.method?.replace("_", " ")}</span></div>
                                         <div className="text-sm text-right font-bold tracking-tight text-[var(--green-bright)] group-hover:drop-shadow-[0_0_8px_rgba(0,255,100,0.3)] transition-all" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(p.amount ?? 0)}</div>
@@ -288,7 +288,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     </div>
 
                     {/* Customer Activity Feed */}
-                    <div className="bg-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-[var(--radius-lg)] p-8 mt-8 relative overflow-hidden">
+                    <div className="bg-[var(--text-primary)]/5 backdrop-blur-xl border border-[var(--text-primary)]/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] rounded-[var(--radius-lg)] p-8 mt-8 relative overflow-hidden">
                         <div className="absolute top-0 right-1/4 w-96 h-96 opacity-10 pointer-events-none blur-[100px] bg-[var(--gold)] rounded-full mix-blend-screen" />
                         <h2 className="font-semibold text-lg mb-8 flex items-center gap-3 relative z-10" style={{ fontFamily: "var(--font-playfair)" }}>
                             <div className="w-8 h-8 rounded-lg bg-[var(--gold)]/10 flex items-center justify-center border border-[var(--gold)]/20 shadow-[0_0_15px_rgba(251,191,36,0.15)]">
@@ -297,7 +297,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                             Activity Timeline
                         </h2>
 
-                        <div className="space-y-6 relative z-10">
+                        <div className="space-y-6 relative z-10 max-h-[600px] overflow-y-auto pr-2">
                             {activityLoading ? (
                                 <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading activity trace...</p>
                             ) : activities.length === 0 ? (
@@ -320,16 +320,16 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                                 </div>
                                                 <div className="flex-1 bg-[var(--bg-card)] rounded-[var(--radius-lg)] p-5 border border-[var(--border)] shadow-sm hover:bg-[var(--bg-card-hover)] hover:-translate-y-0.5 transition-all duration-300">
                                                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
-                                                        <h4 className="font-semibold text-white/90 text-sm tracking-wide">{act.title}</h4>
+                                                        <h4 className="font-semibold text-[var(--text-primary)] text-sm tracking-wide">{act.title}</h4>
                                                         <time className="text-[10px] uppercase tracking-widest text-[var(--gold)]/70 font-medium bg-[var(--gold)]/5 px-2 py-1 rounded border border-[var(--gold)]/10">
                                                             {formatDistanceToNow(new Date(act.createdAt), { addSuffix: true })}
                                                         </time>
                                                     </div>
                                                     <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4">
-                                                        <p className="text-sm text-[var(--text-muted)] leading-relaxed">{act.description}</p>
+                                                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{act.description}</p>
                                                         {(act.amount !== null && act.amount > 0) ? (
                                                             <div className="flex items-center gap-3 shrink-0">
-                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-sm bg-black/40 border border-white/10 uppercase tracking-widest text-[#a1a1aa]">
+                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-sm bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 uppercase tracking-widest text-[var(--text-secondary)]">
                                                                     {act.status}
                                                                 </span>
                                                                 <span className="text-sm font-bold tracking-tight" style={{ fontFamily: "var(--font-mono)", color: colorVar, textShadow: `0 0 10px ${colorVar}40` }}>
@@ -338,7 +338,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                                             </div>
                                                         ) : (
                                                             <div className="flex items-center gap-2 shrink-0">
-                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-sm bg-black/40 border border-white/10 uppercase tracking-widest" style={{ color: colorVar }}>
+                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-sm bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 uppercase tracking-widest" style={{ color: colorVar }}>
                                                                     {act.status}
                                                                 </span>
                                                             </div>

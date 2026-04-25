@@ -56,4 +56,9 @@ export class InventoryController {
     getValuation(@CurrentUser() user: JwtPayload) {
         return this.inventory.getValuation(user.orgId);
     }
+
+    @Get('low-stock')
+    getLowStock(@CurrentUser() user: JwtPayload) {
+        return this.inventory.getLowStockSummary(user.orgId);
+    }
 }

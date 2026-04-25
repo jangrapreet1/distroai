@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
     LayoutDashboard, ShoppingCart, FileText, Package, Users, Truck,
-    CreditCard, ClipboardList, Receipt, BarChart3, Sparkles,
-    Settings, Menu, X, Search, Command, Sun, Moon,
+    CreditCard, ClipboardList, Receipt, BarChart3, Sparkles, Megaphone,
+    Settings, Menu, X, Search, Command, Sun, Moon, Undo2, PieChart, Clock, Coins,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +38,7 @@ const NAV_GROUPS: NavGroup[] = [
             { label: "finance", href: "/payments", icon: CreditCard },
             { label: "purchase_orders", href: "/purchase-orders", icon: ClipboardList, roles: ['OWNER', 'ADMIN', 'MANAGER'] },
             { label: "expenses", href: "/expenses", icon: Receipt },
+            { label: "Returns", href: "/returns", icon: Undo2 },
         ],
     },
     {
@@ -46,6 +47,16 @@ const NAV_GROUPS: NavGroup[] = [
         items: [
             { label: "analytics", href: "/analytics", icon: BarChart3 },
             { label: "AI Chat", href: "/ai", icon: Sparkles },
+            { label: "Ads", href: "/ads", icon: Megaphone, roles: ['OWNER', 'ADMIN'] },
+        ],
+    },
+    {
+        title: "Reports",
+        roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'],
+        items: [
+            { label: "P&L", href: "/reports", icon: PieChart },
+            { label: "Aging", href: "/reports/aging", icon: Clock },
+            { label: "Commissions", href: "/reports/commissions", icon: Coins, roles: ['OWNER', 'ADMIN'] },
         ],
     },
     {

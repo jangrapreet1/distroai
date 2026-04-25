@@ -129,7 +129,7 @@ export default function PurchaseOrdersPage() {
             </div>
 
             {selectedPOs.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-card)] border border-[var(--gold)]/30 shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-full px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 fade-in duration-300">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-primary)] border border-[var(--gold)]/30 shadow-[0_8px_30px_rgba(0,0,0,0.2)] rounded-full px-6 py-3 flex items-center gap-6 animate-in slide-in-from-bottom-5 fade-in duration-300">
                     <div className="flex items-center gap-2">
                         <span className="flex items-center justify-center bg-[var(--gold)]/20 text-[var(--gold)] w-6 h-6 rounded-full text-xs font-bold">{selectedPOs.length}</span>
                         <span className="text-sm font-medium">Orders selected</span>
