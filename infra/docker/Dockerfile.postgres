@@ -1,0 +1,25 @@
+FROM pgvector/pgvector:pg15
+
+# Install dependencies and cron
+RUN apt-get update && apt-get install -y curl cron ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install WAL-G
+# Note: we use the v2.0.1 build for Ubuntu, which is highly compatible with the Debian-based pgvector image
+RUN curl -L "https://github.com/wal-g/wal-g/releases/download/v2.0.1/wal-g-pg-ubuntu-20.04-amd64.tar.gz" -o /tmp/wal-g.tar.gz \
+    && tar -xvzf /tmp/wal-g.tar.gz -C /usr/local/bin \
+    && rm /tmp/wal-g.tar.gz \
+    && chmod +x /usr/local/bin/wal-g
+
+# Setup nightly base backup cron (Runs at 3:00 AM everyday)
+# We export the container's environment variables to /etc/wal-g.env on entry so cron can access the AWS keys
+RUN echo "0 3 * * * postgres bash -c 'export \$(cat /etc/wal-g.env | xargs) && wal-g backup-push /var/lib/postgresql/data >> /var/log/wal-g.log 2>&1'" > /etc/cron.d/wal-g-backup
+RUN chmod 0644 /etc/cron.d/wal-g-backup
+RUN crontab -u postgres /etc/cron.d/wal-g-backup
+
+# Add custom entrypoint to kick off cron
+COPY postgres-entrypoint-walg.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/postgres-entrypoint-walg.sh
+
+ENTRYPOINT ["postgres-entrypoint-walg.sh"]
+CMD ["postgres"]

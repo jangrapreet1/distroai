@@ -1,12 +1,28 @@
 services:
   # ─── Database ───────────────────────────────────────────
   postgres:
-    image: pgvector/pgvector:pg15
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     container_name: distroai_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-distroai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-distroai}
+      WALG_S3_PREFIX: ${WALG_S3_PREFIX}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID_B2}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY_B2}
+      AWS_ENDPOINT: ${AWS_ENDPOINT_B2}
+      AWS_REGION: ${AWS_REGION_B2:-us-west-004}
+      AWS_S3_FORCE_PATH_STYLE: "true"
+      PGUSER: ${POSTGRES_USER:-distroai}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      postgres
+      -c wal_level=logical
+      -c archive_mode=on
+      -c archive_command='wal-g wal-push "%p"'
+      -c archive_timeout=60
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
