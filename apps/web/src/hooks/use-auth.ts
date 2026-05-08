@@ -28,7 +28,7 @@ export function useAuth() {
                 accessToken: data.accessToken,
                 refreshToken: data.refreshToken,
             });
-            document.cookie = `accessToken=${data.accessToken};path=/;max-age=900;SameSite=Lax`;
+            document.cookie = `accessToken=${data.accessToken};path=/;max-age=604800;SameSite=Lax`;
             toast.success(`Welcome back, ${data.user.firstName}!`);
             router.push("/");
         },
@@ -58,7 +58,7 @@ export function useAuth() {
                 accessToken: data.accessToken,
                 refreshToken: data.refreshToken,
             });
-            document.cookie = `accessToken=${data.accessToken};path=/;max-age=900;SameSite=Lax`;
+            document.cookie = `accessToken=${data.accessToken};path=/;max-age=604800;SameSite=Lax`;
             toast.success("Account created! Welcome to DistroAI.");
         },
         onError: (error) => {
@@ -77,7 +77,7 @@ export function useAuth() {
         mutationFn: async (tokens: { accessToken: string; refreshToken: string }) => {
             // Temporary token set to authenticate /me request
             useAuthStore.getState().setTokens(tokens);
-            document.cookie = `accessToken=${tokens.accessToken};path=/;max-age=900;SameSite=Lax`;
+            document.cookie = `accessToken=${tokens.accessToken};path=/;max-age=604800;SameSite=Lax`;
             const res = await apiClient.get<any>("/api/v1/auth/me");
             return { user: res.data, org: res.data.organization, tokens };
         },

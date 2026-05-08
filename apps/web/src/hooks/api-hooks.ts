@@ -90,6 +90,39 @@ export function useUpdateProduct() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+export function useDeleteProduct() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete(`/api/v1/products/${id}`).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["products"] });
+            toast.success("Product deleted successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useRestoreProduct() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.post(`/api/v1/products/${id}/restore`).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["products"] });
+            toast.success("Product restored successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useHardDeleteProduct() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete(`/api/v1/products/${id}/hard`).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["products"] });
+            toast.success("Product permanently deleted");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
 
 // ===== CUSTOMERS =====
 export function useCustomers(filters: Record<string, string | number | undefined>) {
@@ -471,7 +504,7 @@ export function useDeleteCampaign() {
 }
 export function useGenerateCreatives() {
     return useMutation({
-        mutationFn: (data: { productId: string; userType: string }) => apiClient.post("/api/v1/marketing/creatives/generate", data).then((r) => r.data),
+        mutationFn: (data: { productId: string; userType: string; language?: string }) => apiClient.post("/api/v1/marketing/creatives/generate", data).then((r) => r.data),
         onError: (e) => toast.error(getApiError(e).message),
     });
 }

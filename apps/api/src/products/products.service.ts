@@ -26,13 +26,14 @@ export class ProductsService {
     }
 
     async findAll(orgId: string, query: ListProductsQueryDto) {
-        const { page = 1, limit = 20, search, category, brand, isActive = true } = query;
+        const { page = 1, limit = 20, search, category, brand, isActive } = query;
         const cacheKey = `products:${orgId}:${JSON.stringify(query)}`;
         const cached = await this.redis.getJson<unknown>(cacheKey);
         if (cached) return cached;
 
         const where = {
-            orgId, isActive,
+            orgId,
+            ...(isActive !== undefined && { isActive }),
             ...(category && { category }),
             ...(brand && { brand }),
             ...(search && {
@@ -195,6 +196,33 @@ export class ProductsService {
         const product = await this.prisma.product.findFirst({ where: { id, orgId } });
         if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Product not found' });
         return this.prisma.product.update({ where: { id }, data: { isActive: false } });
+    }
+
+    async restore(orgId: string, id: string) {
+        const product = await this.prisma.product.findFirst({ where: { id, orgId } });
+        if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Product not found' });
+        return this.prisma.product.update({ where: { id }, data: { isActive: true } });
+    }
+
+    async hardDelete(orgId: string, id: string) {
+        const product = await this.prisma.product.findFirst({ 
+            where: { id, orgId },
+            include: {
+                orderItems: { select: { id: true }, take: 1 },
+                poItems: { select: { id: true }, take: 1 },
+                invoiceItems: { select: { id: true }, take: 1 },
+            }
+        });
+        if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Product not found' });
+        
+        if (product.orderItems.length > 0 || product.poItems.length > 0 || product.invoiceItems.length > 0) {
+            throw new BadRequestException({ 
+                code: 'HAS_HISTORY', 
+                message: 'Cannot permanently delete this product because it has associated orders or invoices. Please keep it archived instead.' 
+            });
+        }
+
+        return this.prisma.product.delete({ where: { id } });
     }
 
     async getLowStock(orgId: string) {

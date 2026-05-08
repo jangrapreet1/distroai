@@ -17,6 +17,7 @@ export class CreativeService {
     }, context: {
         city: string;
         userType: 'B2B' | 'B2C';
+        language?: string;
     }) {
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey) {
@@ -32,7 +33,7 @@ export class CreativeService {
                 'X-Title': 'DistroAI Creative Studio',
             },
             body: JSON.stringify({
-                model: 'anthropic/claude-sonnet-4-5',
+                model: 'anthropic/claude-3.5-sonnet',
                 max_tokens: 1000,
                 messages: [
                     {
@@ -45,14 +46,14 @@ export class CreativeService {
 Description: ${product.description ?? 'No description'}
 Distributor city: ${context.city}
 Ad type: ${context.userType === 'B2B' ? 'Wholesale targeting local shop owners' : 'Retail targeting neighborhood consumers'}
-Generate 3 ad copy combinations — 2 in English, 1 in Hindi.
+Generate 3 ad copy combinations in ${context.language || 'English'}.
 
 Return ONLY this JSON structure:
 {
   "combinations": [
-    { "headline": "...", "body": "...", "cta": "...", "language": "en" },
-    { "headline": "...", "body": "...", "cta": "...", "language": "en" },
-    { "headline": "...", "body": "...", "cta": "...", "language": "hi" }
+    { "headline": "...", "body": "...", "cta": "..." },
+    { "headline": "...", "body": "...", "cta": "..." },
+    { "headline": "...", "body": "...", "cta": "..." }
   ]
 }`,
                     },

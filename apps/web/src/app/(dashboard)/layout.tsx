@@ -9,6 +9,7 @@ import {
     Settings, Menu, X, Search, Command, Sun, Moon, Undo2, PieChart, Clock, Coins,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuthStore } from "@/stores/auth.store";
 import { useQuery } from "@tanstack/react-query";
 import apiClient from "@/lib/api-client";
 import { LanguageProvider } from "@/contexts/LanguageContext";
@@ -76,6 +77,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const { theme, toggleTheme } = useTheme();
 
     useSyncOfflineData();
+
+    // Session recovery: if the Zustand store has tokens (from localStorage)
+    // but the browser cookie is missing, re-set it so the middleware doesn't
+    // redirect to /login on page reload.
+    useEffect(() => {
+        const { accessToken } = useAuthStore.getState();
+        if (accessToken && !document.cookie.includes('accessToken=')) {
+            document.cookie = `accessToken=${accessToken};path=/;max-age=604800;SameSite=Lax`;
+        }
+    }, []);
 
     // ⌘K keyboard shortcut
     useEffect(() => {

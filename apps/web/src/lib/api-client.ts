@@ -89,7 +89,7 @@ apiClient.interceptors.response.use(
                 setTokens({ accessToken: newAccess, refreshToken: newRefresh });
 
                 // Set cookie for middleware
-                document.cookie = `accessToken=${newAccess};path=/;max-age=900;SameSite=Lax`;
+                document.cookie = `accessToken=${newAccess};path=/;max-age=604800;SameSite=Lax`;
 
                 processQueue(null, newAccess);
                 originalRequest.headers.Authorization = `Bearer ${newAccess}`;

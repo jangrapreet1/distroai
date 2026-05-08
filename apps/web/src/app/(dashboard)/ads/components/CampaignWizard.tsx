@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { X, MessageCircle, Package, MapPin, Loader2, ChevronLeft, ChevronRight, Rocket } from "lucide-react";
-import { useProducts, useCreateCampaign, useGenerateCreatives, useUploadAudience } from "@/hooks/api-hooks";
+import { useState, useRef } from "react";
+import { X, MessageCircle, Package, MapPin, Loader2, ChevronLeft, ChevronRight, Rocket, Upload, Image, Film, Trash2 } from "lucide-react";
+import { useProducts, useCreateCampaign, useGenerateCreatives, useUploadAudience, useUploadFile } from "@/hooks/api-hooks";
 import { CreativePreview } from "./CreativePreview";
 
 interface Props {
@@ -11,11 +11,18 @@ interface Props {
 
 const STEPS = ["Goal", "Audience", "Creative", "Budget & Schedule"];
 
+const PLATFORMS = [
+    { id: "facebook", label: "Facebook", icon: "📘", color: "#1877F2" },
+    { id: "instagram", label: "Instagram", icon: "📸", color: "#E1306C" },
+    { id: "whatsapp", label: "WhatsApp", icon: "💬", color: "#25D366" },
+] as const;
+
 export function CampaignWizard({ onClose }: Props) {
     const [step, setStep] = useState(0);
 
     // Step 1 — Goal
     const [objective, setObjective] = useState("");
+    const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["facebook", "instagram"]);
 
     // Step 2 — Audience
     const [userType, setUserType] = useState<"B2B" | "B2C">("B2B");
@@ -29,21 +36,55 @@ export function CampaignWizard({ onClose }: Props) {
     const [selectedCreativeIdx, setSelectedCreativeIdx] = useState(0);
     const [editedHeadline, setEditedHeadline] = useState("");
     const [editedBody, setEditedBody] = useState("");
+    const [aiLanguage, setAiLanguage] = useState("English");
+    const [mediaFiles, setMediaFiles] = useState<{ url: string; type: "image" | "video"; name: string }[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Step 4 — Budget
     const [dailyBudget, setDailyBudget] = useState(500);
     const [duration, setDuration] = useState(7);
 
-    const { data: productsData } = useProducts({});
-    const products: any[] = Array.isArray(productsData) ? productsData : productsData?.products ?? [];
+    const { data: productsData } = useProducts({ isActive: true, limit: 200 });
+    // Products API returns { data: [...], meta: {...} } — drill into nested .data.data or .data
+    const productsRaw = productsData?.data;
+    const products: any[] = Array.isArray(productsRaw)
+        ? productsRaw
+        : (productsRaw?.data ?? productsRaw?.products ?? []);
     const generateCreatives = useGenerateCreatives();
     const createCampaign = useCreateCampaign();
     const uploadAudience = useUploadAudience();
+    const uploadFile = useUploadFile();
+
+    const togglePlatform = (id: string) => {
+        setSelectedPlatforms((prev) =>
+            prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+        );
+    };
+
+    const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+        for (const file of Array.from(files)) {
+            const isVideo = file.type.startsWith("video/");
+            const isImage = file.type.startsWith("image/");
+            if (!isVideo && !isImage) continue;
+            try {
+                const res = await uploadFile.mutateAsync(file);
+                setMediaFiles((prev) => [
+                    ...prev,
+                    { url: res.url || res.path, type: isVideo ? "video" : "image", name: file.name },
+                ]);
+            } catch { /* toast shown by hook */ }
+        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    const removeMedia = (idx: number) => setMediaFiles((prev) => prev.filter((_, i) => i !== idx));
 
     const canNext = () => {
-        if (step === 0) return !!objective;
+        if (step === 0) return !!objective && selectedPlatforms.length > 0;
         if (step === 1) return !!city;
-        if (step === 2) return creatives.length > 0;
+        if (step === 2) return !!editedHeadline && !!editedBody;
         if (step === 3) return dailyBudget >= 100;
         return true;
     };
@@ -51,7 +92,7 @@ export function CampaignWizard({ onClose }: Props) {
     const handleGenerateCreatives = () => {
         if (!selectedProductId) return;
         generateCreatives.mutate(
-            { productId: selectedProductId, userType },
+            { productId: selectedProductId, userType, language: aiLanguage },
             {
                 onSuccess: (data: any) => {
                     const combos = data?.combinations || [];
@@ -78,7 +119,7 @@ export function CampaignWizard({ onClose }: Props) {
         createCampaign.mutate(
             {
                 objective,
-                platform: ["facebook", "instagram"],
+                platform: selectedPlatforms,
                 userType,
                 dailyBudget,
                 startDate,
@@ -87,6 +128,7 @@ export function CampaignWizard({ onClose }: Props) {
                     headline: editedHeadline || creative?.headline || "",
                     body: editedBody || creative?.body || "",
                     cta: creative?.cta || "Learn More",
+                    mediaUrls: mediaFiles.map((m) => m.url),
                 },
             },
             { onSuccess: () => onClose() },
@@ -177,6 +219,34 @@ export function CampaignWizard({ onClose }: Props) {
                                 </div>
                             </div>
                         ))}
+                        {/* Platform Selection */}
+                        <div style={{ marginTop: ".5rem" }}>
+                            <label style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: ".5rem", display: "block" }}>
+                                Where do you want to run this ad?
+                            </label>
+                            <div style={{ display: "flex", gap: ".5rem" }}>
+                                {PLATFORMS.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => togglePlatform(p.id)}
+                                        style={{
+                                            flex: 1, padding: ".65rem .5rem", borderRadius: 10,
+                                            border: `2px solid ${selectedPlatforms.includes(p.id) ? p.color : "var(--border)"}`,
+                                            background: selectedPlatforms.includes(p.id) ? `${p.color}15` : "transparent",
+                                            color: "var(--text-primary)", fontWeight: 600, fontSize: ".8rem",
+                                            cursor: "pointer", transition: "all .2s",
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: ".3rem",
+                                        }}
+                                    >
+                                        <span>{p.icon}</span> {p.label}
+                                    </button>
+                                ))}
+                            </div>
+                            {selectedPlatforms.length === 0 && (
+                                <p style={{ fontSize: ".75rem", color: "#ef4444", margin: ".3rem 0 0" }}>Select at least one platform</p>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -266,9 +336,10 @@ export function CampaignWizard({ onClose }: Props) {
                 {/* Step 3 — Creative */}
                 {step === 2 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                        {/* Product selector (optional) */}
                         <div>
                             <label style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: ".4rem", display: "block" }}>
-                                Pick a product to advertise
+                                Link a product <span style={{ fontWeight: 400 }}>(optional — helps AI generate copy)</span>
                             </label>
                             <select
                                 value={selectedProductId}
@@ -279,81 +350,184 @@ export function CampaignWizard({ onClose }: Props) {
                                     color: "var(--text-primary)", fontSize: ".9rem",
                                 }}
                             >
-                                <option value="">Select a product...</option>
+                                <option value="">No product selected</option>
                                 {products.map((p: any) => (
                                     <option key={p.id} value={p.id}>
-                                        {p.name} — ₹{p.price ?? p.mrp ?? "N/A"}
+                                        {p.name} — ₹{p.sellingPrice ?? p.mrp ?? "N/A"}
                                     </option>
                                 ))}
                             </select>
                         </div>
 
-                        <button
-                            onClick={handleGenerateCreatives}
-                            disabled={!selectedProductId || generateCreatives.isPending}
-                            style={{
-                                padding: ".65rem 1.2rem", borderRadius: 10,
-                                background: "var(--primary)", color: "#fff",
-                                fontWeight: 600, border: "none", cursor: "pointer",
-                                fontSize: ".85rem", opacity: !selectedProductId ? 0.5 : 1,
-                                display: "inline-flex", alignItems: "center", gap: ".4rem",
-                                alignSelf: "flex-start",
-                            }}
-                        >
-                            {generateCreatives.isPending ? <Loader2 size={16} className="animate-spin" /> : "✨"}
-                            {generateCreatives.isPending ? "Claude is writing..." : "Generate Ad Copy with AI"}
-                        </button>
+                        {/* Manual ad copy inputs — PRIMARY */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
+                            <label style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "-.2rem" }}>
+                                Ad Headline <span style={{ color: "#ef4444" }}>*</span>
+                            </label>
+                            <input
+                                value={editedHeadline}
+                                onChange={(e) => setEditedHeadline(e.target.value)}
+                                placeholder="e.g. Premium Quality Products at Best Prices"
+                                style={{
+                                    padding: ".65rem .9rem", borderRadius: 10,
+                                    border: "1px solid var(--border)", background: "var(--bg-secondary)",
+                                    color: "var(--text-primary)", fontSize: ".9rem",
+                                }}
+                            />
+                            <label style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--text-muted)", marginTop: ".4rem", marginBottom: "-.2rem" }}>
+                                Ad Body <span style={{ color: "#ef4444" }}>*</span>
+                            </label>
+                            <textarea
+                                value={editedBody}
+                                onChange={(e) => setEditedBody(e.target.value)}
+                                placeholder="Write your ad text here. Describe your product, offer, or promotion..."
+                                rows={3}
+                                style={{
+                                    padding: ".65rem .9rem", borderRadius: 10,
+                                    border: "1px solid var(--border)", background: "var(--bg-secondary)",
+                                    color: "var(--text-primary)", fontSize: ".9rem", resize: "vertical",
+                                }}
+                            />
+                        </div>
 
-                        {creatives.length > 0 && (
-                            <>
-                                <div style={{
-                                    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                                    gap: ".75rem",
-                                }}>
-                                    {creatives.map((c: any, i: number) => (
-                                        <CreativePreview
-                                            key={i}
-                                            creative={c}
-                                            selected={selectedCreativeIdx === i}
-                                            onSelect={() => {
-                                                setSelectedCreativeIdx(i);
-                                                setEditedHeadline(c.headline);
-                                                setEditedBody(c.body);
-                                            }}
-                                        />
+                        {/* Media Upload */}
+                        <div>
+                            <label style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: ".5rem", display: "block" }}>
+                                Ad Media <span style={{ fontWeight: 400 }}>(images or videos)</span>
+                            </label>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*,video/*"
+                                multiple
+                                onChange={handleMediaUpload}
+                                style={{ display: "none" }}
+                            />
+                            {mediaFiles.length > 0 && (
+                                <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap", marginBottom: ".5rem" }}>
+                                    {mediaFiles.map((m, i) => (
+                                        <div key={i} style={{
+                                            position: "relative", width: 80, height: 80, borderRadius: 10,
+                                            overflow: "hidden", border: "1px solid var(--border)",
+                                            background: "var(--bg-secondary)",
+                                        }}>
+                                            {m.type === "image" ? (
+                                                <img src={m.url} alt={m.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                            ) : (
+                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: ".2rem" }}>
+                                                    <Film size={20} color="var(--text-muted)" />
+                                                    <span style={{ fontSize: ".6rem", color: "var(--text-muted)" }}>Video</span>
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={() => removeMedia(i)}
+                                                style={{
+                                                    position: "absolute", top: 2, right: 2,
+                                                    width: 20, height: 20, borderRadius: "50%",
+                                                    background: "rgba(239,68,68,.9)", border: "none",
+                                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                <X size={12} color="#fff" />
+                                            </button>
+                                        </div>
                                     ))}
                                 </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploadFile.isPending}
+                                style={{
+                                    width: "100%", padding: ".75rem", borderRadius: 10,
+                                    border: "2px dashed var(--border)", background: "transparent",
+                                    color: "var(--text-secondary)", fontSize: ".85rem", fontWeight: 500,
+                                    cursor: "pointer", display: "flex", alignItems: "center",
+                                    justifyContent: "center", gap: ".5rem", transition: "all .2s",
+                                }}
+                            >
+                                {uploadFile.isPending ? (
+                                    <><Loader2 size={16} className="animate-spin" /> Uploading...</>
+                                ) : (
+                                    <><Upload size={16} /> Upload Images or Videos</>
+                                )}
+                            </button>
+                        </div>
 
-                                {/* Inline editing */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
-                                    <label style={{ fontSize: ".75rem", fontWeight: 600, color: "var(--text-muted)" }}>
-                                        Edit headline
-                                    </label>
-                                    <input
-                                        value={editedHeadline}
-                                        onChange={(e) => setEditedHeadline(e.target.value)}
+                        {/* AI Assist — SECONDARY, collapsible */}
+                        <details style={{
+                            borderRadius: 10, border: "1px dashed var(--border)",
+                            background: "var(--bg-card)",
+                        }}>
+                            <summary style={{
+                                padding: ".75rem 1rem", cursor: "pointer",
+                                display: "flex", alignItems: "center", gap: ".4rem",
+                                fontSize: ".85rem", fontWeight: 600, color: "var(--text-secondary)",
+                                listStyle: "none",
+                            }}>
+                                ✨ Need ideas? Generate copy with AI
+                            </summary>
+                            <div style={{ padding: "0 1rem 1rem", display: "flex", flexDirection: "column", gap: ".75rem" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+                                    <span style={{ fontSize: ".8rem", color: "var(--text-muted)" }}>Language:</span>
+                                    <select
+                                        value={aiLanguage}
+                                        onChange={(e) => setAiLanguage(e.target.value)}
                                         style={{
-                                            padding: ".55rem .8rem", borderRadius: 8,
+                                            padding: ".3rem .6rem", borderRadius: 6,
                                             border: "1px solid var(--border)", background: "var(--bg-secondary)",
-                                            color: "var(--text-primary)", fontSize: ".85rem",
+                                            fontSize: ".8rem", color: "var(--text-primary)",
                                         }}
-                                    />
-                                    <label style={{ fontSize: ".75rem", fontWeight: 600, color: "var(--text-muted)" }}>
-                                        Edit body
-                                    </label>
-                                    <textarea
-                                        value={editedBody}
-                                        onChange={(e) => setEditedBody(e.target.value)}
-                                        rows={3}
-                                        style={{
-                                            padding: ".55rem .8rem", borderRadius: 8,
-                                            border: "1px solid var(--border)", background: "var(--bg-secondary)",
-                                            color: "var(--text-primary)", fontSize: ".85rem", resize: "vertical",
-                                        }}
-                                    />
+                                    >
+                                        <option value="English">English</option>
+                                        <option value="Hindi">Hindi</option>
+                                        <option value="Hinglish">Hinglish</option>
+                                        <option value="Tamil">Tamil</option>
+                                        <option value="Telugu">Telugu</option>
+                                        <option value="Marathi">Marathi</option>
+                                    </select>
                                 </div>
-                            </>
-                        )}
+                                <button
+                                    onClick={handleGenerateCreatives}
+                                    disabled={!selectedProductId || generateCreatives.isPending}
+                                    style={{
+                                        padding: ".6rem 1rem", borderRadius: 8,
+                                        background: "var(--bg-secondary)", color: "var(--text-primary)",
+                                        fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer",
+                                        fontSize: ".85rem", opacity: !selectedProductId ? 0.5 : 1,
+                                        display: "flex", alignItems: "center", justifyContent: "center", gap: ".4rem",
+                                    }}
+                                >
+                                    {generateCreatives.isPending ? <Loader2 size={16} className="animate-spin" /> : "✨"}
+                                    {generateCreatives.isPending ? "Generating ideas..." : `Generate in ${aiLanguage}`}
+                                </button>
+                                {!selectedProductId && (
+                                    <p style={{ fontSize: ".75rem", color: "var(--text-muted)", margin: 0 }}>
+                                        Select a product above to use AI generation
+                                    </p>
+                                )}
+                                {creatives.length > 0 && (
+                                    <div style={{
+                                        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                                        gap: ".5rem", marginTop: ".25rem",
+                                    }}>
+                                        {creatives.map((c: any, i: number) => (
+                                            <CreativePreview
+                                                key={i}
+                                                creative={c}
+                                                selected={selectedCreativeIdx === i}
+                                                onSelect={() => {
+                                                    setSelectedCreativeIdx(i);
+                                                    setEditedHeadline(c.headline);
+                                                    setEditedBody(c.body);
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </details>
                     </div>
                 )}
 

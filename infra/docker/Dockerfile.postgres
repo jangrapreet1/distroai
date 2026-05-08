@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y curl cron ca-certificates \
 RUN curl -L "https://github.com/wal-g/wal-g/releases/download/v2.0.1/wal-g-pg-ubuntu-20.04-amd64.tar.gz" -o /tmp/wal-g.tar.gz \
     && tar -xvzf /tmp/wal-g.tar.gz -C /usr/local/bin \
     && rm /tmp/wal-g.tar.gz \
+    && mv /usr/local/bin/wal-g-pg-ubuntu-20.04-amd64 /usr/local/bin/wal-g \
     && chmod +x /usr/local/bin/wal-g
 
 # Setup nightly base backup cron (Runs at 3:00 AM everyday)

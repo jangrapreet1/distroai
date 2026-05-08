@@ -57,7 +57,7 @@ services:
       context: ../../
       dockerfile: infra/docker/Dockerfile.api
     container_name: distroai_api
-    env_file: /etc/distroai/.env
+    env_file: .env.production
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-distroai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-distroai}?schema=public}
       REDIS_HOST: redis
@@ -72,6 +72,8 @@ services:
         condition: service_healthy
     networks:
       - distroai
+    volumes:
+      - uploads_data:/tmp/distroai-uploads
     restart: unless-stopped
 
   # ─── BullMQ Worker ──────────────────────────────────────
@@ -80,7 +82,7 @@ services:
       context: ../../
       dockerfile: infra/docker/Dockerfile.worker
     container_name: distroai_worker
-    env_file: /etc/distroai/.env
+    env_file: .env.production
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-distroai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-distroai}?schema=public}
       REDIS_HOST: redis
@@ -94,6 +96,8 @@ services:
         condition: service_healthy
     networks:
       - distroai
+    volumes:
+      - uploads_data:/tmp/distroai-uploads
     restart: unless-stopped
 
   # ─── Next.js Frontend ──────────────────────────────────
@@ -103,6 +107,7 @@ services:
       dockerfile: infra/docker/Dockerfile.web
       args:
         API_INTERNAL_URL: http://api:3000
+        NEXT_PUBLIC_META_APP_ID: ${META_APP_ID}
     container_name: distroai_web
     environment:
       API_INTERNAL_URL: http://api:3000
@@ -116,7 +121,7 @@ services:
   caddy:
     image: caddy:2-alpine
     container_name: distroai_caddy
-    env_file: /etc/distroai/.env
+    env_file: .env.production
     ports:
       - "80:80"
       - "443:443"
@@ -134,6 +139,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:
   caddy_data:
   caddy_config:
 

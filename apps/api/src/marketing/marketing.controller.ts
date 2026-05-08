@@ -76,7 +76,7 @@ export class MarketingController {
 
     // ─── Creative Studio ────────────────────────────────────────
     @Post('creatives/generate')
-    async generateCreatives(@Req() req: any, @Body() body: { productId: string; userType: 'B2B' | 'B2C' }) {
+    async generateCreatives(@Req() req: any, @Body() body: { productId: string; userType: 'B2B' | 'B2C', language?: string }) {
         const product = await this.prisma.product.findFirst({
             where: { id: body.productId, orgId: req.user.orgId },
         });
@@ -96,6 +96,7 @@ export class MarketingController {
             {
                 city: org?.city || 'India',
                 userType: body.userType,
+                language: body.language,
             },
         );
     }

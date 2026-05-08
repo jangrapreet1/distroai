@@ -49,7 +49,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
                     <h2 className="text-base font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Add Product</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={18} /></button>
@@ -260,7 +260,7 @@ function TransferModal({ open, onClose, products }: { open: boolean; onClose: ()
 /* ─── Main Inventory Page ─── */
 export default function InventoryPage() {
     const [mainTab, setMainTab] = useState<"products" | "transactions">("products");
-    const [tab, setTab] = useState<"all" | "low">("all");
+    const [tab, setTab] = useState<"all" | "low" | "archived">("all");
     const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
@@ -269,7 +269,7 @@ export default function InventoryPage() {
     const [showTransfer, setShowTransfer] = useState(false);
     const { t } = useLanguage();
 
-    const { data, isLoading } = useProducts({ search, page, limit: 20, isActive: true });
+    const { data, isLoading } = useProducts({ search, page, limit: 20, isActive: tab === "archived" ? false : true });
     const products = data?.data?.data ?? data?.data ?? [];
     const meta = data?.data?.meta ?? data?.meta ?? { total: 0 };
 
@@ -328,9 +328,9 @@ export default function InventoryPage() {
                     {/* Filters */}
                     <div className="flex items-center gap-3 mb-4">
                         <div className="flex bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-1 overflow-x-auto no-scrollbar">
-                            {(["all", "low"] as const).map((f) => (
+                            {(["all", "low", "archived"] as const).map((f) => (
                                 <button key={f} onClick={() => { setTab(f); setPage(1); }} className={`px-4 py-1.5 text-sm rounded ${tab === f ? "bg-[var(--gold)]/10 text-[var(--gold)] font-medium" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
-                                    {f === "all" ? t('all') : t('low_stock_tab')}
+                                    {f === "all" ? t('all') : f === "low" ? t('low_stock_tab') : "Archived"}
                                 </button>
                             ))}
                         </div>

@@ -224,7 +224,7 @@ export class MarketingService {
                 name: `AdSet - ${utmCampaignId}`,
                 daily_budget: dailyBudgetPaisa,
                 billing_event: 'IMPRESSIONS',
-                optimization_goal: input.objective === 'MESSAGES' ? 'CONVERSATIONS' : 'REACH',
+                optimization_goal: input.objective === 'REACH' ? 'REACH' : 'LINK_CLICKS',
                 targeting,
                 start_time: input.startDate,
                 ...(input.endDate && { end_time: input.endDate }),
@@ -369,8 +369,8 @@ export class MarketingService {
     // ─── Helpers ────────────────────────────────────────────────
     private mapObjective(obj: string): string {
         const map: Record<string, string> = {
-            MESSAGES: 'OUTCOME_ENGAGEMENT',
-            CATALOG_SALES: 'OUTCOME_SALES',
+            MESSAGES: 'OUTCOME_TRAFFIC',
+            CATALOG_SALES: 'OUTCOME_TRAFFIC',
             REACH: 'OUTCOME_AWARENESS',
         };
         return map[obj] || 'OUTCOME_AWARENESS';
@@ -379,7 +379,7 @@ export class MarketingService {
     private mapCta(cta: string): string {
         const map: Record<string, string> = {
             'Buy Now': 'SHOP_NOW',
-            'Send Message': 'SEND_WHATSAPP_MESSAGE',
+            'Send Message': 'CONTACT_US',
             'Learn More': 'LEARN_MORE',
             'Order Now': 'SHOP_NOW',
         };

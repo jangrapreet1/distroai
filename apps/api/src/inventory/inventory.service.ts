@@ -165,7 +165,7 @@ export class InventoryService {
 
     async getValuation(orgId: string) {
         const inventories = await this.prisma.inventory.findMany({
-            where: { orgId },
+            where: { orgId, product: { isActive: true } },
             include: {
                 product: { select: { purchasePrice: true, sellingPrice: true } },
                 warehouse: { select: { id: true, name: true } },

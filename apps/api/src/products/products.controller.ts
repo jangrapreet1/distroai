@@ -57,4 +57,14 @@ export class ProductsController {
     remove(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
         return this.products.remove(user.orgId, id);
     }
+
+    @Post(':id/restore')
+    restore(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+        return this.products.restore(user.orgId, id);
+    }
+
+    @Delete(':id/hard')
+    hardDelete(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+        return this.products.hardDelete(user.orgId, id);
+    }
 }

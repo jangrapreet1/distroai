@@ -14,6 +14,7 @@
     --text-muted: #5A5040;
 
     --gold: #C9A84C;
+    --primary: var(--gold);
     --gold-light: #F5D98B;
     --purple: #7B5EA7;
     --orange: #E07B39;
@@ -59,6 +60,7 @@
     --text-muted: #8A8A9A;
 
     --gold: #A08030;
+    --primary: var(--gold);
     --gold-light: #D4B85A;
     --purple: #6B4E97;
     --orange: #D06A28;

@@ -15,7 +15,9 @@ RUN npm install -g pnpm && pnpm install --frozen-lockfile
 
 # Next.js standalone output mode
 ARG API_INTERNAL_URL
+ARG NEXT_PUBLIC_META_APP_ID
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
+ENV NEXT_PUBLIC_META_APP_ID=$NEXT_PUBLIC_META_APP_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN cd apps/web && pnpm run build
 
