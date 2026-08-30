@@ -44,7 +44,7 @@ export function CampaignWizard({ onClose }: Props) {
     const [dailyBudget, setDailyBudget] = useState(500);
     const [duration, setDuration] = useState(7);
 
-    const { data: productsData } = useProducts({ isActive: true, limit: 200 });
+    const { data: productsData } = useProducts({ isActive: true, limit: 100 });
     // Products API returns { data: [...], meta: {...} } — drill into nested .data.data or .data
     const productsRaw = productsData?.data;
     const products: any[] = Array.isArray(productsRaw)
@@ -599,6 +599,63 @@ export function CampaignWizard({ onClose }: Props) {
                                 </span>
                             </div>
                         </div>
+
+                        {/* Model C: Facebook Page Creation Walkthrough */}
+                        {createCampaign.error && (createCampaign.error as any).response?.data?.message?.includes("No Facebook Page") && (
+                            <div style={{
+                                padding: "1.5rem", borderRadius: 12, border: "1px solid #ef444450",
+                                background: "#ef444410", marginTop: "1rem", textAlign: "center"
+                            }}>
+                                <div style={{ 
+                                    width: 48, height: 48, borderRadius: 24, background: "#ef444420", 
+                                    display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" 
+                                }}>
+                                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="#ef4444" strokeWidth="2" fill="none">
+                                        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                                    </svg>
+                                </div>
+                                <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: ".5rem" }}>
+                                    You need a Facebook Page
+                                </h3>
+                                <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: 1.5 }}>
+                                    Meta requires a business page to act as the sender for your ads. We will automatically create your ad account once your page is linked!
+                                </p>
+                                
+                                <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+                                    <button 
+                                        type="button"
+                                        onClick={() => window.open("https://www.facebook.com/pages/create", "_blank")}
+                                        style={{
+                                            padding: ".75rem", borderRadius: 8, background: "#1877F2", 
+                                            color: "white", fontWeight: 600, border: "none", cursor: "pointer",
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: ".5rem"
+                                        }}
+                                    >
+                                        1. Create a Page in 2 mins
+                                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none">
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                            <polyline points="15 3 21 3 21 9"></polyline>
+                                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                                        </svg>
+                                    </button>
+                                    
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            // Trigger Facebook OAuth again to fetch the newly created page
+                                            window.location.href = `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/auth/facebook/connect`;
+                                        }}
+                                        style={{
+                                            padding: ".75rem", borderRadius: 8, background: "var(--bg-card)", 
+                                            color: "var(--text-primary)", fontWeight: 600, border: "1px solid var(--border)", 
+                                            cursor: "pointer"
+                                        }}
+                                    >
+                                        2. I've created it, reconnect my account
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

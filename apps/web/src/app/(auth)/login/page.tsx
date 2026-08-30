@@ -23,8 +23,8 @@ function LoginForm() {
     const searchParams = useSearchParams();
 
     useEffect(() => {
-        const accessToken = searchParams.get('accessToken');
-        const refreshToken = searchParams.get('refreshToken');
+        const accessToken = searchParams?.get('accessToken');
+        const refreshToken = searchParams?.get('refreshToken');
         if (accessToken && refreshToken) {
             handleGoogleCallback({ accessToken, refreshToken });
         }

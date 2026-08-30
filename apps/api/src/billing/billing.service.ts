@@ -55,10 +55,21 @@ export class BillingService {
         }
 
         try {
-            const order = await this.razorpay.orders.create({
-                amount: priceAmount,
-                currency: 'INR',
-                receipt: `s_${orgId.slice(-8)}_${Date.now().toString(36)}`,
+            let planId = '';
+            if (plan === 'STARTER') {
+                planId = (isAnnual ? this.config.get<string>('RAZORPAY_PLAN_STARTER_ANNUAL') : this.config.get<string>('RAZORPAY_PLAN_STARTER_MONTHLY')) || '';
+            } else if (plan === 'GROWTH') {
+                planId = (isAnnual ? this.config.get<string>('RAZORPAY_PLAN_GROWTH_ANNUAL') : this.config.get<string>('RAZORPAY_PLAN_GROWTH_MONTHLY')) || '';
+            }
+
+            if (!planId) {
+                throw new BadRequestException({ code: 'MISSING_PLAN_ID', message: `Razorpay plan ID for ${plan} is not configured in .env.` });
+            }
+
+            const subscription = await this.razorpay.subscriptions.create({
+                plan_id: planId,
+                total_count: isAnnual ? 10 : 120, // Allow up to 10 years of auto-pay
+                customer_notify: 1,
                 notes: {
                     orgId,
                     plan,
@@ -68,7 +79,8 @@ export class BillingService {
             });
 
             return {
-                orderId: order.id,
+                orderId: subscription.id, // Frontend uses 'orderId' variable, returning sub_ ID here works as Razorpay JS accepts subscription_id or order_id
+                subscriptionId: subscription.id,
                 amount: priceAmount,
                 currency: 'INR',
                 planName: plan,
@@ -76,10 +88,10 @@ export class BillingService {
                 razorpayKeyId: this.config.get<string>('RAZORPAY_KEY_ID'),
             };
         } catch (err: any) {
-            this.logger.error('Razorpay order creation failed', err?.error ?? err?.message ?? err);
+            this.logger.error('Razorpay subscription creation failed', err?.error ?? err?.message ?? err);
             throw new BadRequestException({
                 code: 'CHECKOUT_FAILED',
-                message: err?.error?.description || err?.message || 'Failed to create checkout order',
+                message: err?.error?.description || err?.message || 'Failed to create checkout subscription',
             });
         }
     }
@@ -187,20 +199,46 @@ export class BillingService {
         this.logger.log(`[Billing Webhook] Event: ${payload.event}`);
 
         // Handle subscription-level events
-        if (payload.event === 'payment.captured') {
-            const entity = payload.payload?.payment?.entity;
+        if (payload.event === 'subscription.charged') {
+            const entity = payload.payload?.subscription?.entity;
             const notes = entity?.notes;
             if (notes?.type === 'subscription_upgrade' && notes?.orgId && notes?.plan) {
-                // Auto-activate if webhook arrives before verify (edge case)
+                // Determine if this is first payment (verifyPayment might be called by frontend too)
                 const existingSub = await this.prisma.subscription.findUnique({ where: { orgId: notes.orgId } });
-                if (!existingSub || existingSub.status !== 'ACTIVE') {
-                    await this.verifyPayment(notes.orgId, {
-                        razorpay_order_id: entity.order_id,
-                        razorpay_payment_id: entity.id,
-                        razorpay_signature: signature,
-                        plan: notes.plan,
-                    });
-                }
+                
+                const isAnnual = notes.isAnnual === 'true';
+                const periodEnd = new Date(entity.current_end * 1000); // Unix timestamp to JS Date
+
+                await this.prisma.subscription.upsert({
+                    where: { orgId: notes.orgId },
+                    create: {
+                        orgId: notes.orgId,
+                        plan: notes.plan as any,
+                        status: 'ACTIVE',
+                        currentPeriodStart: new Date(entity.current_start * 1000),
+                        currentPeriodEnd: periodEnd,
+                        razorpaySubId: entity.id,
+                    },
+                    update: {
+                        status: 'ACTIVE',
+                        currentPeriodStart: new Date(entity.current_start * 1000),
+                        currentPeriodEnd: periodEnd,
+                    },
+                });
+
+                await this.prisma.organization.update({
+                    where: { id: notes.orgId },
+                    data: {
+                        plan: notes.plan as any,
+                        planExpiresAt: periodEnd,
+                    },
+                });
+            }
+        } else if (payload.event === 'subscription.halted' || payload.event === 'subscription.cancelled') {
+            const entity = payload.payload?.subscription?.entity;
+            const notes = entity?.notes;
+            if (notes?.orgId) {
+                await this.cancelSubscription(notes.orgId).catch(() => {});
             }
         }
 

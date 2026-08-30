@@ -217,7 +217,7 @@ function WhatsAppCard() {
 
 /* ─── Other Integrations ─── */
 function OtherIntegrationsCard() {
-    const { data: orgData } = useOrg();
+    const { data: orgData } = useOrg() || {};
     const org = orgData?.data ?? orgData ?? {};
     const [expanded, setExpanded] = useState<string | null>(null);
 

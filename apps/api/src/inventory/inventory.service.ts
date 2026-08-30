@@ -1,11 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdjustInventoryDto, TransferInventoryDto, ListTransactionsQueryDto, InventoryQueryDto, CreateWarehouseDto, UpdateWarehouseDto } from './dto/inventory.dto';
+import { EventsService } from '../events/events.service';
 
 @Injectable()
 export class InventoryService {
     constructor(
         private readonly prisma: PrismaService,
+        private readonly eventsService: EventsService,
     ) { }
 
     async findAll(orgId: string, query: InventoryQueryDto) {
@@ -93,6 +95,7 @@ export class InventoryService {
             }),
         ]);
 
+        this.eventsService.emit(orgId, 'inventory:adjusted', { productId: dto.productId });
         return tx;
     }
 

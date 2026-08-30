@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import OrderDetailPage from '@/app/(dashboard)/orders/[id]/page';
-import { useOrder, useOrderAction } from '@/hooks/api-hooks';
+import { useOrder, useOrderAction, useProducts, useUpdateDraftOrder } from '@/hooks/api-hooks';
 import toast from 'react-hot-toast';
 
 // Mock the dependencies
@@ -26,6 +26,15 @@ describe('Order Confirmation behavior', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+
+        (useProducts as jest.Mock).mockReturnValue({
+            data: { data: [] },
+            isLoading: false,
+        });
+        (useUpdateDraftOrder as jest.Mock).mockReturnValue({
+            mutate: jest.fn(),
+            isPending: false,
+        });
 
         // Mock the GET hook to return a DRAFT order
         (useOrder as jest.Mock).mockReturnValue({
@@ -55,14 +64,12 @@ describe('Order Confirmation behavior', () => {
     });
 
     it('shows the Confirm Order button for a DRAFT order', async () => {
-        const Page = await OrderDetailPage({ params: Promise.resolve({ id: orderId }) });
-        render(Page);
+        render(<OrderDetailPage params={Promise.resolve({ id: orderId })} />);
         expect(screen.getByRole('button', { name: /confirm order/i })).toBeInTheDocument();
     });
 
     it('triggers the confirm action when button is clicked', async () => {
-        const Page = await OrderDetailPage({ params: Promise.resolve({ id: orderId }) });
-        render(Page);
+        render(<OrderDetailPage params={Promise.resolve({ id: orderId })} />);
 
         const confirmBtn = screen.getByRole('button', { name: /confirm order/i });
         fireEvent.click(confirmBtn);

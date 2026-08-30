@@ -18,3 +18,27 @@ apps/ai-service/venv/
 apps/ai-service/__pycache__/
 .pytest_cache/
 .turbo
+
+# Sensitive files
+rzp-key.csv
+rzp-key.csv*
+*.csv
+*.pdf
+
+# Scratch test files at root
+create-*.ts
+test-*.ts
+test-*.js
+test*.ts
+
+# Build logs
+*.log
+
+# IDE prompts
+*-prompt.md
+*-prompt.jsx
+engineer-prompt.*
+phase*-prompt.*
+implementation_plan.md.resolved
+.idea/
+

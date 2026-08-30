@@ -16,31 +16,23 @@ import { createQuerySalesTool } from './tools/query-sales';
 import { createGetInventoryTool } from './tools/get-inventory';
 import { createGetPaymentsTool } from './tools/get-payments';
 import { createGetForecastTool, createGetCustomerTool, createGetSalesmanTool } from './tools/get-forecast-customer-salesman';
-import { createGetSuppliersTool, createRunReportTool } from './tools/get-suppliers-report';
-import { createGetProductDetailsTool, createGetRestockRecommendationsTool } from './tools/product-actions';
-import { createGetCustomerBalanceTool, createGetLedgerHistoryTool } from './tools/finance-actions';
+import { createOrderTool, createPaymentTool, createSendReminderTool } from './tools/write-actions';
+import { createOpenRouterLLM } from './utils/llm-factory';
 import { v4 as uuid } from 'uuid';
 
-let _llm: ChatOpenAI | null = null;
+let _llm: any = null;
 let _llmInitialized = false;
 
-export function getLlm(): ChatOpenAI | null {
+export function getLlm(model: 'fast' | 'advanced' = 'fast'): any {
     if (!_llmInitialized) {
         _llmInitialized = true;
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (apiKey) {
-            _llm = new ChatOpenAI({
-                modelName: 'nvidia/nemotron-3-super-120b-a12b:free',
-                temperature: 0,
-                configuration: {
-                    apiKey: process.env.OPENROUTER_API_KEY,
-                    baseURL: "https://openrouter.ai/api/v1",
-                    defaultHeaders: {
-                        "HTTP-Referer": "https://distroai.in",
-                        "X-Title": "DistroAI",
-                    }
-                }
-            });
+            const primary = createOpenRouterLLM(process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free');
+            const fallback1 = createOpenRouterLLM('google/gemini-2.5-flash');
+            const fallback2 = createOpenRouterLLM('meta-llama/llama-3-8b-instruct:free');
+            
+            _llm = primary.withFallbacks({ fallbacks: [fallback1, fallback2] });
         }
     }
     return _llm;
@@ -119,7 +111,8 @@ If they provide partial info, use \`<ask_input>\` to collect the remaining requi
 
 ## AFTER WORKFLOW COMPLETION
 - Show a summary of what was collected using the Markdown table format below.
-- For action workflows (/order, /payment, /remind, /return): You can ONLY collect information and show a summary. You CANNOT actually create orders, send reminders, record payments, or perform any write action. Always say "**📋 Summary Prepared**" (NOT "Sent", "Created", or "Completed"). Clearly state: "This is a draft — the action has not been executed yet."
+- After presenting the summary, wait for the user to confirm. Once confirmed, you MUST use the appropriate write tool (\`confirm_and_create_order\`, \`confirm_and_record_payment\`, \`confirm_and_send_reminder\`) to execute the action!
+- Do not claim the action was executed until the write tool returns a success message.
 - For data queries (/report, /customer): Show the data directly since these are read-only.
 
 ## OUTPUT FORMATTING
@@ -246,13 +239,10 @@ export class AiService {
             createGetForecastTool(orgId, this.prisma),
             createGetCustomerTool(orgId, this.prisma),
             createGetSalesmanTool(orgId, this.prisma),
-            createGetSuppliersTool(orgId, this.prisma),
-            createRunReportTool(orgId, this.prisma),
-            // Strict Read-Only Policy: Action-Oriented write tools have been stripped per architectural directives.
-            createGetProductDetailsTool(orgId, this.prisma),
-            createGetCustomerBalanceTool(orgId, this.prisma),
-            createGetLedgerHistoryTool(orgId, this.prisma),
-            createGetRestockRecommendationsTool(orgId, this.prisma),
+            // Write tools: Execute actions after user confirmation
+            createOrderTool(orgId, this.prisma),
+            createPaymentTool(orgId, this.prisma),
+            createSendReminderTool(orgId, this.aiQueue),
             // ask_input is used by the LLM during interactive workflows (/order, /remind, etc.)
             // The actual card is rendered client-side from <ask_input> XML in the text stream.
             // This tool registration prevents "tool not found" retry loops.
@@ -271,21 +261,7 @@ export class AiService {
         ];
     }
 
-    async query(orgId: string, userId: string, userQuery: string, sessionId?: string) {
-        if (!getLlm()) {
-            return { response: "AI is not configured. Please add OPENROUTER_API_KEY to environment variables." };
-        }
-
-        const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
-        const orgName = org?.name || 'your organization';
-        const detectedLang = detectLanguage(userQuery);
-
-        const systemMsg = buildSystemPrompt(orgName, detectedLang);
-
-        const tools = this.buildTools(orgId, userId);
-        const toolMap = new Map(tools.map(t => [t.name, t]));
-        const llmWithTools = getLlm()!.bindTools(tools);
-
+    private async loadSessionHistory(sessionId?: string): Promise<BaseMessage[]> {
         let previousMessages: BaseMessage[] = [];
         const redisKey = sessionId ? `aiHistory:${sessionId}` : null;
         if (redisKey && this.redis) {
@@ -301,14 +277,36 @@ export class AiService {
                 this.logger.warn('Failed to load AI history from Redis', err);
             }
         }
+        return previousMessages;
+    }
 
-        const messages: BaseMessage[] = [
-            new SystemMessage(systemMsg),
-            ...previousMessages,
-            new HumanMessage(userQuery)
-        ];
+    private async saveSessionHistory(sessionId: string | undefined, previousMessages: BaseMessage[], userQuery: string, response: string): Promise<void> {
+        const redisKey = sessionId ? `aiHistory:${sessionId}` : null;
+        if (redisKey && this.redis) {
+            try {
+                const updatedHistory = [
+                    ...previousMessages.map(m => ({ role: m instanceof HumanMessage ? 'human' : 'ai', content: typeof m.content === 'string' ? m.content : '' })),
+                    { role: 'human', content: userQuery },
+                    { role: 'ai', content: response }
+                ].slice(-10); // Keep last 10 turns
+                await this.redis.setex(redisKey, 1800, JSON.stringify(updatedHistory));
+            } catch (err) {
+                this.logger.warn('Failed to save AI history to Redis', err);
+            }
+        }
+    }
 
-        const timeoutMs = 30000;
+    async query(orgId: string, userId: string, userQuery: string, sessionId?: string) {
+        if (!getLlm()) return { response: "AI is not configured. Please add OPENROUTER_API_KEY to environment variables." };
+
+        const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
+        const systemMsg = buildSystemPrompt(org?.name || 'your organization', detectLanguage(userQuery));
+        const tools = this.buildTools(orgId, userId);
+        const toolMap = new Map(tools.map(t => [t.name, t]));
+        const llmWithTools = getLlm()!.bindTools(tools);
+
+        const previousMessages = await this.loadSessionHistory(sessionId);
+        const messages: BaseMessage[] = [new SystemMessage(systemMsg), ...previousMessages, new HumanMessage(userQuery)];
 
         try {
             const result: string = await Promise.race([
@@ -316,9 +314,8 @@ export class AiService {
                     for (let round = 0; round <= 5; round++) {
                         const response = await llmWithTools.invoke(messages);
                         const toolCalls = (response as any).tool_calls ?? [];
-                        if (toolCalls.length === 0) {
-                            return typeof response.content === 'string' ? response.content : '';
-                        }
+                        if (toolCalls.length === 0) return typeof response.content === 'string' ? response.content : '';
+                        
                         messages.push(new AIMessage({ content: response.content || '', tool_calls: toolCalls }));
                         for (const tc of toolCalls) {
                             const tool = toolMap.get(tc.name);
@@ -332,33 +329,17 @@ export class AiService {
                     }
                     return '';
                 })(),
-                new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+                new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000))
             ]) as string;
 
             await this.prisma.aIQuery.create({
                 data: { orgId, userId, sessionId, query: userQuery, response: result, latencyMs: 0 }
             });
 
-            if (redisKey && this.redis) {
-                try {
-                    const updatedHistory = [
-                        ...previousMessages.map(m => ({ role: m instanceof HumanMessage ? 'human' : 'ai', content: m.content })),
-                        { role: 'human', content: userQuery },
-                        { role: 'ai', content: result }
-                    ].slice(-10); // Keep last 10 turns to respect token limits
-
-                    // 30 minute TTL (1800 seconds) - Resets on every new message
-                    await this.redis.setex(redisKey, 1800, JSON.stringify(updatedHistory));
-                } catch (err) {
-                    this.logger.warn('Failed to save AI history to Redis', err);
-                }
-            }
-
+            await this.saveSessionHistory(sessionId, previousMessages, userQuery, result);
             return { response: result };
         } catch (error: any) {
-            if (error.message === 'timeout') {
-                return { response: "I'm sorry, that query took too long to process. Try a simpler question." };
-            }
+            if (error.message === 'timeout') return { response: "I'm sorry, that query took too long to process. Try a simpler question." };
             this.logger.error("AI Query Error", error);
             return { response: "There was an error processing your query. Please try again." };
         }
@@ -379,32 +360,18 @@ export class AiService {
         }
 
         const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
-        const orgName = org?.name || 'your organization';
-        const detectedLang = detectLanguage(userQuery);
+        const systemPrompt = buildSystemPrompt(org?.name || 'your organization', detectLanguage(userQuery));
 
-        // Immediate persistence for background generation
         const aiQueryRecord = await this.prisma.aIQuery.create({
             data: { orgId, userId, sessionId, query: userQuery, response: "", latencyMs: 0 }
         });
         const aiQueryRecordId = aiQueryRecord.id;
         let finalOutput = '';
 
-        // If image provided, use Gemini Vision
         let imageContext = '';
         if (imageBase64) {
             try {
-                const visionLlm = new ChatOpenAI({
-                    modelName: 'google/gemini-2.5-flash',
-                    temperature: 0,
-                    configuration: {
-                        apiKey: process.env.OPENROUTER_API_KEY!,
-                        baseURL: "https://openrouter.ai/api/v1",
-                        defaultHeaders: {
-                            "HTTP-Referer": "https://distroai.in",
-                            "X-Title": "DistroAI",
-                        }
-                    }
-                });
+                const visionLlm = createOpenRouterLLM('google/gemini-2.5-flash');
                 const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
                 const visionResponse = await visionLlm.invoke([
                     new HumanMessage({
@@ -418,29 +385,16 @@ export class AiService {
                 const visionText = typeof visionResponse.content === 'string' ? visionResponse.content : '';
                 imageContext = `\n\n[The user uploaded a product image. Vision analysis: ${visionText}]\n`;
 
-                // Extract 'Search: ...' and lookup in DB
                 const searchMatch = visionText.match(/Search:\s*(.+)/i);
                 if (searchMatch && searchMatch[1]) {
                     const query = searchMatch[1].trim().replace(/['"]/g, '');
-                    // Split query into terms (e.g. "Parle G 800g" -> ["Parle", "G", "800g"])
                     const terms = query.split(/\s+/).filter(t => t.length > 2).slice(0, 3);
-
                     if (terms.length > 0) {
                         const products = await this.prisma.product.findMany({
-                            where: {
-                                orgId,
-                                AND: terms.map(term => ({
-                                    OR: [
-                                        { name: { contains: term, mode: 'insensitive' } },
-                                        { sku: { contains: term, mode: 'insensitive' } },
-                                        { brand: { contains: term, mode: 'insensitive' } }
-                                    ]
-                                }))
-                            },
+                            where: { orgId, AND: terms.map(term => ({ OR: [ { name: { contains: term, mode: 'insensitive' } }, { sku: { contains: term, mode: 'insensitive' } }, { brand: { contains: term, mode: 'insensitive' } } ] })) },
                             include: { inventories: { select: { quantity: true, warehouse: { select: { name: true } } } } },
                             take: 3
                         });
-
                         if (products.length > 0) {
                             imageContext += `[Database Search Results for "${query}":\n`;
                             products.forEach(p => {
@@ -459,48 +413,19 @@ export class AiService {
             }
         }
 
-        const systemPrompt = buildSystemPrompt(orgName, detectedLang);
-
         const tools = this.buildTools(orgId, userId);
         const toolMap = new Map(tools.map(t => [t.name, t]));
-
-        // Bind tools to LLM — the LLM decides whether to use them (like ChatGPT/Claude)
         const llmWithTools = getLlm()!.bindTools(tools);
 
-        // Load previous session messages from Redis for multi-turn context
-        let previousMessages: BaseMessage[] = [];
-        const redisKey = sessionId ? `aiHistory:${sessionId}` : null;
-        if (redisKey && this.redis) {
-            try {
-                const cached = await this.redis.get(redisKey);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    previousMessages = parsed.map((m: any) =>
-                        m.role === 'human' ? new HumanMessage(m.content) : new AIMessage(m.content)
-                    );
-                }
-            } catch (err) {
-                this.logger.warn('Failed to load AI stream history from Redis', err);
-            }
-        }
-
-        const messages: BaseMessage[] = [
-            new SystemMessage(systemPrompt),
-            ...previousMessages,
-            new HumanMessage(userQuery + imageContext),
-        ];
+        const previousMessages = await this.loadSessionHistory(sessionId);
+        const messages: BaseMessage[] = [new SystemMessage(systemPrompt), ...previousMessages, new HumanMessage(userQuery + imageContext)];
 
         try {
-            const MAX_TOOL_ROUNDS = 5; // Safety limit to prevent infinite loops
-
-            for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-                // Stream the LLM response
+            for (let round = 0; round <= 5; round++) {
                 const stream = await llmWithTools.stream(messages);
                 let chunks: any[] = [];
-
                 for await (const chunk of stream) {
                     chunks.push(chunk);
-                    // Stream text content to the client immediately
                     const text = typeof chunk.content === 'string' ? chunk.content : '';
                     if (text) {
                         finalOutput += text;
@@ -508,88 +433,44 @@ export class AiService {
                     }
                 }
 
-                // Reconstruct the full AI message from chunks
                 if (chunks.length === 0) break;
                 let fullMessage = chunks[0];
-                for (let i = 1; i < chunks.length; i++) {
-                    fullMessage = fullMessage.concat(chunks[i]);
-                }
+                for (let i = 1; i < chunks.length; i++) fullMessage = fullMessage.concat(chunks[i]);
 
-                // Check if the LLM wants to call tools
                 const toolCalls = fullMessage.tool_calls ?? [];
-                if (toolCalls.length === 0) {
-                    // No tool calls — LLM responded directly, we're done
-                    break;
-                }
+                if (toolCalls.length === 0) break;
 
-                // Execute each tool call and collect results
-                this.logger.log(`LLM requested ${toolCalls.length} tool call(s): ${toolCalls.map((tc: any) => tc.name).join(', ')}`);
+                this.logger.log(`LLM requested ${toolCalls.length} tool call(s)`);
                 messages.push(new AIMessage({ content: fullMessage.content || '', tool_calls: toolCalls }));
 
                 for (const toolCall of toolCalls) {
                     const tool = toolMap.get(toolCall.name);
-                    if (tool) {
-                        try {
-                            const result = await tool.invoke(toolCall.args);
-                            messages.push(new ToolMessage({
-                                tool_call_id: toolCall.id,
-                                content: typeof result === 'string' ? result : JSON.stringify(result),
-                            }));
-                        } catch (toolErr: any) {
-                            this.logger.error(`Tool ${toolCall.name} failed`, toolErr);
-                            messages.push(new ToolMessage({
-                                tool_call_id: toolCall.id,
-                                content: `Error: ${toolErr.message}`,
-                            }));
-                        }
-                    } else {
-                        messages.push(new ToolMessage({
-                            tool_call_id: toolCall.id,
-                            content: `Tool '${toolCall.name}' not found.`,
-                        }));
+                    try {
+                        const result = tool ? await tool.invoke(toolCall.args) : `Tool not found`;
+                        messages.push(new ToolMessage({ tool_call_id: toolCall.id, content: typeof result === 'string' ? result : JSON.stringify(result) }));
+                    } catch (toolErr: any) {
+                        this.logger.error(`Tool ${toolCall.name} failed`, toolErr);
+                        messages.push(new ToolMessage({ tool_call_id: toolCall.id, content: `Error: ${toolErr.message}` }));
                     }
                 }
 
-                // If ask_input was called, synthesize the XML for client rendering,
-                // but save clean question text to history so the LLM has context on next turn.
                 const askInputCall = toolCalls.find((tc: any) => tc.name === 'ask_input');
                 if (askInputCall) {
                     const { step, title, options } = askInputCall.args;
-                    // XML for client rendering
                     const xml = `<ask_input step="${step || ''}" title="${title || ''}">${JSON.stringify(options || [])}</ask_input>`;
                     yield { data: JSON.stringify({ token: xml, done: false }) };
-                    // Clean text for history — this is what the LLM sees on the next turn
                     const optionsList = (options || []).map((o: string, i: number) => `${i + 1}. ${o}`).join('\n');
                     finalOutput += `${title}\n${optionsList}`;
                     break;
                 }
-                // Loop back: send tool results to LLM for the final response
             }
-
             yield { data: JSON.stringify({ done: true }) };
         } catch (error: any) {
             this.logger.error('AI Stream Error', error);
             yield { data: JSON.stringify({ token: '\n[Error processing query]', done: true }) };
         } finally {
-            // Save session history to Redis for multi-turn context
-            if (redisKey && this.redis) {
-                try {
-                    const updatedHistory = [
-                        ...previousMessages.map(m => ({ role: m instanceof HumanMessage ? 'human' : 'ai', content: typeof m.content === 'string' ? m.content : '' })),
-                        { role: 'human', content: userQuery },
-                        { role: 'ai', content: finalOutput }
-                    ].slice(-10); // Keep last 10 turns
-                    await this.redis.setex(redisKey, 1800, JSON.stringify(updatedHistory));
-                } catch (err) {
-                    this.logger.warn('Failed to save AI stream history to Redis', err);
-                }
-            }
-            if (aiQueryRecordId) {
-                await this.prisma.aIQuery.update({
-                    where: { id: aiQueryRecordId },
-                    data: { response: finalOutput }
-                }).catch(e => this.logger.error('Failed to update AI query history', e));
-            }
+            await this.saveSessionHistory(sessionId, previousMessages, userQuery, finalOutput);
+            await this.prisma.aIQuery.update({ where: { id: aiQueryRecordId }, data: { response: finalOutput } }).catch(e => this.logger.error('Failed to update AI query history', e));
         }
     }
 
@@ -602,18 +483,7 @@ export class AiService {
         const base64Audio = audioBuffer.toString('base64');
 
         try {
-            const visionLlm = new ChatOpenAI({
-                modelName: 'google/gemini-2.5-flash',
-                temperature: 0,
-                configuration: {
-                    apiKey: process.env.OPENROUTER_API_KEY!,
-                    baseURL: "https://openrouter.ai/api/v1",
-                    defaultHeaders: {
-                        "HTTP-Referer": "https://distroai.in",
-                        "X-Title": "DistroAI",
-                    }
-                }
-            });
+            const visionLlm = createOpenRouterLLM('google/gemini-2.5-flash');
 
             const transcriptionResponse = await visionLlm.invoke([
                 new HumanMessage({
@@ -757,18 +627,7 @@ Return ONLY a JSON object exactly matching this schema:
 }`;
 
         try {
-            const visionLlm = new ChatOpenAI({
-                modelName: 'google/gemini-2.5-flash',
-                temperature: 0,
-                configuration: {
-                    apiKey: process.env.OPENROUTER_API_KEY!,
-                    baseURL: "https://openrouter.ai/api/v1",
-                    defaultHeaders: {
-                        "HTTP-Referer": "https://distroai.in",
-                        "X-Title": "DistroAI",
-                    }
-                }
-            });
+            const visionLlm = createOpenRouterLLM('google/gemini-2.5-flash');
 
             const response = await visionLlm.invoke([
                 new HumanMessage({

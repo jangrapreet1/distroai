@@ -16,6 +16,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
     const upload = useUploadFile();
     const [name, setName] = useState("");
     const [sku, setSku] = useState("");
+    const [description, setDescription] = useState("");
     const [imageUrls, setImageUrls] = useState<string[]>([]);
     const [unit, setUnit] = useState("Pieces");
     const [sellingPrice, setSellingPrice] = useState("");
@@ -29,7 +30,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
         e.preventDefault();
         if (!name || !sku || !sellingPrice || !gstRate) return;
         create.mutate({
-            name, sku, unit,
+            name, sku, unit, description,
             imageUrl: imageUrls[0] || "",
             imageUrls,
             sellingPrice: Number(sellingPrice),
@@ -41,7 +42,7 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
         }, {
             onSuccess: () => {
                 onClose();
-                setName(""); setSku(""); setImageUrls([]); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18"); setInitialQuantity("0");
+                setName(""); setSku(""); setDescription(""); setImageUrls([]); setSellingPrice(""); setMrp(""); setPurchasePrice(""); setGstRate("18"); setInitialQuantity("0");
             }
         });
     };
@@ -101,6 +102,10 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Min Stock Level</span>
                             <input type="number" value={minStockLevel} onChange={(e) => setMinStockLevel(e.target.value)} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
                         </label>
+                        <div className="col-span-2">
+                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Description</span>
+                            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter rich product details to show up in the customer storefront..." rows={3} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition resize-vertical" />
+                        </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-3">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition">Cancel</button>

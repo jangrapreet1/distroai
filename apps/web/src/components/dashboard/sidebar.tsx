@@ -56,6 +56,7 @@ export function SidebarContent({ navGroups, userRole, userName, orgName, orgPlan
     );
 
     const isActive = (href: string) => {
+        if (href === "/dashboard") return pathname === "/dashboard";
         if (href === "/") return pathname === "/";
         // Exact match always wins
         if (pathname === href) return true;

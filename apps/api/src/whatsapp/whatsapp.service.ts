@@ -97,7 +97,26 @@ export class WhatsAppService {
         this.clientCache.delete(orgId);
     }
 
+    private async logOutbound(orgId: string, phone: string, messageType: string, content: string, mediaUrl?: string) {
+        try {
+            await this.prisma.whatsAppMessage.create({
+                data: {
+                    orgId,
+                    direction: 'OUTBOUND',
+                    phone,
+                    messageType,
+                    content,
+                    mediaUrl,
+                    status: 'SENT',
+                },
+            });
+        } catch (e) {
+            this.logger.warn(`Failed to log outbound WA message to org ${orgId}: ${(e as Error).message}`);
+        }
+    }
+
     async sendText(orgId: string, to: string, body: string): Promise<void> {
+        await this.logOutbound(orgId, to, 'text', body);
         const resolved = await this.getClient(orgId);
         if (!resolved) {
             this.logger.log(`[WA STUB] sendText org=${orgId} to=${to}: ${body}`);
@@ -117,6 +136,7 @@ export class WhatsAppService {
         orgId: string, to: string, body: string,
         buttons: Array<{ id: string; title: string }>,
     ): Promise<void> {
+        await this.logOutbound(orgId, to, 'interactive', body);
         const resolved = await this.getClient(orgId);
         if (!resolved) {
             this.logger.log(`[WA STUB] sendButtons org=${orgId} to=${to}: ${body}`);
@@ -141,6 +161,7 @@ export class WhatsAppService {
         orgId: string, to: string, header: string, body: string, buttonText: string,
         sections: Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }>,
     ): Promise<void> {
+        await this.logOutbound(orgId, to, 'interactive', `${header}: ${body}`);
         const resolved = await this.getClient(orgId);
         if (!resolved) {
             this.logger.log(`[WA STUB] sendList org=${orgId} to=${to}: ${header}`);
@@ -160,6 +181,7 @@ export class WhatsAppService {
     }
 
     async sendDocument(orgId: string, to: string, documentUrl: string, filename: string, caption?: string): Promise<void> {
+        await this.logOutbound(orgId, to, 'document', caption || filename, documentUrl);
         const resolved = await this.getClient(orgId);
         if (!resolved) {
             this.logger.log(`[WA STUB] sendDocument org=${orgId} to=${to}: ${filename}`);
@@ -179,6 +201,7 @@ export class WhatsAppService {
         orgId: string, to: string, templateName: string, languageCode: string,
         components?: Record<string, unknown>[],
     ): Promise<void> {
+        await this.logOutbound(orgId, to, 'template', `Template: ${templateName}`);
         const resolved = await this.getClient(orgId);
         if (!resolved) {
             this.logger.log(`[WA STUB] sendTemplate org=${orgId} to=${to}: ${templateName}`);

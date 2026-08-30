@@ -37,7 +37,7 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
     }, [product?.imageUrl, product?.imageUrls]);
 
     const [editData, setEditData] = useState({
-        name: "", sku: "", brand: "", category: "",
+        name: "", sku: "", brand: "", category: "", description: "",
         purchasePrice: 0, sellingPrice: 0, mrp: 0, gstRate: 0,
         unit: "", secondaryUnit: "", conversionFactor: 1, minStockLevel: 0,
         commissionType: null as string | null, commissionValue: 0,
@@ -50,6 +50,7 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 sku: product.sku || "",
                 brand: product.brand || "",
                 category: product.category || "",
+                description: product.description || "",
                 purchasePrice: product.purchasePrice || 0,
                 sellingPrice: product.sellingPrice || 0,
                 mrp: product.mrp || 0,
@@ -194,6 +195,13 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 </div>
             </div>
 
+            {product.description && (
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
+                    <h2 className="text-base font-bold mb-3" style={{ fontFamily: "var(--font-playfair)" }}>Product Description</h2>
+                    <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{product.description}</p>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
                     <h2 className="text-lg font-bold mb-4" style={{ fontFamily: "var(--font-playfair)" }}>Pricing Details</h2>
@@ -289,6 +297,10 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Category</span>
                                             <input type="text" value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value })} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" />
                                         </label>
+                                        <div className="col-span-1 md:col-span-3">
+                                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Product Description</span>
+                                            <textarea value={editData.description} onChange={(e) => setEditData({ ...editData, description: e.target.value })} placeholder="Enter rich product details to show up in the customer storefront..." rows={3} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none resize-vertical" />
+                                        </div>
                                     </div>
                                 </div>
 

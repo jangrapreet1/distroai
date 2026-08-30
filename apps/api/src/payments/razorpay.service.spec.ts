@@ -15,8 +15,6 @@ describe('RazorpayService', () => {
                     provide: ConfigService,
                     useValue: {
                         get: jest.fn().mockImplementation((key: string) => {
-                            if (key === 'RAZORPAY_KEY_ID') return 'rzp_test_123';
-                            if (key === 'RAZORPAY_KEY_SECRET') return 'rzp_secret_456';
                             if (key === 'RAZORPAY_WEBHOOK_SECRET') return 'test_webhook_secret';
                             return null;
                         }),

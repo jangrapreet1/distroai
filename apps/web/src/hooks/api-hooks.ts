@@ -269,9 +269,7 @@ export function useUploadFile() {
         mutationFn: (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
-            return apiClient.post("/api/v1/storage/upload", formData, {
-                headers: { "Content-Type": "multipart/form-data" },
-            }).then((r) => r.data);
+            return apiClient.post("/api/v1/storage/upload", formData).then((r) => r.data);
         },
         onError: (e) => toast.error(getApiError(e).message),
     });
@@ -285,7 +283,7 @@ export function useWarehouses() {
 export function useCreateWarehouse() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (data: any) => apiClient.post("/api/v1/inventory/warehouses", data).then((r) => r.data),
+        mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/inventory/warehouses", data).then((r) => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["inventory", "warehouses"] });
             toast.success("Location added successfully");
@@ -297,7 +295,7 @@ export function useCreateWarehouse() {
 export function useUpdateWarehouse() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: any }) => apiClient.put(`/api/v1/inventory/warehouses/${id}`, data).then((r) => r.data),
+        mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => apiClient.put(`/api/v1/inventory/warehouses/${id}`, data).then((r) => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["inventory", "warehouses"] });
             toast.success("Location updated successfully");
@@ -483,7 +481,12 @@ export function useCreateCampaign() {
     return useMutation({
         mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/marketing/campaigns", data).then((r) => r.data),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ["campaigns"] }); toast.success("Campaign launched! 🚀"); },
-        onError: (e) => toast.error(getApiError(e).message),
+        onError: (e) => {
+            const msg = getApiError(e).message;
+            if (!msg.includes("No Facebook Page")) {
+                toast.error(msg);
+            }
+        },
     });
 }
 export function useUpdateCampaign() {

@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText, Send, Download, CreditCard, CheckCircle, X, Link as LinkIcon, Receipt } from "lucide-react";
+import { ArrowLeft, FileText, Send, Download, CreditCard, CheckCircle, X, Link as LinkIcon, Receipt, QrCode } from "lucide-react";
 import { useInvoice, useRecordPayment } from "@/hooks/api-hooks";
 import { formatDate, buildWhatsAppInvoiceLink, formatINR } from "@/lib/utils";
 import apiClient from "@/lib/api-client";
 import toast from "react-hot-toast";
+import { UpiPaymentModal } from "@/components/modals/UpiPaymentModal";
 
 
 const statusClass: Record<string, string> = { DRAFT: "badge-draft", SENT: "badge-sent", PARTIAL: "badge-partial", PAID: "badge-paid", OVERDUE: "badge-overdue", CANCELLED: "badge-cancelled" };
@@ -77,6 +78,7 @@ export default function InvoiceDetailPage() {
     const { data, isLoading, refetch } = useInvoice(id);
     const invoice = data?.data ?? data ?? {};
     const [showPayment, setShowPayment] = useState(false);
+    const [showUpiModal, setShowUpiModal] = useState(false);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState("");
 
@@ -213,9 +215,17 @@ export default function InvoiceDetailPage() {
                         </button>
                     )}
                     {((invoice.balanceAmount as number) ?? 0) > 0 && (
-                        <button onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 transition">
-                            <CreditCard size={14} /> Record Payment
-                        </button>
+                        <>
+                            <button
+                                onClick={() => setShowUpiModal(true)}
+                                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-[var(--radius-md)] border border-[var(--gold)]/40 bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 transition"
+                            >
+                                <QrCode size={14} /> Pay via UPI QR
+                            </button>
+                            <button onClick={() => setShowPayment(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--green-bright)] text-[var(--bg-primary)] hover:opacity-90 transition">
+                                <CreditCard size={14} /> Record Payment
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -346,6 +356,16 @@ export default function InvoiceDetailPage() {
                 invoiceId={id}
                 customerId={invoice.customerId as string ?? ""}
                 maxAmount={(invoice.balanceAmount as number) ?? 0}
+            />
+
+            <UpiPaymentModal
+                isOpen={showUpiModal}
+                onClose={() => setShowUpiModal(false)}
+                invoiceNumber={invoice.invoiceNumber ?? "INV"}
+                amount={Number(invoice.balanceAmount ?? invoice.totalAmount ?? 0)}
+                upiId={invoice.organization?.settings?.upiId || "distroai@icici"}
+                orgName={invoice.organization?.name || "DistroAI Merchant"}
+                onPaymentConfirmed={() => refetch()}
             />
         </div>
     );

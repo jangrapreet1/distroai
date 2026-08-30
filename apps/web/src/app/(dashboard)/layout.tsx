@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
     LayoutDashboard, ShoppingCart, FileText, Package, Users, Truck,
     CreditCard, ClipboardList, Receipt, BarChart3, Sparkles, Megaphone,
@@ -24,7 +24,7 @@ const NAV_GROUPS: NavGroup[] = [
     {
         title: "operations_title",
         items: [
-            { label: "dashboard", href: "/", icon: LayoutDashboard },
+            { label: "dashboard", href: "/dashboard", icon: LayoutDashboard },
             { label: "orders", href: "/orders", icon: ShoppingCart },
             { label: "invoices", href: "/invoices", icon: FileText },
             { label: "inventory", href: "/inventory", icon: Package, roles: ['OWNER', 'ADMIN', 'MANAGER', 'ACCOUNTANT'] },
@@ -71,22 +71,44 @@ const NAV_GROUPS: NavGroup[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
     const { user, org, logout } = useAuth();
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const accessToken = useAuthStore((s) => s.accessToken);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const { theme, toggleTheme } = useTheme();
+    const [hydrated, setHydrated] = useState(false);
 
     useSyncOfflineData();
+
+    // Wait for Zustand persist to hydrate from localStorage before deciding auth state
+    useEffect(() => {
+        // Zustand persist hydrates synchronously on first render in most cases,
+        // but we add a small delay to be safe across environments
+        const unsub = useAuthStore.persist.onFinishHydration?.(() => setHydrated(true));
+        // If already hydrated (common case), set immediately
+        if (useAuthStore.persist.hasHydrated?.()) setHydrated(true);
+        return () => { if (typeof unsub === 'function') unsub(); };
+    }, []);
 
     // Session recovery: if the Zustand store has tokens (from localStorage)
     // but the browser cookie is missing, re-set it so the middleware doesn't
     // redirect to /login on page reload.
     useEffect(() => {
-        const { accessToken } = useAuthStore.getState();
-        if (accessToken && !document.cookie.includes('accessToken=')) {
-            document.cookie = `accessToken=${accessToken};path=/;max-age=604800;SameSite=Lax`;
+        if (!hydrated) return;
+        const token = useAuthStore.getState().accessToken;
+        if (token && !document.cookie.includes('accessToken=')) {
+            document.cookie = `accessToken=${token};path=/;max-age=2592000;SameSite=Lax`;
         }
-    }, []);
+    }, [hydrated]);
+
+    // Auth gate: if store is hydrated and user is not authenticated, redirect to login
+    useEffect(() => {
+        if (hydrated && !isAuthenticated) {
+            router.replace(`/login${pathname !== '/' ? `?redirect=${encodeURIComponent(pathname)}` : ''}`);
+        }
+    }, [hydrated, isAuthenticated, router, pathname]);
 
     // ⌘K keyboard shortcut
     useEffect(() => {
@@ -105,6 +127,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         queryKey: ["analytics", "dashboard"],
         queryFn: () => apiClient.get("/api/v1/analytics/dashboard").then((r) => r.data),
         retry: false, staleTime: 60_000,
+        enabled: hydrated && isAuthenticated,
     });
     const dd = dashData?.data ?? dashData ?? {};
 
@@ -142,6 +165,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         onLogout: logout,
     };
 
+    // Show loading skeleton while hydrating or if not authenticated (prevents flash)
+    if (!hydrated || !isAuthenticated) {
+        return (
+            <div style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                minHeight: "100vh", background: "var(--bg-primary)",
+            }}>
+                <div style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem",
+                }}>
+                    <div style={{
+                        width: 40, height: 40, borderRadius: "50%",
+                        border: "3px solid var(--border)",
+                        borderTopColor: "var(--gold)",
+                        animation: "spin 0.8s linear infinite",
+                    }} />
+                    <span style={{ fontSize: ".85rem", color: "var(--text-muted)" }}>Loading DistroAI...</span>
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <LanguageProvider>
             <div className="min-h-screen flex bg-[var(--bg-primary)]">
@@ -172,8 +218,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <Menu size={20} />
                             </button>
                             <nav className="hidden sm:flex items-center gap-1 text-sm text-[var(--text-muted)]">
-                                <Link href="/" className="hover:text-[var(--text-secondary)] transition">Home</Link>
-                                {pathname !== "/" && (
+                                <Link href="/dashboard" className="hover:text-[var(--text-secondary)] transition">Home</Link>
+                                {pathname !== "/dashboard" && pathname !== "/" && (
                                     <>
                                         <span>/</span>
                                         <span className="text-[var(--text-primary)] capitalize">

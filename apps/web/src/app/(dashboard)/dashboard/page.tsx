@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShoppingCart, IndianRupee, AlertTriangle, Package, RefreshCw, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import apiClient from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth.store";
+import { toast } from "react-hot-toast";
 import { greeting } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -13,9 +14,11 @@ import { KPICard, formatINR } from "@/components/dashboard/kpi-card";
 import { SalesChart } from "@/components/dashboard/sales-chart";
 import { AlertsFeed } from "@/components/dashboard/alerts-feed";
 import { TopLists } from "@/components/dashboard/top-lists";
+import { DashboardData } from "@/types/api";
 
 export default function DashboardPage() {
     const user = useAuthStore((s) => s.user);
+    const token = useAuthStore((s) => s.accessToken);
     const [chartRange, setChartRange] = useState<"7D" | "30D" | "90D">("30D");
     const { t } = useLanguage();
 
@@ -24,6 +27,29 @@ export default function DashboardPage() {
         queryFn: () => apiClient.get("/api/v1/analytics/dashboard").then((r) => r.data),
         retry: false,
     });
+
+    useEffect(() => {
+        if (!token) return;
+        // In real app, NEXT_PUBLIC_API_URL is used, here we hardcode localhost:3000 as fallback
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+        const eventSource = new EventSource(`${apiUrl}/api/v1/events/stream?token=${token}`);
+        
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type) {
+                    refetch();
+                    toast(`Dashboard updated via ${data.type.replace(':', ' ')}`, { icon: '🔄', id: 'sse-update' });
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        };
+
+        return () => {
+            eventSource.close();
+        };
+    }, [token, refetch]);
 
     const daysBack = chartRange === "7D" ? 7 : chartRange === "30D" ? 30 : 90;
     const from = useMemo(() => {
@@ -46,15 +72,15 @@ export default function DashboardPage() {
         retry: false,
     });
 
-    const d = dashboard?.data ?? dashboard ?? {};
+    const d: Partial<DashboardData> = dashboard?.data ?? dashboard ?? {};
     const todayRevenue = d?.today?.revenue ?? 0;
     const todayOrders = d?.today?.orders ?? 0;
     const monthRevenue = d?.thisMonth?.revenue ?? 0;
     const monthOrders = d?.thisMonth?.orders ?? 0;
-    const outData = (d as any)?.collections ?? { totalOutstanding: 0, totalCredit: 0 };
+    const outData = d?.collections ?? { totalOutstanding: 0, totalCredit: 0 };
     const outstanding = outData.totalOutstanding;
     const credit = outData.totalCredit;
-    const lowStock = (d as any)?.inventory?.lowStockCount ?? 0;
+    const lowStock = d?.inventory?.lowStockCount ?? 0;
 
     const topProducts = d?.topProducts ?? [];
     const topCustomers = d?.topCustomers ?? [];
@@ -73,7 +99,7 @@ export default function DashboardPage() {
     }, [salesData]);
 
     const alerts = useMemo(() => {
-        const items: { type: string; message: string; action: string; color: string; href?: string; secondaryAction?: any }[] = [];
+        const items: { type: string; message: string; action: string; color: string; href?: string; secondaryAction?: { label: string; href: string; icon: any } }[] = [];
         if (lowStock > 0) items.push({ type: "stockout", message: `${lowStock} ${t('products_below_reorder')}`, action: t('view'), color: "var(--red)", href: "/inventory", secondaryAction: { label: "Create PO", href: "/purchase-orders/new", icon: Plus } });
         if (outstanding > 0) items.push({ type: "overdue", message: `${formatINR(outstanding)} ${t('total_outstanding_from_customers')}`, action: t('collect'), color: "var(--warning)", href: "/customers" });
         recentOrders.slice(0, 3).forEach((o) => {
@@ -177,7 +203,7 @@ export default function DashboardPage() {
                         </Link>
                     </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
-                        {(lowStockData.items || []).slice(0, 5).map((item: any) => (
+                        {(lowStockData.items || []).slice(0, 5).map((item: { productId: string; name: string; sku: string; currentStock: number; minStockLevel: number; unit: string }) => (
                             <div key={item.productId} className="flex items-center justify-between p-2.5 bg-[var(--bg-secondary)]/50 rounded-lg border border-[var(--border)]">
                                 <div className="min-w-0 flex-1 mr-2">
                                     <p className="text-xs font-medium truncate">{item.name}</p>

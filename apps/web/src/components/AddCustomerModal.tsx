@@ -7,7 +7,7 @@ const CUSTOMER_TYPES = ["RETAILER", "WHOLESALER", "INSTITUTION", "INDIVIDUAL"];
 
 export function AddCustomerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const createCustomer = useCreateCustomer();
-    const { data: orgData } = useOrg();
+    const { data: orgData } = useOrg() || {};
     const orgState = orgData?.data?.state ?? "Maharashtra";
 
     const [isRegistered, setIsRegistered] = useState(false);

@@ -6,10 +6,12 @@ import { StorageModule } from '../storage/storage.module';
 import { AiProcessor } from './ai.processor';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { BullModule } from '@nestjs/bullmq';
+import { EventsModule } from '../events/events.module';
 
 @Module({
     imports: [
         StorageModule,
+        EventsModule,
         forwardRef(() => WhatsAppModule),
         BullModule.registerQueue({ name: 'ai' })
     ],

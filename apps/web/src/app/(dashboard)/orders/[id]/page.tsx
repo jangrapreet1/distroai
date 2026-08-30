@@ -38,7 +38,7 @@ function EditDraftModal({ order, open, onClose }: { order: any; open: boolean; o
     const [productSearch, setProductSearch] = useState("");
     const [showPicker, setShowPicker] = useState(false);
 
-    const { data: productsData } = useProducts({ search: productSearch || undefined, limit: 20, isActive: true });
+    const { data: productsData } = useProducts({ search: productSearch || undefined, limit: 20, isActive: true }) || {};
     const products = productsData?.data?.data ?? productsData?.data ?? [];
 
     // Initialize state from order on open

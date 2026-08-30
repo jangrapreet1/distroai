@@ -64,12 +64,14 @@ const s = StyleSheet.create({
     grandTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: `2pt solid ${GOLD}`, fontSize: 12, fontWeight: 'bold' },
     amountWords: { fontSize: 7.5, color: MUTED, marginTop: 5, fontStyle: 'italic' },
 
-    /* Bank */
-    bankRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
-    bankBox: { flex: 1, backgroundColor: '#faf9f7', border: `0.5pt solid ${BORDER}`, borderRadius: 4, padding: 9 },
+    /* Bank & UPI */
+    bankRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+    bankBox: { flex: 1, backgroundColor: '#faf9f7', border: `0.5pt solid ${BORDER}`, borderRadius: 4, padding: 8 },
     bankTag: { fontSize: 7, fontWeight: 'bold', color: MUTED, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 3 },
     bankText: { fontSize: 8.5, color: '#444', marginTop: 1 },
     bankBold: { fontWeight: 'bold' },
+    upiBox: { width: 140, backgroundColor: '#faf9f7', border: `0.5pt solid ${BORDER}`, borderRadius: 4, padding: 6, alignItems: 'center', justifyContent: 'center' },
+    upiQrImage: { width: 60, height: 60, marginTop: 2, marginBottom: 2 },
 
     /* Signature */
     sigBox: { alignItems: 'flex-end', marginTop: 20, marginBottom: 8 },
@@ -98,8 +100,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
     SENT: { bg: '#ede9f6', text: '#7B5EA7' },
     PAID: { bg: '#e6f5ed', text: '#2E8B57' },
     PARTIAL: { bg: '#fef3e2', text: '#E07B39' },
-    OVERDUE: { bg: '#fce8e4', text: '#E07B60' },
-    CANCELLED: { bg: '#fce8e4', text: '#E07B60' },
+    OVERDUE: { bg: '#fdeeed', text: '#E07B60' },
+    CANCELLED: { bg: '#eee', text: '#888' },
 };
 
 const InvoicePDF = ({ invoice }: { invoice: any }) => {
@@ -115,7 +117,7 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
 
     const statusColor = STATUS_COLORS[invoice.status] ?? STATUS_COLORS.DRAFT;
 
-    const hasBankDetails = settings.bankName || settings.bankAccountNumber;
+    const hasPaymentDetails = settings.bankName || settings.bankAccountNumber || settings.upiId || invoice.upiQrDataUri;
 
     return (
         <Document>
@@ -256,20 +258,26 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                     </View>
                 </View>
 
-                {/* ─── Bank & UPI ─── */}
-                {hasBankDetails && (
+                {/* ─── Bank & Dynamic UPI QR ─── */}
+                {hasPaymentDetails && (
                     <View style={s.bankRow}>
-                        <View style={s.bankBox}>
-                            <Text style={s.bankTag}>Bank Details</Text>
-                            {settings.bankName && <Text style={s.bankText}><Text style={s.bankBold}>{settings.bankName}</Text></Text>}
-                            {settings.bankAccountNumber && <Text style={s.bankText}>A/C: <Text style={s.bankBold}>{settings.bankAccountNumber}</Text></Text>}
-                            {settings.bankIfscCode && <Text style={s.bankText}>IFSC: {settings.bankIfscCode}</Text>}
-                            {settings.bankBranch && <Text style={s.bankText}>Branch: {settings.bankBranch}</Text>}
-                        </View>
-                        {settings.upiId && (
-                            <View style={[s.bankBox, { textAlign: 'center', flex: 0.6 }]}>
-                                <Text style={s.bankTag}>UPI Payment</Text>
-                                <Text style={[s.bankText, s.bankBold]}>{settings.upiId}</Text>
+                        {(settings.bankName || settings.bankAccountNumber) && (
+                            <View style={s.bankBox}>
+                                <Text style={s.bankTag}>Bank Details</Text>
+                                {settings.bankName && <Text style={s.bankText}><Text style={s.bankBold}>{settings.bankName}</Text></Text>}
+                                {settings.bankAccountNumber && <Text style={s.bankText}>A/C: <Text style={s.bankBold}>{settings.bankAccountNumber}</Text></Text>}
+                                {settings.bankIfscCode && <Text style={s.bankText}>IFSC: {settings.bankIfscCode}</Text>}
+                                {settings.bankBranch && <Text style={s.bankText}>Branch: {settings.bankBranch}</Text>}
+                            </View>
+                        )}
+                        {(settings.upiId || invoice.upiQrDataUri) && (
+                            <View style={s.upiBox}>
+                                <Text style={s.bankTag}>Scan & Pay via UPI</Text>
+                                {invoice.upiQrDataUri && (
+                                    <Image src={invoice.upiQrDataUri} style={s.upiQrImage} />
+                                )}
+                                {settings.upiId && <Text style={[s.bankText, s.bankBold, { fontSize: 7.5 }]}>{settings.upiId}</Text>}
+                                <Text style={{ fontSize: 6.5, color: MUTED, marginTop: 1 }}>GPay / PhonePe / Paytm / BHIM</Text>
                             </View>
                         )}
                     </View>

@@ -32,7 +32,22 @@ export class InvoicePdfService {
       try {
         invoice.qrCodeDataUri = await QRCode.toDataURL(invoice.eInvoiceQrCode, { margin: 1 });
       } catch (err) {
-        this.logger.error('Failed to generate QR code for PDF', err);
+        this.logger.error('Failed to generate e-Invoice QR code for PDF', err);
+      }
+    }
+
+    // Generate Dynamic NPCI UPI QR Code
+    const upiId = invoice.organization?.settings?.upiId;
+    if (upiId) {
+      try {
+        const orgName = invoice.organization?.name || 'Distributor';
+        const amount = Number(invoice.balanceAmount ?? invoice.totalAmount ?? 0);
+        if (amount > 0) {
+          const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(orgName)}&am=${amount.toFixed(2)}&tr=${encodeURIComponent(invoice.invoiceNumber)}&tn=Invoice+${encodeURIComponent(invoice.invoiceNumber)}&cu=INR`;
+          invoice.upiQrDataUri = await QRCode.toDataURL(upiUri, { margin: 1, width: 140 });
+        }
+      } catch (err) {
+        this.logger.error('Failed to generate UPI QR code for PDF', err);
       }
     }
 

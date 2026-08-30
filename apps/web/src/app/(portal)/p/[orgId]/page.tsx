@@ -8,8 +8,9 @@ import { Plus, Loader2, PackageSearch, ShoppingCart, AlertCircle } from "lucide-
 import { toast } from "react-hot-toast";
 import { usePortalOrgId, usePortalCart, usePortalAuth, portalApi } from "@/contexts/portal-context";
 import { QuickViewModal } from "./components/quick-view-modal";
+import { CatalogProduct, Order, OrderItem } from "@/types/api";
 
-function ProductCard({ product, orgId, cart, isB2BContext, onQuickView }: { product: any; orgId: string; cart: any; isB2BContext: boolean; onQuickView: (p: any) => void }) {
+function ProductCard({ product, orgId, cart, isB2BContext, onQuickView }: { product: CatalogProduct; orgId: string; cart: any; isB2BContext: boolean; onQuickView: (p: CatalogProduct) => void }) {
     const [bulkQty, setBulkQty] = useState<number>(1);
     const isOOS = !product.inStock;
 
@@ -133,7 +134,7 @@ export default function CatalogPage() {
     const initialQuery = searchParams.get("q") || "";
     const [searchQuery, setSearchQuery] = useState(initialQuery);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [quickViewProduct, setQuickViewProduct] = useState<any | null>(null);
+    const [quickViewProduct, setQuickViewProduct] = useState<CatalogProduct | null>(null);
 
     const isB2BContext = auth.isAuthenticated && auth.customer?.type !== 'INDIVIDUAL';
 
@@ -155,7 +156,7 @@ export default function CatalogPage() {
 
     const maxCatalogPrice = useMemo(() => {
         if (!catalog) return 10000;
-        return catalog.reduce((max: number, p: any) => Math.max(max, p.price), 0);
+        return catalog.reduce((max: number, p: CatalogProduct) => Math.max(max, p.price), 0);
     }, [catalog]);
 
     const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
@@ -175,7 +176,7 @@ export default function CatalogPage() {
 
     const filteredCatalog = useMemo(() => {
         if (!catalog) return [];
-        return catalog.filter((p: any) => {
+        return catalog.filter((p: CatalogProduct) => {
             // B2C Context: Completely hide Out of Stock items
             if (!isB2BContext && !p.inStock) return false;
 
@@ -196,14 +197,14 @@ export default function CatalogPage() {
 
         // Extract distinct product IDs from all past orders
         const pastProductIds = new Set<string>();
-        orders.forEach((order: any) => {
-            order.items?.forEach((item: any) => {
+        orders.forEach((order: Order) => {
+            order.items?.forEach((item: OrderItem) => {
                 if (item.productId) pastProductIds.add(item.productId);
             });
         });
 
         // Map IDs back to full catalog products, filter out anything not in active catalog
-        return catalog.filter((p: any) => pastProductIds.has(p.id) && p.inStock).slice(0, 10);
+        return catalog.filter((p: CatalogProduct) => pastProductIds.has(p.id) && p.inStock).slice(0, 10);
     }, [catalog, orders, isB2BContext]);
 
     return (
@@ -241,7 +242,7 @@ export default function CatalogPage() {
                         </span>
                     </div>
                     <div className="flex overflow-x-auto gap-4 sm:gap-6 pb-4 scrollbar-hide snap-x">
-                        {buyItAgainProducts.map((product: any) => (
+                        {buyItAgainProducts.map((product: CatalogProduct) => (
                             <div key={product.id} className="w-[240px] sm:w-[280px] shrink-0 snap-start">
                                 <ProductCard
                                     product={product}
@@ -359,7 +360,7 @@ export default function CatalogPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4 sm:gap-6">
-                            {filteredCatalog.map((product: any) => (
+                            {filteredCatalog.map((product: CatalogProduct) => (
                                 <ProductCard
                                     key={product.id}
                                     product={product}

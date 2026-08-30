@@ -130,6 +130,7 @@ export class ProductsService {
                             gstRate: Number(row['gstRate']),
                             category: row['category'] as string,
                             brand: row['brand'] as string,
+                            hsnCode: row['hsnCode'] ? String(row['hsnCode']) : undefined,
                         },
                     });
                     this.aiService.generateAndSaveEmbedding(existing.id).catch(() => { });
@@ -145,6 +146,7 @@ export class ProductsService {
                             unit: (row['unit'] as string) ?? 'Pieces',
                             category: row['category'] as string,
                             brand: row['brand'] as string,
+                            hsnCode: row['hsnCode'] ? String(row['hsnCode']) : undefined,
                             ...(defaultWarehouse && {
                                 inventories: { create: { orgId, warehouseId: defaultWarehouse.id, quantity: 0 } },
                             }),

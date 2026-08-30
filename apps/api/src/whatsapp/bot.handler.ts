@@ -12,6 +12,9 @@ type BotState =
     | 'ORDER_QTY_INPUT'
     | 'ORDER_ADD_MORE'
     | 'ORDER_CONFIRM'
+    | 'ORDER_DELIVERY_TYPE_SELECT'
+    | 'ORDER_ADDRESS_INPUT'
+    | 'ORDER_PAYMENT_METHOD_SELECT'
     | 'ORDER_AWAITING_CONFIRM'
     | 'ORDER_TRACK_INPUT';
 
@@ -28,10 +31,39 @@ interface SessionContext {
     currentProduct?: { productId: string; name: string; price: number; unit: string };
     customerId?: string;
     orgId?: string;
+    deliveryType?: 'DELIVERY' | 'PICKUP';
+    address?: string;
+    paymentMethod?: 'COD' | 'UPI' | 'RAZORPAY';
 }
 
 function formatINR(n: number): string {
     return '₹' + n.toLocaleString('en-IN');
+}
+
+function parseAskInput(text: string): { cleanText: string; askInput: { step: string; title: string; options: string[] } | null } {
+    const askInputRegex = /<ask_input\s+step="([^"]*)"\s+title="([^"]*)">\s*([\s\S]*?)\s*<\/ask_input>/is;
+    const match = text.match(askInputRegex);
+    if (match) {
+        let options: string[] = [];
+        try {
+            options = JSON.parse(match[3]);
+        } catch (e) {
+            // fallback if it's not valid JSON array
+            const arrMatch = match[3].match(/\[(.*?)\]/s);
+            if (arrMatch) {
+                try { options = JSON.parse(`[${arrMatch[1]}]`); } catch (err) {}
+            }
+        }
+        return {
+            cleanText: text.replace(askInputRegex, '').trim(),
+            askInput: {
+                step: match[1],
+                title: match[2],
+                options
+            }
+        };
+    }
+    return { cleanText: text, askInput: null };
 }
 
 const ORDER_KEYWORDS = ['order', 'order karni', 'order chahiye', 'mujhe order', 'hi', 'hello', 'help', 'menu'];
@@ -132,7 +164,25 @@ export class BotHandler {
                             // Composite Session Key preventing tenant bleed
                             const aiSessionId = `session:${orgId}:${from}`;
                             const res = await this.aiService.query(orgId, from, text, aiSessionId);
-                            await this.wa.sendText(orgId, from, res.response);
+                            
+                            const parsed = parseAskInput(res.response);
+                            
+                            if (parsed.askInput) {
+                                const { title, options, step } = parsed.askInput;
+                                const msgText = parsed.cleanText ? `${parsed.cleanText}\n\n*${title}*` : `*${title}*`;
+                                
+                                if (options.length <= 3 && options.length > 0) {
+                                    const buttons = options.map((opt, i) => ({ id: `ai_opt_${i}`, title: opt.slice(0, 20) }));
+                                    await this.wa.sendButtons(orgId, from, msgText, buttons);
+                                } else if (options.length > 3) {
+                                    const rows = options.map((opt, i) => ({ id: `ai_opt_${i}`, title: opt.slice(0, 24) }));
+                                    await this.wa.sendList(orgId, from, title, msgText, 'Select Option', [{ title: step || 'Options', rows }]);
+                                } else {
+                                    await this.wa.sendText(orgId, from, msgText);
+                                }
+                            } else {
+                                await this.wa.sendText(orgId, from, parsed.cleanText || res.response);
+                            }
                         } catch (err) {
                             this.logger.error(`AI Service failed for WA ${from}`, (err as Error).message);
                             await this.wa.sendText(orgId, from, "Sorry, I couldn't process that right now. Try again in a moment or use 'order' to see available commands.");
@@ -220,18 +270,45 @@ export class BotHandler {
                         await this.sendProductList(orgId, from);
                         await this.updateSession(session.id, 'ORDER_PRODUCT_SELECT', context);
                     } else if (buttonId === 'confirm_order') {
-                        const items = context.items ?? [];
-                        const total = items.reduce((s: number, it: OrderItem) => s + it.total, 0);
-                        const summary = items.map((it: OrderItem) => `• ${it.name} x${it.qty} — ${formatINR(it.total)}`).join('\n');
-
-                        await this.wa.sendButtons(orgId, from, `📦 Order Summary:\n${summary}\n\nTotal: ${formatINR(total)} + GST\n\nConfirm this order?`, [
-                            { id: 'yes_confirm', title: 'Yes, Confirm' },
-                            { id: 'no_cancel', title: 'No, Cancel' },
+                        await this.wa.sendButtons(orgId, from, `How would you like to receive your order?`, [
+                            { id: 'del_delivery', title: 'Home Delivery' },
+                            { id: 'del_pickup', title: 'Store Pickup' },
                         ]);
-                        await this.updateSession(session.id, 'ORDER_AWAITING_CONFIRM', context);
+                        await this.updateSession(session.id, 'ORDER_DELIVERY_TYPE_SELECT', context);
                     } else if (buttonId === 'cancel_order') {
                         await this.wa.sendText(orgId, from, "Order cancelled. Type 'order' anytime to start again.");
                         await this.updateSession(session.id, 'IDLE', {});
+                    }
+                    break;
+
+                case 'ORDER_DELIVERY_TYPE_SELECT':
+                    if (buttonId === 'del_delivery') {
+                        await this.wa.sendText(orgId, from, "Please type your full delivery address:");
+                        await this.updateSession(session.id, 'ORDER_ADDRESS_INPUT', { ...context, deliveryType: 'DELIVERY' });
+                    } else if (buttonId === 'del_pickup') {
+                        await this.askPaymentMethod(orgId, from, session.id, { ...context, deliveryType: 'PICKUP', address: 'Store Pickup' });
+                    } else {
+                        await this.wa.sendText(orgId, from, "Please select an option.");
+                    }
+                    break;
+
+                case 'ORDER_ADDRESS_INPUT':
+                    if (text.length < 5) {
+                        await this.wa.sendText(orgId, from, "Address too short. Please provide a full address.");
+                        break;
+                    }
+                    await this.askPaymentMethod(orgId, from, session.id, { ...context, address: text });
+                    break;
+
+                case 'ORDER_PAYMENT_METHOD_SELECT':
+                    if (buttonId === 'pay_cod') {
+                        await this.showFinalSummary(orgId, from, session.id, { ...context, paymentMethod: 'COD' });
+                    } else if (buttonId === 'pay_upi') {
+                        await this.showFinalSummary(orgId, from, session.id, { ...context, paymentMethod: 'UPI' });
+                    } else if (buttonId === 'pay_rzp') {
+                        await this.showFinalSummary(orgId, from, session.id, { ...context, paymentMethod: 'RAZORPAY' });
+                    } else {
+                        await this.wa.sendText(orgId, from, "Please select a payment method.");
                     }
                     break;
 
@@ -239,7 +316,21 @@ export class BotHandler {
                     if (buttonId === 'yes_confirm') {
                         const order = await this.createOrderFromSession(orgId, from, context);
                         if (order) {
-                            await this.wa.sendText(orgId, from, `✅ Order #${order.orderNumber} confirmed!\nExpected delivery: within 2-3 days.\nWe'll notify you when dispatched.`);
+                            let msg = `✅ Order #${order.orderNumber} confirmed!\nExpected delivery: within 2-3 days.\nWe'll notify you when dispatched.`;
+                            
+                            if (context.paymentMethod === 'UPI') {
+                                const org = await this.prisma.organization.findUnique({ where: { id: orgId }, include: { settings: true }});
+                                const upiId = (org?.settings as any)?.upiId;
+                                if (upiId) {
+                                    const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(org?.name ?? '')}&am=${order.netAmount}&cu=INR`;
+                                    msg += `\n\n💳 *Pay via UPI (Zero Fee):*\n${upiLink}`;
+                                }
+                            } else if (context.paymentMethod === 'RAZORPAY') {
+                                msg += `\n\n💳 *Pay Online:*\nWe will send you a Razorpay link shortly.`;
+                                // Can be wired to RazorpayService here
+                            }
+
+                            await this.wa.sendText(orgId, from, msg);
                             // Queue notification to owner
                             await this.queueService.addToQueue('notification', 'send-push', {
                                 type: 'NEW_WHATSAPP_ORDER', orgId, orderId: order.id,
@@ -413,6 +504,7 @@ export class BotHandler {
                     discountAmount: 0,
                     taxAmount: 0,
                     netAmount: totalAmount,
+                    deliveryAddress: context.address,
                     items: {
                         create: items.map((it: OrderItem) => ({
                             productId: it.productId,
@@ -433,5 +525,39 @@ export class BotHandler {
             this.logger.error('Failed to create WhatsApp order', (err as Error).message);
             return null;
         }
+    }
+
+    private async askPaymentMethod(orgId: string, from: string, sessionId: string, context: SessionContext) {
+        const org = await this.prisma.organization.findUnique({ where: { id: orgId }, include: { settings: true } });
+        const settings = org?.settings as any;
+        const upiId = settings?.upiId;
+        const enableRzp = settings?.enableRazorpayB2C ?? true;
+
+        const buttons: any[] = [{ id: 'pay_cod', title: 'Cash on Delivery' }];
+        if (upiId) {
+            buttons.push({ id: 'pay_upi', title: 'Direct UPI' });
+        }
+        if (enableRzp) {
+            buttons.push({ id: 'pay_rzp', title: 'Pay Online' });
+        }
+
+        // Limit to 3 buttons for WhatsApp
+        const finalButtons = buttons.slice(0, 3);
+        await this.wa.sendButtons(orgId, from, `How would you like to pay?`, finalButtons);
+        await this.updateSession(sessionId, 'ORDER_PAYMENT_METHOD_SELECT', context);
+    }
+
+    private async showFinalSummary(orgId: string, from: string, sessionId: string, context: SessionContext) {
+        const items = context.items ?? [];
+        const total = items.reduce((s: number, it: OrderItem) => s + it.total, 0);
+        const summary = items.map((it: OrderItem) => `• ${it.name} x${it.qty} — ${formatINR(it.total)}`).join('\n');
+
+        const msg = `📦 *Final Order Summary*\n\n${summary}\n\n*Total:* ${formatINR(total)} + GST\n*Delivery:* ${context.deliveryType === 'PICKUP' ? 'Store Pickup' : 'Home Delivery'}\n*Address:* ${context.address}\n*Payment:* ${context.paymentMethod}\n\nConfirm this order?`;
+        
+        await this.wa.sendButtons(orgId, from, msg, [
+            { id: 'yes_confirm', title: 'Yes, Confirm' },
+            { id: 'no_cancel', title: 'No, Cancel' },
+        ]);
+        await this.updateSession(sessionId, 'ORDER_AWAITING_CONFIRM', context);
     }
 }

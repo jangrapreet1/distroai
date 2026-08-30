@@ -3,6 +3,7 @@ import { AiService } from './ai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
 import { ForbiddenException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 
 // Mock ESM modules that Jest cannot parse
 jest.mock('uuid', () => ({ v4: () => 'test-uuid-1234' }));
@@ -70,6 +71,7 @@ describe('AiService', () => {
                 AiService,
                 { provide: PrismaService, useValue: mockPrisma },
                 { provide: S3Service, useValue: mockStorage },
+                { provide: getQueueToken('ai'), useValue: { add: jest.fn() } },
             ],
         }).compile();
 

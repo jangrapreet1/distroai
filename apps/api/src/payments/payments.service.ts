@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IsString, IsOptional, IsNumber, IsEnum, IsDateString, Min } from 'class-validator';
 import { QueueService } from '../queue/queue.service';
 import { RedisService } from '../common/services/redis.service';
+import { EventsService } from '../events/events.service';
 
 export class CreatePaymentDto {
     @IsOptional() @IsString() invoiceId?: string;
@@ -40,6 +41,7 @@ export class PaymentsService {
         private readonly config: ConfigService,
         private readonly queue: QueueService,
         private readonly redis: RedisService,
+        private readonly eventsService: EventsService,
     ) { }
 
     async findAll(orgId: string, params: { customerId?: string; method?: string; status?: string; page?: number; limit?: number }) {
@@ -177,6 +179,8 @@ export class PaymentsService {
             this.redis.del(`analytics:dashboard:${orgId}`),
             this.redis.del(`analytics:sales:${orgId}`)
         ]);
+
+        this.eventsService.emit(orgId, 'payment:created', { id: payment.id, amount: payment.amount });
 
         return payment;
     }

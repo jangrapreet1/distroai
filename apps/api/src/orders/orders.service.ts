@@ -14,6 +14,7 @@ import {
   ListOrdersQueryDto,
 } from "./dto/orders.dto";
 import { InvoicesService } from "../invoices/invoices.service";
+import { EventsService } from "../events/events.service";
 
 @Injectable()
 export class OrdersService {
@@ -23,6 +24,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly invoices: InvoicesService,
+    private readonly eventsService: EventsService,
   ) { }
 
   private async invalidateAnalytics(orgId: string) {
@@ -249,6 +251,7 @@ export class OrdersService {
     });
 
     await this.invalidateAnalytics(orgId);
+    this.eventsService.emit(orgId, 'order:created', { id: order.id, orderNumber: order.orderNumber, netAmount: order.netAmount });
     return order;
   }
 
@@ -450,6 +453,7 @@ export class OrdersService {
     }
 
     await this.invalidateAnalytics(orgId);
+    this.eventsService.emit(orgId, 'order:status_changed', { id, status: 'CONFIRMED' });
     return { success: true, status: "CONFIRMED" };
   }
 
@@ -607,6 +611,7 @@ export class OrdersService {
 
 
     await this.invalidateAnalytics(orgId);
+    this.eventsService.emit(orgId, 'order:status_changed', { id, status: 'DISPATCHED' });
     return { success: true, status: "DISPATCHED" };
   }
 
@@ -696,6 +701,7 @@ export class OrdersService {
     });
 
     await this.invalidateAnalytics(orgId);
+    this.eventsService.emit(orgId, 'order:status_changed', { id, status: 'CANCELLED' });
     return { success: true, status: "CANCELLED" };
   }
 

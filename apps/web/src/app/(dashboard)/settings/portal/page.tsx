@@ -24,7 +24,7 @@ function Toggle({ enabled, onToggle, label, description }: { enabled: boolean; o
 
 /* ─── Portal / Storefront Tab ─── */
 function PortalTab() {
-    const { data: orgData } = useOrg();
+    const { data: orgData } = useOrg() || {};
     const { data: subData } = useSubscription();
     const updateOrg = useUpdateOrg();
     const { openModal } = useUpgradeStore();

@@ -40,7 +40,7 @@ export function useTokenRefresh() {
                 setTokens({ accessToken: newAccess, refreshToken: newRefresh });
 
                 // Keep the middleware cookie alive
-                document.cookie = `accessToken=${newAccess};path=/;max-age=900;SameSite=Lax`;
+                document.cookie = `accessToken=${newAccess};path=/;max-age=2592000;SameSite=Lax`;
             } catch {
                 // Refresh failed — token is likely revoked or expired
                 logout();
@@ -50,11 +50,10 @@ export function useTokenRefresh() {
             }
         };
 
-        // Run immediately on mount if authenticated (covers tab-restore after idle)
-        const { isAuthenticated } = useAuthStore.getState();
-        if (isAuthenticated) {
-            doRefresh();
-        }
+        // We no longer run doRefresh() immediately on mount. 
+        // With cookie max-age fixed to 30 days, the middleware no longer blocks us, 
+        // so we can safely rely on the axios 401 interceptor for tab-restore scenarios,
+        // preventing single-use refresh token race conditions across multiple tabs.
 
         // Then run every 13 minutes
         intervalRef.current = setInterval(doRefresh, REFRESH_INTERVAL_MS);

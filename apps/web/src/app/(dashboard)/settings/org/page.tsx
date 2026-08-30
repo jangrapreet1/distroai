@@ -29,7 +29,7 @@ function InputField({ label, value, onChange, type = "text", placeholder }: {
 
 /* ─── General Tab ─── */
 function GeneralTab() {
-    const { data: orgData } = useOrg();
+    const { data: orgData } = useOrg() || {};
     const { data: warehousesData } = useWarehouses();
     const updateOrg = useUpdateOrg();
     const uploadFile = useUploadFile();

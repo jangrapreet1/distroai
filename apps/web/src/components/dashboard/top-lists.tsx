@@ -5,21 +5,26 @@ import { formatINR } from "./kpi-card";
 import { ScoreRing } from "./score-ring";
 
 interface TopProduct {
-    productId: string;
+    productId?: string;
+    id?: string;
     productName?: string;
-    _sum: { totalAmount: number };
+    name?: string;
+    revenue?: number;
+    _sum?: { totalAmount: number };
 }
 
 interface TopCustomer {
     id: string;
     name: string;
-    outstandingAmount: number;
-    paymentScore: number;
+    outstandingAmount?: number;
+    revenue?: number;
+    paymentScore?: number;
+    orderCount?: number;
 }
 
 export function TopLists({ topProducts, topCustomers, t }: {
-    topProducts: TopProduct[];
-    topCustomers: TopCustomer[];
+    topProducts: any[];
+    topCustomers: any[];
     t: (key: string) => string;
 }) {
     return (
@@ -28,15 +33,18 @@ export function TopLists({ topProducts, topCustomers, t }: {
                 <h3 className="font-semibold mb-4">{t('top_products')}</h3>
                 <div className="space-y-3">
                     {topProducts.length > 0 ? topProducts.map((p, i) => {
-                        const maxRev = topProducts[0]._sum?.totalAmount ?? 1;
-                        const rev = p._sum?.totalAmount ?? 0;
+                        const rev = p.revenue ?? p._sum?.totalAmount ?? 0;
+                        const firstRev = topProducts[0]?.revenue ?? topProducts[0]?._sum?.totalAmount ?? 1;
+                        const maxRev = firstRev > 0 ? firstRev : 1;
+                        const prodName = p.name ?? p.productName ?? p.productId ?? "Product";
+                        const prodKey = p.id ?? p.productId ?? `prod-${i}`;
                         return (
-                            <div key={p.productId} className="flex items-center gap-3">
+                            <div key={prodKey} className="flex items-center gap-3">
                                 <span className="text-sm font-bold text-[var(--text-muted)] w-5">{i + 1}</span>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{(p as any).productName ?? p.productId}</p>
+                                    <p className="text-sm font-medium truncate">{prodName}</p>
                                     <div className="h-1.5 rounded-full bg-[var(--border)] mt-1">
-                                        <div className="h-full rounded-full bg-[var(--gold)]" style={{ width: `${(rev / maxRev) * 100}%` }} />
+                                        <div className="h-full rounded-full bg-[var(--gold)]" style={{ width: `${Math.min(100, (rev / maxRev) * 100)}%` }} />
                                     </div>
                                 </div>
                                 <div className="text-right shrink-0">

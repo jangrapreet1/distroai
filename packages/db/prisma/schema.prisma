@@ -1026,6 +1026,7 @@ model OrgSettings {
   financialYearStart  Int?     @default(4) // April = 4
   defaultWarehouseId  String?
   autoInvoice         Boolean  @default(false)
+  enableRazorpayB2C   Boolean  @default(true) // Added for WhatsApp storefront
   paymentReminderDays Int[]    @default([3, 7, 15, 30])
   whatsappBriefingTime String? @default("08:00") // HH:mm format
   language            String   @default("en")

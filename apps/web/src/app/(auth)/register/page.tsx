@@ -259,7 +259,7 @@ export default function RegisterPage() {
                             ))}
                         </div>
 
-                        <Link href="/" className="inline-flex items-center gap-2 py-3 px-8 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] font-semibold hover:bg-[var(--gold-light)] transition">
+                        <Link href="/dashboard" className="inline-flex items-center gap-2 py-3 px-8 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] font-semibold hover:bg-[var(--gold-light)] transition">
                             Open Dashboard <ArrowRight size={16} />
                         </Link>
                     </div>

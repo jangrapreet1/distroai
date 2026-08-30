@@ -44,6 +44,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @distroai/db exec prisma generate
 
+      - name: Prisma Drift Check
+        run: |
+          pnpm --filter @distroai/db exec prisma migrate deploy
+          pnpm --filter @distroai/db exec prisma migrate status
+        env:
+          DATABASE_URL: postgresql://distroai:devpassword@localhost:5432/distroai_test
+
       - name: Typecheck
         run: pnpm run typecheck
 

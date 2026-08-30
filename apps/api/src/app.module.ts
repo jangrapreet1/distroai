@@ -37,6 +37,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { PortalModule } from './portal/portal.module';
 import { MarketingModule } from './marketing/marketing.module';
 import { CreditNotesModule } from './credit-notes/credit-notes.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
     imports: [
@@ -92,6 +93,7 @@ import { CreditNotesModule } from './credit-notes/credit-notes.module';
         PortalModule,
         MarketingModule,
         CreditNotesModule,
+        EventsModule,
     ],
     controllers: [AppController],
     providers: [

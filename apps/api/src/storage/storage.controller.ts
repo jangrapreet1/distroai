@@ -27,15 +27,15 @@ export class StorageController {
     constructor(private readonly s3Service: S3Service) { }
 
     @Post('upload')
-    @ApiOperation({ summary: 'Upload an image' })
+    @ApiOperation({ summary: 'Upload an image or video' })
     @ApiConsumes('multipart/form-data')
     @UseInterceptors(FileInterceptor('file'))
     async uploadFile(
         @UploadedFile(
             new ParseFilePipe({
                 validators: [
-                    new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }), // 2MB max (client compresses first)
-                    new FileTypeValidator({ fileType: /.(jpg|jpeg|png|webp|avif)$/ }),
+                    new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 20 }), // 20MB max for videos/images
+                    new FileTypeValidator({ fileType: /.(jpg|jpeg|png|webp|avif|mp4|mov|webm|quicktime)$/i }),
                 ],
             }),
         )

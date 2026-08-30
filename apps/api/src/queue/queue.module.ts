@@ -5,6 +5,7 @@ import { QueueService } from './queue.service';
 import { InvoiceProcessor } from './invoice.processor';
 import { PaymentProcessor } from './payment.processor';
 import { NotificationProcessor } from './notification.processor';
+import { PaymentReminderProcessor } from './payment-reminder.processor';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { InvoicePdfService } from '../invoices/invoice-pdf.service';
 
@@ -36,7 +37,7 @@ const defaultJobOptions = {
         }),
         ...QUEUES.map((name) => BullModule.registerQueue({ name })),
     ],
-    providers: [QueueService, PaymentProcessor, InvoiceProcessor, NotificationProcessor, InvoicePdfService],
+    providers: [QueueService, PaymentProcessor, InvoiceProcessor, NotificationProcessor, PaymentReminderProcessor, InvoicePdfService],
     exports: [QueueService, BullModule],
 })
 export class QueueModule { }

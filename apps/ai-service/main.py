@@ -211,8 +211,9 @@ def compute_payment_score(req: PaymentScoreRequest):
         factors.append({"type": "negative", "message": f"Historical late payments (avg {int(avg_days_late)} days)", "impact": -penalty})
         
     # Factor 3: Early Payment Bonus (positive)
+    # Determine if they get the early payment bonus (No overdue, and historically pays early)
     paid_early = df[(df['status'] == 'PAID') & (df['paid_at'] <= df['due_date'])]
-    if not paid_early.empty and not unpaid_overdue.empty == False:
+    if not paid_early.empty and unpaid_overdue.empty:
         bonus = min(15, len(paid_early) * 2)
         score += bonus
         factors.append({"type": "positive", "message": f"{len(paid_early)} on-time/early payments", "impact": bonus})
