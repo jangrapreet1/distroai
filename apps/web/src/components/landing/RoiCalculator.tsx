@@ -30,7 +30,7 @@ export function RoiCalculator() {
     const roiMultiplier = ((totalMonthlyBenefit / estimatedSoftwareCost)).toFixed(1);
 
     return (
-        <section id="roi-calculator" className="py-24 bg-[#050508] relative overflow-hidden border-y border-white/[0.06]">
+        <section id="roi-calculator" className="py-24 bg-[#050508] relative overflow-hidden border-y border-white/[0.06] scroll-mt-28">
             {/* Background Radial Glow */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[radial-gradient(ellipse_at_center,rgba(201,168,76,0.1),transparent_70%)] blur-3xl pointer-events-none -z-10" />
 

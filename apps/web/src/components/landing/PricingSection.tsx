@@ -68,7 +68,7 @@ export function PricingSection() {
     ];
 
     return (
-        <section id="pricing" className="py-24 bg-[#050508] relative overflow-hidden border-t border-white/[0.06]">
+        <section id="pricing" className="py-24 bg-[#050508] relative overflow-hidden border-t border-white/[0.06] scroll-mt-28">
             {/* Ambient Background Glow */}
             <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[radial-gradient(ellipse_at_center,rgba(201,168,76,0.12),transparent_70%)] blur-3xl pointer-events-none -z-10" />
 

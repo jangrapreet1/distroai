@@ -127,7 +127,7 @@ export function HeroSection() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-100px" }}
                     transition={{ duration: 0.7, ease: "easeOut" }}
-                    className="mt-16 sm:mt-20"
+                    className="mt-16 sm:mt-20 scroll-mt-28"
                 >
                     <InteractiveDemo />
                 </motion.div>
