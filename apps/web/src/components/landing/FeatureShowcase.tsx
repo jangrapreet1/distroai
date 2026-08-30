@@ -1,228 +1,242 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, RefreshCw, TrendingUp, Truck, Check, ArrowRight, ShieldCheck, Zap, Sparkles, MapPin, Database } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { MessageSquare, RefreshCw, TrendingUp, MapPin, CheckCircle2, Terminal, Sparkles, Shield, Cpu, Layers } from "lucide-react";
+import { SpotlightCard } from "@/components/ui/SpotlightCard";
+
+interface FeaturePillar {
+    id: string;
+    tag: string;
+    title: string;
+    description: string;
+    icon: any;
+    bullets: string[];
+    terminalPreview: {
+        title: string;
+        codeLines: { line: string; color?: string }[];
+    };
+}
+
+const FEATURES: FeaturePillar[] = [
+    {
+        id: "whatsapp",
+        tag: "PILLAR 01 // MULTILINGUAL_NLP",
+        title: "AI WhatsApp Voice & Chat Order Taking",
+        description: "Indian retailers place orders via voice notes, Hinglish text, and photo lists. DistroAI's custom-trained Llama/Gemini engine matches catalog SKUs with 99.4% accuracy.",
+        icon: MessageSquare,
+        bullets: [
+            "Parses regional Hindi, Marathi, Gujarati, Telugu & Tamil voice notes",
+            "Auto-calculates quantity slabs, schemes, discounts, and GST brackets",
+            "Dispatches instant PDF invoice with Dynamic UPI QR in WhatsApp chat",
+            "Automated payment reminders with 1-tap UPI payment deep links",
+        ],
+        terminalPreview: {
+            title: "ai_order_engine.py",
+            codeLines: [
+                { line: "# Inbound audio stream (Hindi / Hinglish)", color: "text-gray-500" },
+                { line: "audio = fetch_voice_note(msg.media_url)", color: "text-cyan-400" },
+                { line: "transcript = whisper_indic.transcribe(audio)", color: "text-emerald-400" },
+                { line: ">> 'Bhai 25 peti Parle-G aur 10 peti Marie dispatch kardo'", color: "text-amber-300" },
+                { line: "matched_skus = catalog_embedder.match(transcript)", color: "text-purple-400" },
+                { line: "order = create_sales_order(customer_id, matched_skus)", color: "text-emerald-400" },
+                { line: "queue_tally_voucher(order.id) # Status: 200 OK", color: "text-cyan-400" },
+            ],
+        },
+    },
+    {
+        id: "tally",
+        tag: "PILLAR 02 // DESKTOP_BRIDGE",
+        title: "Real-Time Tally Prime & 9 XML Bridge",
+        description: "Zero change management for your accountant. Our lightweight local bridge runs in the background on your Tally computer, synchronizing inventory and sales vouchers in under 2.5 seconds.",
+        icon: RefreshCw,
+        bullets: [
+            "Bidirectional ledger balance & payment sync without cloud export hassle",
+            "Auto-creates Sales Vouchers and Credit Notes in correct Tally ledger",
+            "Operates offline: queues mutations locally and flushes on reconnection",
+            "Supports multi-company and multi-godown stock allocation",
+        ],
+        terminalPreview: {
+            title: "tally_bridge_agent.rs",
+            codeLines: [
+                { line: "// Listening for Tally XML RPC on port 9000", color: "text-gray-500" },
+                { line: "let payload = build_tally_envelope(&sales_voucher);", color: "text-purple-400" },
+                { line: "let res = tally_client.post_xml(payload).await?;", color: "text-cyan-400" },
+                { line: ">> <RESPONSE><CREATED>1</CREATED><VOUCHERID>8492</VOUCHERID></RESPONSE>", color: "text-emerald-400" },
+                { line: "sync_godown_stock('Warehouse-1', skus).await;", color: "text-amber-300" },
+                { line: "emit_event('TALLY_MUTATION_CONFIRMED');", color: "text-emerald-400" },
+            ],
+        },
+    },
+    {
+        id: "forecasting",
+        tag: "PILLAR 03 // PROPHET_ML",
+        title: "Predictive Stock Replenishment & Credit Scoring",
+        description: "Stop tying up capital in slow-moving inventory. Our ML models forecast demand spikes before Diwali & festivals while computing real-time payment risk scores for every kirana.",
+        icon: TrendingUp,
+        bullets: [
+            "Prophet ML demand forecasting prevents stockouts on top 20% revenue SKUs",
+            "Auto-generates Supplier Purchase Orders when stock reaches safety thresholds",
+            "Dynamic credit limit scoring (0–100) blocks high-risk overdue defaulters",
+            "Automated aging bucket reports (0-30, 31-60, 60-90, 90+ days)",
+        ],
+        terminalPreview: {
+            title: "credit_risk_model.py",
+            codeLines: [
+                { line: "# Prophet ML Time-Series & Credit Scoring", color: "text-gray-500" },
+                { line: "forecast = prophet.predict(sku_sales_history)", color: "text-purple-400" },
+                { line: ">> Predicted Demand (Next 14D): 450 Cases (+28% MoM)", color: "text-emerald-400" },
+                { line: "risk_score = evaluate_kirana_dso(customer.payment_history)", color: "text-cyan-400" },
+                { line: "if risk_score > 80: approve_credit_order(order)", color: "text-amber-300" },
+                { line: "else: require_advance_upi(order) # Risk Mitigation", color: "text-rose-400" },
+            ],
+        },
+    },
+    {
+        id: "sfa",
+        tag: "PILLAR 04 // FIELD_FORCE_SFA",
+        title: "Sales Rep Mobile GPS Beat Route Tracking",
+        description: "Give your field sales team a lightning-fast offline-first mobile app. Track daily beat visits, check-in geo-fencing, spot invoice printing, and commission leaderboards.",
+        icon: MapPin,
+        bullets: [
+            "Live GPS beat plan routing with geotagged store check-ins",
+            "Offline order entry: works in rural basements with zero mobile coverage",
+            "Bluetooth thermal invoice printer support for immediate store slips",
+            "Real-time sales target vs achievement gamification & commissions",
+        ],
+        terminalPreview: {
+            title: "sfa_beat_tracker.ts",
+            codeLines: [
+                { line: "// Geo-fenced store check-in verification", color: "text-gray-500" },
+                { line: "const distance = calculateHaversine(repGps, storeCoords);", color: "text-purple-400" },
+                { line: "if (distance <= 50 /* meters */) {", color: "text-cyan-400" },
+                { line: "  recordCheckin({ repId, storeId, verified: true });", color: "text-emerald-400" },
+                { line: "  loadStorePromotionsAndSchemes(storeId);", color: "text-amber-300" },
+                { line: "}", color: "text-cyan-400" },
+            ],
+        },
+    },
+];
 
 export function FeatureShowcase() {
-    const [activeTab, setActiveTab] = useState(0);
-
-    const pillars = [
-        {
-            id: "whatsapp-ai",
-            tabLabel: "💬 WhatsApp AI Ordering",
-            title: "Turn WhatsApp Messages & Voice Notes into Verified Invoices",
-            subtitle: "Your retailers don't need to download an app. They order in plain Hinglish on WhatsApp, and DistroAI handles the rest.",
-            icon: MessageSquare,
-            color: "#25D366",
-            features: [
-                "Understands Hinglish, Hindi, and regional slang (e.g., '10 peti Parle-G bhej do')",
-                "Auto-calculates trade schemes (Buy 10 Get 1 Free, Cash discounts, Bundles)",
-                "Instant PDF invoice dispatch with embedded Dynamic UPI QR codes",
-                "Automated ledger balance inquiries & payment confirmation receipts",
-            ],
-            codePreview: {
-                title: "Inbound Message NLP Parser",
-                code: `// DistroAI NLP Engine (Hinglish ➔ Structured SKU Match)
-Input: "Sharma ji, 15 peti Fortune Mustard 1L + 5 bori Basmati Rice"
-Output: {
-  retailer: "Sharma General Store (ID: RET-9284)",
-  items: [
-    { sku: "FORT-MUST-1L", qty: 15, unit: "cases", schemeApplied: "3% Cash Disc" },
-    { sku: "DAAWAT-BASM-25K", qty: 5, unit: "bags", taxRate: 0.05 }
-  ],
-  invoiceStatus: "DRAFT_VERIFIED",
-  tallySyncStatus: "QUEUED"
-}`,
-            },
-        },
-        {
-            id: "tally-bridge",
-            tabLabel: "📊 Real-Time Tally Bridge",
-            title: "Zero Manual Accounting Entry — Everything in Tally Stays in Sync",
-            subtitle: "DistroAI connects directly to desktop Tally Prime or Tally ERP 9 over secure local HTTP/XML, posting vouchers in seconds.",
-            icon: RefreshCw,
-            color: "var(--gold)",
-            features: [
-                "Bi-directional sync of Sales Vouchers, Receipts, and Credit Notes",
-                "Automated GST tax split (CGST, SGST, IGST, Cess) with HSN verification",
-                "Multi-warehouse inventory reservation and stock adjustment tracking",
-                "Zero risk of duplicate entries or human data entry errors",
-            ],
-            codePreview: {
-                title: "Tally XML Voucher Output",
-                code: `<ENVELOPE>
-  <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
-  <BODY>
-    <IMPORTDATA>
-      <REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC>
-      <REQUESTDATA>
-        <TALLYMESSAGE>
-          <VOUCHER VCHTYPE="Sales" ACTION="Create">
-            <DATE>20260829</DATE>
-            <PARTYLEDGERNAME>Sharma Kirana Store</PARTYLEDGERNAME>
-            <VOUCHERNUMBER>INV-2026-0849</VOUCHERNUMBER>
-            <AMOUNT>-39740.00</AMOUNT>
-          </VOUCHER>
-        </TALLYMESSAGE>
-      </REQUESTDATA>
-    </IMPORTDATA>
-  </BODY>
-</ENVELOPE>`,
-            },
-        },
-        {
-            id: "ml-forecast",
-            tabLabel: "🧠 ML Forecasting & Credit Score",
-            title: "Predict Demand with Prophet ML & Eliminate Bad Debts",
-            subtitle: "Never run out of fast-moving SKUs during Diwali/Holi rush, and never deliver goods to high-risk chronic defaulters.",
-            icon: TrendingUp,
-            color: "#7B5EA7",
-            features: [
-                "Facebook Prophet 30-day stock prediction with Indian holiday regressors",
-                "Automated Reorder Point & Safety Stock formula (95% Service Level)",
-                "AI Credit Risk Scoring (0–100) based on historical payment velocity",
-                "Automated AR Aging Alerts (30+, 60+, 90+ days) with 1-click WhatsApp reminders",
-            ],
-            codePreview: {
-                title: "AI Credit Risk & Safety Stock Model",
-                code: `# FastAPI Prophet Forecaster
-Safety_Stock = 1.65 * std_dev * sqrt(lead_time_days)
-Reorder_Point = (avg_daily_demand * lead_time_days) + Safety_Stock
-
-# Credit Risk Scorer (0-100)
-if overdue_invoices > 0:
-    penalty = min(50, overdue_invoices * 10)
-    score -= penalty
-Result: "Score 94/100 • Low Risk • Approved for Credit"`,
-            },
-        },
-        {
-            id: "sfa-mobile",
-            tabLabel: "📍 Field Sales Force (SFA)",
-            title: "Track Sales Reps on Beat Routes with GPS & Selfie Attendance",
-            subtitle: "Give your on-ground sales force a fast mobile app with offline catalog order taking, beat day planning, and shop check-ins.",
-            icon: Truck,
-            color: "#E07B39",
-            features: [
-                "Beat Day Route Planning on Google Maps with optimal store sequencing",
-                "GPS Shop Check-In/Out with mandatory selfie and shelf audit photo",
-                "Offline Catalog Order Taking in remote zero-network retail pockets",
-                "Live Field Sales Commission & Monthly Target tracking",
-            ],
-            codePreview: {
-                title: "Field SFA GPS Check-In State",
-                code: `// Salesman Mobile Beat Check-In
-{
-  salesmanId: "SAL-409 (Vikram Singh)",
-  customerId: "RET-9284 (Sharma Kirana)",
-  checkInLat: 28.6139,
-  checkInLng: 77.2090,
-  distanceFromStore: "4.2 meters (Verified Inside)",
-  ordersPlaced: 1,
-  collectionAmount: 25000,
-  syncStatus: "ONLINE_ACKNOWLEDGED"
-}`,
-            },
-        },
-    ];
-
-    const currentPillar = pillars[activeTab];
+    const [activeTab, setActiveTab] = useState("whatsapp");
+    const feature = FEATURES.find((f) => f.id === activeTab) || FEATURES[0];
+    const Icon = feature.icon;
 
     return (
-        <section id="features" className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Header */}
-            <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-                <span className="text-xs font-semibold text-[var(--gold)] uppercase tracking-wider bg-[var(--gold)]/10 px-3 py-1 rounded-full">
-                    Built Exclusively for Indian Distribution
-                </span>
-                <h2
-                    className="text-3xl sm:text-5xl font-bold text-[var(--text-primary)] tracking-tight"
-                    style={{ fontFamily: "var(--font-playfair)" }}
-                >
-                    Everything you need to scale your wholesale & distribution business
-                </h2>
-                <p className="text-[var(--text-secondary)] text-base sm:text-lg">
-                    Traditional ERPs were built for factories. DistroAI is built from day one for the Indian distributor's daily hustle.
-                </p>
-            </div>
-
-            {/* Tab Buttons */}
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-12">
-                {pillars.map((p, idx) => (
-                    <button
-                        key={p.id}
-                        onClick={() => setActiveTab(idx)}
-                        className={`px-4 sm:px-6 py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
-                            activeTab === idx
-                                ? "bg-[var(--gold)] text-[#07070E] shadow-lg shadow-amber-500/20 scale-105"
-                                : "bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-accent)]"
-                        }`}
-                    >
-                        <span>{p.tabLabel}</span>
-                    </button>
-                ))}
-            </div>
-
-            {/* Pillar Content Card */}
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6 sm:p-10 shadow-2xl transition-all duration-300">
-                <div className="grid lg:grid-cols-12 gap-8 items-center">
-                    {/* Left Column: Feature Highlights */}
-                    <div className="lg:col-span-6 space-y-6">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[var(--bg-secondary)] border border-[var(--border)] text-xs font-mono font-medium text-[var(--gold)]">
-                            <currentPillar.icon size={15} />
-                            <span>Pillar 0{activeTab + 1}</span>
-                        </div>
-
-                        <h3 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] leading-tight">
-                            {currentPillar.title}
-                        </h3>
-
-                        <p className="text-[var(--text-secondary)] text-sm sm:text-base leading-relaxed">
-                            {currentPillar.subtitle}
-                        </p>
-
-                        <div className="space-y-3 pt-2">
-                            {currentPillar.features.map((feat, i) => (
-                                <div key={i} className="flex items-start gap-3">
-                                    <div className="mt-1 p-0.5 rounded-full bg-[var(--gold)]/20 text-[var(--gold)] shrink-0">
-                                        <Check size={13} />
-                                    </div>
-                                    <span className="text-sm text-[var(--text-primary)] font-medium">
-                                        {feat}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="pt-4">
-                            <a
-                                href="/register"
-                                className="inline-flex items-center gap-2 text-sm font-bold text-[var(--gold)] hover:text-[var(--gold-light)] group transition"
-                            >
-                                <span>Try this feature free for 14 days</span>
-                                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                            </a>
-                        </div>
+        <section id="features" className="py-24 relative overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+                {/* Section Header */}
+                <div className="text-center max-w-3xl mx-auto space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-white/[0.08]">
+                        <Layers size={12} />
+                        <span>[CORE_ARCHITECTURE // 4_PILLARS]</span>
                     </div>
-
-                    {/* Right Column: Code / Data Visualizer */}
-                    <div className="lg:col-span-6 rounded-xl border border-[var(--border)] bg-[#07070E] overflow-hidden shadow-2xl">
-                        <div className="bg-[var(--bg-secondary)] px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                                <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-                                <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-                                <span className="text-xs font-mono text-[var(--text-muted)] ml-2">
-                                    {currentPillar.codePreview.title}
-                                </span>
-                            </div>
-                            <span className="text-[10px] font-mono text-[var(--gold)] uppercase">Live Output</span>
-                        </div>
-                        <pre className="p-5 font-mono text-xs text-amber-200/90 leading-relaxed overflow-x-auto selection:bg-amber-500/30">
-                            <code>{currentPillar.codePreview.code}</code>
-                        </pre>
-                    </div>
+                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
+                        Engineered for High-Volume Indian Trade
+                    </h2>
+                    <p className="text-sm sm:text-base text-[var(--text-secondary)]">
+                        Everything you need to scale from ₹10 Lakhs to ₹100 Crores monthly turnover with zero friction.
+                    </p>
                 </div>
+
+                {/* Pillar Tab Bar with Spring Indicator */}
+                <div className="flex flex-wrap items-center justify-center gap-2 max-w-4xl mx-auto p-1.5 rounded-2xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-md">
+                    {FEATURES.map((item) => {
+                        const ItemIcon = item.icon;
+                        const isSelected = activeTab === item.id;
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => setActiveTab(item.id)}
+                                className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors duration-200 ${
+                                    isSelected
+                                        ? "text-[#07070E]"
+                                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                                }`}
+                            >
+                                {isSelected && (
+                                    <motion.div
+                                        layoutId="activeFeaturePill"
+                                        transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                                        className="absolute inset-0 rounded-xl bg-gradient-to-r from-[var(--gold)] via-[var(--gold-light)] to-[#FFE8A3] shadow-md shadow-amber-500/20"
+                                    />
+                                )}
+                                <ItemIcon size={15} className="relative z-10" />
+                                <span className="relative z-10">{item.title.split(" ")[0]} {item.title.split(" ")[1]}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Selected Pillar Card */}
+                <SpotlightCard
+                    spotlightColor="rgba(201, 168, 76, 0.12)"
+                    className="p-6 sm:p-10 border-white/[0.08] bg-[#07070C]"
+                >
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={feature.id}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -12 }}
+                            transition={{ duration: 0.25 }}
+                            className="grid lg:grid-cols-12 gap-8 items-center"
+                        >
+                            {/* Left Description Column */}
+                            <div className="lg:col-span-6 space-y-6">
+                                <div className="space-y-2">
+                                    <span className="text-xs font-mono font-bold text-[var(--gold)] tracking-widest uppercase">
+                                        {feature.tag}
+                                    </span>
+                                    <h3 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
+                                        {feature.title}
+                                    </h3>
+                                    <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                                        {feature.description}
+                                    </p>
+                                </div>
+
+                                <div className="space-y-3 pt-2">
+                                    {feature.bullets.map((b, i) => (
+                                        <div key={i} className="flex items-start gap-3 text-xs sm:text-sm text-[var(--text-primary)]">
+                                            <CheckCircle2 size={16} className="text-[var(--gold)] shrink-0 mt-0.5" />
+                                            <span>{b}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Right Code/Terminal Column */}
+                            <div className="lg:col-span-6">
+                                <div className="rounded-2xl border border-white/[0.08] bg-[#050509] overflow-hidden shadow-2xl">
+                                    {/* Terminal Header */}
+                                    <div className="bg-white/[0.03] px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                                            <span className="text-[11px] font-mono text-[var(--text-muted)] ml-2">
+                                                {feature.terminalPreview.title}
+                                            </span>
+                                        </div>
+                                        <span className="text-[10px] font-mono text-emerald-400">ENGINE // RUNNING</span>
+                                    </div>
+
+                                    {/* Terminal Code Body */}
+                                    <div className="p-5 font-mono text-xs space-y-2 overflow-x-auto leading-relaxed bg-[#030306]">
+                                        {feature.terminalPreview.codeLines.map((lineObj, idx) => (
+                                            <div key={idx} className="flex gap-4">
+                                                <span className="text-gray-600 select-none text-[11px] w-4 text-right shrink-0">{idx + 1}</span>
+                                                <span className={lineObj.color ?? "text-gray-300"}>{lineObj.line}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </AnimatePresence>
+                </SpotlightCard>
             </div>
         </section>
     );

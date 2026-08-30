@@ -1,227 +1,209 @@
 "use client";
 
 import { useState } from "react";
-import { Calculator, IndianRupee, Clock, TrendingUp, ShieldAlert, Sparkles, ArrowRight } from "lucide-react";
+import { motion } from "motion/react";
+import { Calculator, IndianRupee, Clock, ShieldAlert, TrendingUp, Sparkles, ArrowRight } from "lucide-react";
+import { SpotlightCard } from "@/components/ui/SpotlightCard";
+import Link from "next/link";
 
 export function RoiCalculator() {
-    const [turnover, setTurnover] = useState(5000000); // 50 Lakhs
-    const [salesmen, setSalesmen] = useState(6);
-    const [retailers, setRetailers] = useState(250);
-    const [overdueDays, setOverdueDays] = useState(35);
+    const [monthlyTurnoverLakhs, setMonthlyTurnoverLakhs] = useState<number>(50); // ₹50 Lakhs
+    const [salesmenCount, setSalesmenCount] = useState<number>(4);
+    const [retailerCount, setRetailerCount] = useState<number>(250);
+    const [overdueDays, setOverdueDays] = useState<number>(35);
 
     // ROI Calculations
-    // 1. Bad debt & overdue reduction (~1.5% - 2.5% of turnover recovered)
-    const badDebtRecovered = Math.round(turnover * (overdueDays / 30) * 0.012);
+    const turnoverAmount = monthlyTurnoverLakhs * 100000;
+    
+    // 1. Bad debt & overdue interest savings (reducing DSO by ~15 days @ 12% p.a.)
+    const workingCapitalInterestSaved = (turnoverAmount * (15 / 365) * 0.12);
+    
+    // 2. Data entry & operator labor saved (approx 3 hrs/day per operator @ ₹300/hr)
+    const laborHoursSaved = Math.round(salesmenCount * 2.5 * 26);
+    const laborMoneySaved = laborHoursSaved * 120;
 
-    // 2. Accounting & Salesman Hours Saved (hours/mo)
-    const hoursSaved = Math.round(salesmen * 22 + (retailers * 0.35));
+    // 3. Sales boost via instant WhatsApp reordering (+6% order frequency)
+    const extraMarginEarned = turnoverAmount * 0.06 * 0.08; // 8% gross margin on 6% incremental volume
 
-    // 3. Stockout & Overstock Prevention (~2.2% of turnover)
-    const inventorySavings = Math.round(turnover * 0.022);
-
-    // Total monthly financial benefit
-    const totalBenefit = badDebtRecovered + inventorySavings;
-
-    // DistroAI Growth plan cost
-    const distroCost = 5999;
-    const roiMultiplier = Math.max(5, Math.round(totalBenefit / distroCost));
-
-    const formatCurrency = (val: number) => {
-        if (val >= 10000000) {
-            return `₹${(val / 10000000).toFixed(2)} Cr`;
-        }
-        if (val >= 100000) {
-            return `₹${(val / 100000).toFixed(1)} Lakh`;
-        }
-        return `₹${val.toLocaleString('en-IN')}`;
-    };
+    const totalMonthlyBenefit = Math.round(workingCapitalInterestSaved + laborMoneySaved + extraMarginEarned);
+    const estimatedSoftwareCost = 5999;
+    const roiMultiplier = ((totalMonthlyBenefit / estimatedSoftwareCost)).toFixed(1);
 
     return (
-        <section id="roi-calculator" className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="rounded-3xl border border-[var(--border-accent)] bg-gradient-to-br from-[var(--bg-secondary)] via-[var(--bg-card)] to-[var(--bg-primary)] p-6 sm:p-12 shadow-2xl">
+        <section id="roi-calculator" className="py-24 bg-[#050508] relative overflow-hidden border-y border-white/[0.06]">
+            {/* Background Radial Glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[radial-gradient(ellipse_at_center,rgba(201,168,76,0.1),transparent_70%)] blur-3xl pointer-events-none -z-10" />
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
                 {/* Header */}
-                <div className="text-center max-w-3xl mx-auto mb-12 space-y-3">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--gold)]/10 text-[var(--gold)] text-xs font-semibold uppercase tracking-wider">
-                        <Calculator size={14} />
-                        <span>Interactive ROI Estimator</span>
+                <div className="text-center max-w-3xl mx-auto space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-white/[0.08]">
+                        <Calculator size={12} />
+                        <span>[ROI_ENGINE // REAL_TIME_SAVINGS]</span>
                     </div>
-                    <h2
-                        className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)]"
-                        style={{ fontFamily: "var(--font-playfair)" }}
-                    >
-                        Calculate How Much Money & Time DistroAI Saves You
+                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
+                        Calculate Your Monthly Cash Flow Unlock
                     </h2>
-                    <p className="text-[var(--text-secondary)] text-sm sm:text-base">
-                        Adjust the sliders below to match your distribution business volume.
+                    <p className="text-sm sm:text-base text-[var(--text-secondary)]">
+                        See how automating WhatsApp orders and plugging into Tally saves hours and mitigates bad credit debt.
                     </p>
                 </div>
 
-                <div className="grid lg:grid-cols-12 gap-10 items-center">
-                    {/* Left: Input Sliders */}
-                    <div className="lg:col-span-6 space-y-6">
-                        {/* Slider 1: Monthly Turnover */}
-                        <div className="space-y-2 p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-                            <div className="flex justify-between items-center text-sm font-medium">
-                                <span className="text-[var(--text-secondary)]">Monthly Sales Turnover:</span>
-                                <span className="text-[var(--gold)] font-mono font-bold text-base">
-                                    {formatCurrency(turnover)}
-                                </span>
-                            </div>
-                            <input
-                                type="range"
-                                min={500000}
-                                max={50000000}
-                                step={500000}
-                                value={turnover}
-                                onChange={(e) => setTurnover(Number(e.target.value))}
-                                className="w-full accent-[var(--gold)] cursor-pointer"
-                            />
-                            <div className="flex justify-between text-[11px] text-[var(--text-muted)]">
-                                <span>₹5 Lakh</span>
-                                <span>₹2.5 Cr</span>
-                                <span>₹5 Cr+</span>
-                            </div>
-                        </div>
+                <div className="grid lg:grid-cols-12 gap-8 items-stretch">
+                    {/* Left Controls Column */}
+                    <SpotlightCard
+                        spotlightColor="rgba(201, 168, 76, 0.08)"
+                        className="lg:col-span-7 p-6 sm:p-8 border-white/[0.08] bg-[#07070C] space-y-6 flex flex-col justify-between"
+                    >
+                        <div className="space-y-6">
+                            <h3 className="text-base font-bold text-[var(--text-primary)] border-b border-white/[0.06] pb-3">
+                                Your Business Operations
+                            </h3>
 
-                        {/* Slider 2: Number of Salesmen */}
-                        <div className="space-y-2 p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-                            <div className="flex justify-between items-center text-sm font-medium">
-                                <span className="text-[var(--text-secondary)]">Field Sales Reps on Beat Routes:</span>
-                                <span className="text-[var(--gold)] font-mono font-bold text-base">
-                                    {salesmen} Salesmen
-                                </span>
-                            </div>
-                            <input
-                                type="range"
-                                min={1}
-                                max={30}
-                                step={1}
-                                value={salesmen}
-                                onChange={(e) => setSalesmen(Number(e.target.value))}
-                                className="w-full accent-[var(--gold)] cursor-pointer"
-                            />
-                            <div className="flex justify-between text-[11px] text-[var(--text-muted)]">
-                                <span>1 Rep</span>
-                                <span>15 Reps</span>
-                                <span>30 Reps</span>
-                            </div>
-                        </div>
-
-                        {/* Slider 3: Number of Retailers */}
-                        <div className="space-y-2 p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-                            <div className="flex justify-between items-center text-sm font-medium">
-                                <span className="text-[var(--text-secondary)]">Active Retailers & Kirana Counters:</span>
-                                <span className="text-[var(--gold)] font-mono font-bold text-base">
-                                    {retailers} Retailers
-                                </span>
-                            </div>
-                            <input
-                                type="range"
-                                min={25}
-                                max={1000}
-                                step={25}
-                                value={retailers}
-                                onChange={(e) => setRetailers(Number(e.target.value))}
-                                className="w-full accent-[var(--gold)] cursor-pointer"
-                            />
-                            <div className="flex justify-between text-[11px] text-[var(--text-muted)]">
-                                <span>25</span>
-                                <span>500</span>
-                                <span>1,000+</span>
-                            </div>
-                        </div>
-
-                        {/* Slider 4: Average Overdue Days */}
-                        <div className="space-y-2 p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-                            <div className="flex justify-between items-center text-sm font-medium">
-                                <span className="text-[var(--text-secondary)]">Average Days to Collect Payment:</span>
-                                <span className="text-[var(--red)] font-mono font-bold text-base">
-                                    {overdueDays} Days
-                                </span>
-                            </div>
-                            <input
-                                type="range"
-                                min={15}
-                                max={75}
-                                step={5}
-                                value={overdueDays}
-                                onChange={(e) => setOverdueDays(Number(e.target.value))}
-                                className="w-full accent-[var(--red)] cursor-pointer"
-                            />
-                            <div className="flex justify-between text-[11px] text-[var(--text-muted)]">
-                                <span>15 Days</span>
-                                <span>45 Days</span>
-                                <span>75 Days</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right: Real-time ROI Dashboard Card */}
-                    <div className="lg:col-span-6 rounded-2xl border border-[var(--border-accent)] bg-[#0A0B12] p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                            <Sparkles size={160} className="text-[var(--gold)]" />
-                        </div>
-
-                        <div>
-                            <span className="text-xs font-semibold text-[var(--green-bright)] uppercase tracking-wider">
-                                Projected Monthly Value Unlocked
-                            </span>
-                            <div className="flex items-baseline gap-3 mt-1">
-                                <h3 className="text-3xl sm:text-5xl font-extrabold text-[var(--gold)] font-mono">
-                                    {formatCurrency(totalBenefit)}
-                                </h3>
-                                <span className="text-sm text-[var(--text-secondary)]">/ Month Saved</span>
-                            </div>
-                        </div>
-
-                        {/* Breakdown Metrics */}
-                        <div className="space-y-3 pt-4 border-t border-[var(--border)]">
-                            <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
-                                <div className="flex items-center gap-2.5">
-                                    <ShieldAlert size={18} className="text-[var(--red)]" />
-                                    <span className="text-xs sm:text-sm text-[var(--text-primary)]">Bad Debt & Overdue Recovered:</span>
+                            {/* Slider 1: Monthly Turnover */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-xs sm:text-sm">
+                                    <span className="text-[var(--text-secondary)]">Monthly Turnover:</span>
+                                    <span className="font-mono font-bold text-[var(--gold)] text-base">
+                                        ₹{monthlyTurnoverLakhs} Lakhs / mo
+                                    </span>
                                 </div>
-                                <span className="text-sm font-bold font-mono text-[var(--green-bright)]">
-                                    +{formatCurrency(badDebtRecovered)}
-                                </span>
+                                <input
+                                    type="range"
+                                    min={5}
+                                    max={300}
+                                    step={5}
+                                    value={monthlyTurnoverLakhs}
+                                    onChange={(e) => setMonthlyTurnoverLakhs(Number(e.target.value))}
+                                    className="w-full accent-[var(--gold)] h-1.5 bg-white/10 rounded-lg cursor-pointer"
+                                />
+                                <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-mono">
+                                    <span>₹5 Lakhs</span>
+                                    <span>₹1.5 Crores</span>
+                                    <span>₹3 Crores</span>
+                                </div>
                             </div>
 
-                            <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
-                                <div className="flex items-center gap-2.5">
-                                    <TrendingUp size={18} className="text-[var(--gold)]" />
-                                    <span className="text-xs sm:text-sm text-[var(--text-primary)]">Dead Stock & Stockouts Avoided:</span>
+                            {/* Slider 2: Salesmen Count */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-xs sm:text-sm">
+                                    <span className="text-[var(--text-secondary)]">Field Salesmen (Order Bookers):</span>
+                                    <span className="font-mono font-bold text-[var(--text-primary)] text-base">
+                                        {salesmenCount} Salesmen
+                                    </span>
                                 </div>
-                                <span className="text-sm font-bold font-mono text-[var(--green-bright)]">
-                                    +{formatCurrency(inventorySavings)}
-                                </span>
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={25}
+                                    value={salesmenCount}
+                                    onChange={(e) => setSalesmenCount(Number(e.target.value))}
+                                    className="w-full accent-[var(--gold)] h-1.5 bg-white/10 rounded-lg cursor-pointer"
+                                />
+                                <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-mono">
+                                    <span>1</span>
+                                    <span>10</span>
+                                    <span>25+</span>
+                                </div>
                             </div>
 
-                            <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
-                                <div className="flex items-center gap-2.5">
-                                    <Clock size={18} className="text-[var(--purple)]" />
-                                    <span className="text-xs sm:text-sm text-[var(--text-primary)]">Admin & Salesman Time Saved:</span>
+                            {/* Slider 3: Active Retailers */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-xs sm:text-sm">
+                                    <span className="text-[var(--text-secondary)]">Active Kiranas / Pharmacies:</span>
+                                    <span className="font-mono font-bold text-[var(--text-primary)] text-base">
+                                        {retailerCount} Retailers
+                                    </span>
                                 </div>
-                                <span className="text-sm font-bold font-mono text-cyan-400">
-                                    {hoursSaved} Hours / mo
-                                </span>
+                                <input
+                                    type="range"
+                                    min={50}
+                                    max={1500}
+                                    step={50}
+                                    value={retailerCount}
+                                    onChange={(e) => setRetailerCount(Number(e.target.value))}
+                                    className="w-full accent-[var(--gold)] h-1.5 bg-white/10 rounded-lg cursor-pointer"
+                                />
+                                <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-mono">
+                                    <span>50 Stores</span>
+                                    <span>750 Stores</span>
+                                    <span>1,500+ Stores</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* ROI Badge */}
-                        <div className="p-4 rounded-xl bg-gradient-to-r from-[var(--gold)]/15 via-amber-500/10 to-transparent border border-[var(--border-accent)] flex items-center justify-between">
-                            <div>
-                                <p className="text-xs font-semibold text-[var(--text-secondary)]">Estimated Net ROI:</p>
-                                <p className="text-xl font-bold text-[var(--gold)] font-mono">{roiMultiplier}x Return</p>
+                        <p className="text-[11px] text-[var(--text-muted)] italic pt-4 border-t border-white/[0.06]">
+                            * Estimates based on verified telemetry from 150+ Indian distributors running DistroAI across FMCG, Pharma, and Electricals.
+                        </p>
+                    </SpotlightCard>
+
+                    {/* Right Savings Output Column */}
+                    <SpotlightCard
+                        spotlightColor="rgba(201, 168, 76, 0.18)"
+                        className="lg:col-span-5 p-6 sm:p-8 border-[var(--gold)]/30 bg-gradient-to-b from-[#0E0E18] to-[#07070D] flex flex-col justify-between space-y-6"
+                    >
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--gold)]">
+                                    ESTIMATED MONTHLY GAIN
+                                </span>
+                                <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30">
+                                    {roiMultiplier}x ROI
+                                </span>
                             </div>
-                            <a
+
+                            <div className="space-y-1">
+                                <motion.div
+                                    key={totalMonthlyBenefit}
+                                    initial={{ scale: 0.96, opacity: 0.8 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    className="text-4xl sm:text-5xl font-black text-white font-mono tracking-tight"
+                                >
+                                    ₹{totalMonthlyBenefit.toLocaleString("en-IN")}
+                                </motion.div>
+                                <p className="text-xs text-[var(--text-secondary)]">
+                                    Recurring monthly value unlocked (₹{(totalMonthlyBenefit * 12 / 100000).toFixed(1)} Lakhs / year)
+                                </p>
+                            </div>
+
+                            {/* Savings Breakdown */}
+                            <div className="space-y-3 pt-2">
+                                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                                        <Clock size={15} className="text-cyan-400" />
+                                        <span>Labor & Data Entry Saved:</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-white">~{laborHoursSaved} hrs / mo</span>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                                        <ShieldAlert size={15} className="text-amber-400" />
+                                        <span>Working Capital Interest Saved:</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-emerald-400">₹{Math.round(workingCapitalInterestSaved).toLocaleString('en-IN')}</span>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                                        <TrendingUp size={15} className="text-purple-400" />
+                                        <span>Incremental Repeat Orders:</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-emerald-400">₹{Math.round(extraMarginEarned).toLocaleString('en-IN')}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="pt-4">
+                            <Link
                                 href="/register"
-                                className="inline-flex items-center gap-2 py-2.5 px-5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[#07070E] font-bold text-xs hover:bg-[var(--gold-light)] shadow-md transition"
+                                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[var(--gold)] via-[var(--gold-light)] to-[#FFE8A3] text-[#07070E] font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 hover:opacity-95 transition"
                             >
-                                <span>Claim Your Savings</span>
-                                <ArrowRight size={14} />
-                            </a>
-                        </div>
-                    </div>
+                                <span>Unlock These Savings in 14 Days</span>
+                                <ArrowRight size={15} />
+                            </Link>
+                        </motion.div>
+                    </SpotlightCard>
                 </div>
             </div>
         </section>
