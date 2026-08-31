@@ -3,15 +3,32 @@
 import { useMemo } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
+import { SpotlightCard } from "@/components/ui/SpotlightCard";
 
 export function formatINR(n: number): string {
     return "₹" + n.toLocaleString("en-IN");
 }
 
-export function KPICard({ title, value, change, changeLabel, icon: Icon, accentColor, sparkData, actionNode, children }: {
-    title: string; value: string; change: number; changeLabel: React.ReactNode;
-    icon: React.ElementType; accentColor: string; sparkData: number[];
-    actionNode?: React.ReactNode; children?: React.ReactNode;
+export function KPICard({
+    title,
+    value,
+    change,
+    changeLabel,
+    icon: Icon,
+    accentColor,
+    sparkData,
+    actionNode,
+    children,
+}: {
+    title: string;
+    value: string;
+    change: number;
+    changeLabel: React.ReactNode;
+    icon: React.ElementType;
+    accentColor: string;
+    sparkData: number[];
+    actionNode?: React.ReactNode;
+    children?: React.ReactNode;
 }) {
     const isUp = change >= 0;
     const chartPoints = useMemo(() => {
@@ -24,30 +41,62 @@ export function KPICard({ title, value, change, changeLabel, icon: Icon, accentC
     }, [sparkData]);
 
     return (
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 hover:border-opacity-30 transition group flex flex-col" style={{ "--accent": accentColor } as React.CSSProperties}>
-            <div className="flex items-start justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 duration-300" style={{ background: `${accentColor}15` }}>
-                    <Icon size={20} style={{ color: accentColor }} />
-                </div>
-                {actionNode ? actionNode : (
-                    <div className={`flex items-center gap-1 text-xs font-medium ${isUp ? "text-[var(--green-bright)]" : "text-[var(--red)]"}`}>
-                        {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {Math.abs(change)}%
+        <SpotlightCard
+            spotlightColor={`${accentColor}25`}
+            className="p-5 flex flex-col justify-between h-full group"
+        >
+            <div>
+                {/* Top Row: Icon + Badge / Action */}
+                <div className="flex items-start justify-between mb-3">
+                    <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 duration-300 border"
+                        style={{
+                            backgroundColor: `${accentColor}15`,
+                            borderColor: `${accentColor}25`,
+                        }}
+                    >
+                        <Icon size={20} style={{ color: accentColor }} />
                     </div>
-                )}
-            </div>
-            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-1.5">{title}</h3>
-            <p className="text-2xl lg:text-3xl font-light mb-1.5 truncate" title={value} style={{ fontFamily: "var(--font-mono)" }}>{value}</p>
-            <div className="text-xs text-[var(--text-muted)]">{changeLabel}</div>
-            {children && <div className="mt-4 pt-4 border-t border-[var(--border)]">{children}</div>}
+                    {actionNode ? (
+                        actionNode
+                    ) : (
+                        <div
+                            className={`flex items-center gap-1 text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${
+                                isUp
+                                    ? "text-[var(--green-bright)] bg-[var(--green-bright)]/10 border-[var(--green-bright)]/20"
+                                    : "text-[var(--red)] bg-[var(--red)]/10 border-[var(--red)]/20"
+                            }`}
+                        >
+                            {isUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                            {Math.abs(change)}%
+                        </div>
+                    )}
+                </div>
 
+                {/* Title & Value */}
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    {title}
+                </h3>
+                <p
+                    className="text-2xl lg:text-3xl font-bold tracking-tight text-[var(--text-primary)] mb-1 truncate"
+                    title={value}
+                    style={{ fontFamily: "var(--font-mono)" }}
+                >
+                    {value}
+                </p>
+                <div className="text-xs text-[var(--text-muted)]">{changeLabel}</div>
+            </div>
+
+            {children && <div className="mt-4 pt-3 border-t border-white/[0.05]">{children}</div>}
+
+            {/* Sparkline mini chart */}
             {!children && sparkData && sparkData.length > 0 && (
-                <div className="h-10 mt-4 opacity-50 group-hover:opacity-80 transition">
+                <div className="h-9 mt-4 opacity-40 group-hover:opacity-80 transition-opacity">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={chartPoints}>
                             <defs>
                                 <linearGradient id={`spark-${title}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={accentColor} stopOpacity={0.3} />
+                                    <stop offset="0%" stopColor={accentColor} stopOpacity={0.4} />
                                     <stop offset="100%" stopColor={accentColor} stopOpacity={0} />
                                 </linearGradient>
                             </defs>
@@ -57,18 +106,38 @@ export function KPICard({ title, value, change, changeLabel, icon: Icon, accentC
                                     if (!active || !payload?.length) return null;
                                     const p = payload[0].payload;
                                     return (
-                                        <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px", fontSize: 11 }}>
-                                            <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>{p.date}</div>
-                                            <div style={{ color: accentColor, fontWeight: 700 }}>{typeof p.v === "number" && title === "Revenue" ? formatINR(p.v) : typeof p.v === "number" && title === "Outstanding" ? formatINR(p.v) : p.v}</div>
+                                        <div
+                                            style={{
+                                                background: "rgba(10, 10, 15, 0.95)",
+                                                border: "1px solid rgba(255, 255, 255, 0.1)",
+                                                borderRadius: 6,
+                                                padding: "4px 8px",
+                                                fontSize: 10,
+                                                color: "#fff",
+                                            }}
+                                        >
+                                            <div style={{ color: "#71717A" }}>{p.date}</div>
+                                            <div style={{ color: accentColor, fontWeight: 700 }}>
+                                                {typeof p.v === "number" && (title === "Revenue" || title === "Outstanding")
+                                                    ? formatINR(p.v)
+                                                    : p.v}
+                                            </div>
                                         </div>
                                     );
                                 }}
                             />
-                            <Area dataKey="v" stroke={accentColor} fill={`url(#spark-${title})`} strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: accentColor, stroke: "var(--bg-card)", strokeWidth: 2 }} />
+                            <Area
+                                dataKey="v"
+                                stroke={accentColor}
+                                fill={`url(#spark-${title})`}
+                                strokeWidth={1.5}
+                                dot={false}
+                                activeDot={{ r: 3, fill: accentColor, stroke: "#000", strokeWidth: 1.5 }}
+                            />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
             )}
-        </div>
+        </SpotlightCard>
     );
 }
