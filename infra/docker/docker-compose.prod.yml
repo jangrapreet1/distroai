@@ -1,5 +1,5 @@
 services:
-  # ─── Database ───────────────────────────────────────────
+  # ─── Database (PostgreSQL 15 + pgvector + WAL-G PITR) ───
   postgres:
     build:
       context: .
@@ -34,7 +34,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Redis (queues + cache) ─────────────────────────────
+  # ─── Redis (BullMQ Queues + Session Cache) ──────────────
   redis:
     image: redis:7-alpine
     container_name: distroai_redis
@@ -51,7 +51,28 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── NestJS API ─────────────────────────────────────────
+  # ─── AI Python Microservice (FastAPI + Prophet) ─────────
+  ai-service:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.ai-service
+    container_name: distroai_ai
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-distroai}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-distroai}
+      PORT: 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - distroai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── NestJS API Backend ─────────────────────────────────
   api:
     build:
       context: ../../
@@ -64,11 +85,14 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
       JWT_ACCESS_SECRET: ${JWT_SECRET}
+      AI_SERVICE_URL: http://ai-service:8000
       PORT: 3000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      ai-service:
         condition: service_healthy
     networks:
       - distroai
@@ -76,7 +100,7 @@ services:
       - uploads_data:/tmp/distroai-uploads
     restart: unless-stopped
 
-  # ─── BullMQ Worker ──────────────────────────────────────
+  # ─── BullMQ Background Worker ───────────────────────────
   worker:
     build:
       context: ../../
@@ -89,6 +113,7 @@ services:
       REDIS_PORT: 6379
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
       JWT_ACCESS_SECRET: ${JWT_SECRET}
+      AI_SERVICE_URL: http://ai-service:8000
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,14 +125,14 @@ services:
       - uploads_data:/tmp/distroai-uploads
     restart: unless-stopped
 
-  # ─── Next.js Frontend ──────────────────────────────────
+  # ─── Next.js Standalone Frontend ────────────────────────
   web:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.web
       args:
         API_INTERNAL_URL: http://api:3000
-        NEXT_PUBLIC_META_APP_ID: ${META_APP_ID}
+        NEXT_PUBLIC_META_APP_ID: ${META_APP_ID:-}
     container_name: distroai_web
     environment:
       API_INTERNAL_URL: http://api:3000
@@ -117,7 +142,7 @@ services:
       - distroai
     restart: unless-stopped
 
-  # ─── Caddy (Reverse Proxy + Auto-SSL) ──────────────────
+  # ─── Caddy Reverse Proxy (Auto-SSL + Security Headers) ──
   caddy:
     image: caddy:2-alpine
     container_name: distroai_caddy

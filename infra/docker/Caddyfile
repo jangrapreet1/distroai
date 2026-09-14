@@ -1,30 +1,62 @@
 # ─────────────────────────────────────────────────────────
-# Caddy Reverse Proxy — Auto-HTTPS via Let's Encrypt
-# ─────────────────────────────────────────────────────────
-#
-# BEFORE DEPLOYING: Replace {$DOMAIN} below with your actual
-# domain, or set the DOMAIN env var in your .env.production.
-#
-# Example:  DOMAIN=distroai.in
-#
-# If you don't have a domain yet, use :80 instead of {$DOMAIN}
-# to serve over HTTP on port 80 (no SSL).
+# DistroAI Caddy Reverse Proxy — Production Hardened
+# Auto-HTTPS via Let's Encrypt / ZeroSSL with OWASP Security Headers
 # ─────────────────────────────────────────────────────────
 
-# Main domain — routes /api/* to API, everything else to Next.js
+(security_headers) {
+	header {
+		# Enforce HTTPS strictly across all subdomains
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		# Prevent MIME-type sniffing
+		X-Content-Type-Options "nosniff"
+		# Prevent clickjacking
+		X-Frame-Options "DENY"
+		# Protect referrer privacy
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Permissions policy
+		Permissions-Policy "camera=(), microphone=(self), geolocation=()"
+		# Content Security Policy
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'none';"
+		# Hide web server identification
+		-Server
+		-X-Powered-By
+	}
+}
+
+# Main domain — routes /api/* to API, everything else to Next.js standalone
 {$DOMAIN:localhost} {
+	import security_headers
+	encode zstd gzip
+
+	# Health check endpoint for external ping monitors (UptimeRobot, BetterStack)
+	handle /healthz {
+		respond "OK" 200
+	}
+
 	# API routes — proxy /api/* to the NestJS backend
 	handle /api/* {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
 	}
 
 	# Everything else — proxy to the Next.js frontend
 	handle {
-		reverse_proxy web:3001
+		reverse_proxy web:3001 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
 	}
 }
 
-# API subdomain — also serves the NestJS backend
+# API subdomain — direct NestJS backend access
 api.{$DOMAIN:localhost} {
-	reverse_proxy api:3000
+	import security_headers
+	encode zstd gzip
+
+	reverse_proxy api:3000 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
 }

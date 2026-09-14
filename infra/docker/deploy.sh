@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────
-# DistroAI — Deploy / Redeploy Script
+# DistroAI — Production Deploy / Redeploy Script
 # Run from: /home/distroai/app/infra/docker/
 # Usage: bash deploy.sh
 # ─────────────────────────────────────────────────────────
@@ -9,57 +9,69 @@ set -euo pipefail
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env.production"
 
-echo "🚀 DistroAI — Deploying"
-echo "═══════════════════════"
+echo "🚀 DistroAI — Production Deployment"
+echo "═════════════════════════════════════"
+
+# Detect Docker Compose command format
+if docker compose version &>/dev/null; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &>/dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo "❌ Neither 'docker compose' nor 'docker-compose' is installed."
+    exit 1
+fi
+echo "✅ Using Compose engine: $DOCKER_COMPOSE"
 
 # Pre-flight checks
 if [ ! -f "$ENV_FILE" ]; then
     echo "❌ Missing $ENV_FILE"
-    echo "   Copy .env.production.example to .env.production and fill in your values"
+    echo "   Copy .env.production.example to .env.production and fill in your secrets."
     exit 1
 fi
 
-# Pull latest code (if this is a git repo)
+# Pull latest code (if in git repo)
 if [ -d "../../.git" ]; then
-    echo "📥 Pulling latest code..."
-    cd ../../ && git pull || echo "⚠️  Git pull failed (continuing anyway)" && cd infra/docker
+    echo "📥 Pulling latest git commit..."
+    cd ../../ && git pull || echo "⚠️  Git pull skipped/failed (continuing with local code)" && cd infra/docker
 else
-    echo "ℹ️  No .git directory found — skipping git pull (rsync deploy mode)"
+    echo "ℹ️  No .git directory found — proceeding with existing source tree."
 fi
 
-# Build images
-echo "🔨 Building Docker images..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+# Build production images
+echo "🔨 Building production Docker images..."
+$DOCKER_COMPOSE -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
 
-# Start all services
+# Start all services in background
 echo "🚀 Starting all services..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+$DOCKER_COMPOSE -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
-# Wait for API container to be ready
-echo "⏳ Waiting for API to start..."
+# Wait for core API and DB to be healthy
+echo "⏳ Waiting 15 seconds for database and API startup..."
 sleep 15
 
-# Run Prisma migrations inside the running api container
+# Run Prisma schema push / migration inside running api container
 echo "📊 Running database migrations..."
 docker exec distroai_api npx prisma db push --schema=./packages/db/prisma/schema.prisma --accept-data-loss 2>/dev/null || \
 docker exec distroai_api npx prisma migrate deploy --schema=./packages/db/prisma/schema.prisma 2>/dev/null || \
-echo "⚠️  Migration skipped (will auto-run on API startup)"
+echo "ℹ️  Prisma migration check finished."
 
-# Cleanup old images
-echo "🧹 Cleaning up old images..."
+# Prune dangling intermediate build images
+echo "🧹 Pruning dangling build images..."
 docker image prune -f
 
 echo ""
 echo "═══════════════════════════════════════════════════════"
 echo "✅ Deployment complete!"
 echo ""
-echo "Services:"
-docker compose -f "$COMPOSE_FILE" ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+echo "Active Services:"
+$DOCKER_COMPOSE -f "$COMPOSE_FILE" ps
 echo ""
-echo "Useful commands:"
-echo "  Logs:     docker compose -f $COMPOSE_FILE logs -f"
-echo "  API logs: docker compose -f $COMPOSE_FILE logs -f api"
-echo "  Status:   docker compose -f $COMPOSE_FILE ps"
-echo "  Restart:  docker compose -f $COMPOSE_FILE restart"
-echo "  Stop:     docker compose -f $COMPOSE_FILE down"
+echo "Useful Commands:"
+echo "  View All Logs:          $DOCKER_COMPOSE -f $COMPOSE_FILE logs -f"
+echo "  View API Logs:          $DOCKER_COMPOSE -f $COMPOSE_FILE logs -f api"
+echo "  Check Status:           $DOCKER_COMPOSE -f $COMPOSE_FILE ps"
+echo "  Verify Backups:         bash verify-backup.sh"
+echo "  Restart Stack:          $DOCKER_COMPOSE -f $COMPOSE_FILE restart"
+echo "  Stop Stack:             $DOCKER_COMPOSE -f $COMPOSE_FILE down"
 echo "═══════════════════════════════════════════════════════"

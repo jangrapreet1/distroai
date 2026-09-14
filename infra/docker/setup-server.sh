@@ -1,20 +1,27 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────
 # DistroAI — First-time Server Setup Script
-# Run this ONCE on a fresh Ubuntu 22.04+ VPS
+# Run this ONCE on a fresh Ubuntu 22.04+ / 24.04+ VPS
 # Usage: ssh root@your-server-ip 'bash -s' < setup-server.sh
 # ─────────────────────────────────────────────────────────
 set -euo pipefail
 
-echo "🚀 DistroAI — Server Setup"
-echo "═══════════════════════════"
+echo "🚀 DistroAI — Production Server Hardening"
+echo "═════════════════════════════════════════"
 
-# 1. System updates
+# 1. System updates & essential tools
 echo "📦 Updating system packages..."
 apt-get update -qq && apt-get upgrade -y -qq
+apt-get install -y -qq curl wget git ufw fail2ban ca-certificates gnupg
 
-# 2. Install Docker
-echo "🐳 Installing Docker..."
+# 2. Configure fail2ban for SSH brute-force defense
+echo "🛡️  Enabling fail2ban for SSH..."
+systemctl enable fail2ban
+systemctl start fail2ban
+echo "✅ fail2ban active"
+
+# 3. Install Docker
+echo "🐳 Installing Docker Engine..."
 if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com | sh
     systemctl enable docker
@@ -24,15 +31,15 @@ else
     echo "✅ Docker already installed"
 fi
 
-# 3. Install Docker Compose plugin
-echo "🔧 Verifying Docker Compose..."
+# 4. Install Docker Compose plugin
+echo "🔧 Verifying Docker Compose plugin..."
 if ! docker compose version &> /dev/null; then
     apt-get install -y -qq docker-compose-plugin
 fi
-echo "✅ Docker Compose: $(docker compose version --short)"
+echo "✅ Docker Compose: $(docker compose version --short 2>/dev/null || echo 'Installed')"
 
-# 4. Create app user (non-root)
-echo "👤 Creating distroai user..."
+# 5. Create dedicated app user (non-root)
+echo "👤 Creating dedicated 'distroai' system user..."
 if ! id "distroai" &>/dev/null; then
     useradd -m -s /bin/bash -G docker distroai
     mkdir -p /home/distroai/.ssh
@@ -42,46 +49,50 @@ if ! id "distroai" &>/dev/null; then
     chown -R distroai:distroai /home/distroai/.ssh
     chmod 700 /home/distroai/.ssh
     chmod 600 /home/distroai/.ssh/authorized_keys 2>/dev/null || true
-    echo "✅ User 'distroai' created with SSH keys copied"
+    echo "✅ User 'distroai' created with SSH access"
 else
     echo "✅ User 'distroai' already exists"
 fi
 
-# 5. Set up project directory
-echo "📁 Setting up project directory..."
+# 6. Set up project application directory
+echo "📁 Initializing /home/distroai/app directory..."
 mkdir -p /home/distroai/app
 chown -R distroai:distroai /home/distroai/app
 
-# 6. Configure firewall
-echo "🔒 Configuring firewall..."
+# 7. Configure UFW Firewall (Least Privilege)
+echo "🔒 Configuring UFW Firewall (Least Privilege)..."
 if command -v ufw &> /dev/null; then
+    ufw default deny incoming
+    ufw default allow outgoing
     ufw allow OpenSSH
-    ufw allow 80/tcp
-    ufw allow 443/tcp
+    ufw allow 80/tcp comment 'HTTP Web'
+    ufw allow 443/tcp comment 'HTTPS Web'
+    # PostgreSQL (5432) and Redis (6379) are explicitly NOT allowed externally
     ufw --force enable
-    echo "✅ Firewall configured (22, 80, 443 open)"
+    echo "✅ Firewall active: Only 22, 80, 443 open. DB & Redis are internal-only."
 fi
 
-# 7. Enable swap (important for 1GB RAM servers)
-echo "💾 Setting up swap..."
+# 8. Enable swap (prevents OOM on budget 2GB-4GB VPS instances)
+echo "💾 Checking swap memory..."
 if [ ! -f /swapfile ]; then
     fallocate -l 2G /swapfile
     chmod 600 /swapfile
     mkswap /swapfile
     swapon /swapfile
     echo '/swapfile none swap sw 0 0' >> /etc/fstab
-    echo "✅ 2GB swap enabled"
+    echo "✅ 2GB swapfile enabled"
 else
     echo "✅ Swap already configured"
 fi
 
 echo ""
 echo "═══════════════════════════════════════════════════════"
-echo "✅ Server setup complete!"
+echo "✅ Server hardening complete!"
 echo ""
-echo "Next steps:"
-echo "  1. Clone your repo:  git clone <your-repo-url> /home/distroai/app"
-echo "  2. Copy env file:    cp infra/docker/.env.production.example infra/docker/.env.production"
-echo "  3. Edit env file:    nano infra/docker/.env.production"
-echo "  4. Deploy:           cd infra/docker && bash deploy.sh"
+echo "Next Steps to Deploy:"
+echo "  1. Switch to user:   su - distroai"
+echo "  2. Clone codebase:   git clone https://github.com/jangrapreet1/distroai.git /home/distroai/app"
+echo "  3. Configure env:    cp /home/distroai/app/infra/docker/.env.production.example /home/distroai/app/infra/docker/.env.production"
+echo "                       nano /home/distroai/app/infra/docker/.env.production"
+echo "  4. Launch stack:     cd /home/distroai/app/infra/docker && bash deploy.sh"
 echo "═══════════════════════════════════════════════════════"
