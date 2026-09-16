@@ -2,20 +2,21 @@
 # Worker — same build as API, different entrypoint
 # Runs BullMQ queue processors only (no HTTP server)
 # =========================================================
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 WORKDIR /app
 
-# Native build deps for bcrypt
-RUN apk add --no-cache python3 make g++
+# Native build deps and corepack setup
+RUN apt-get update && apt-get install -y python3 make g++ openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 
 # Use hoisted node_modules so symlinks survive Docker COPY
 RUN echo "node-linker=hoisted" > .npmrc
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages/ ./packages/
-COPY apps/api/ ./apps/api/
+COPY apps/ ./apps/
 
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 RUN npx prisma generate --schema=packages/db/prisma/schema.prisma
 RUN cd apps/api && pnpm run build
 RUN npx -y tsc-alias -p apps/api/tsconfig.json
@@ -23,13 +24,13 @@ RUN npx -y tsc-alias -p apps/api/tsconfig.json
 # =========================================================
 # Runner
 # =========================================================
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-RUN apk add --no-cache openssl && \
-    addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nestjs
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 -g nodejs nestjs
 
 # Copy compiled output
 COPY --chown=nestjs:nodejs --from=builder /app/apps/api/dist ./dist
@@ -42,6 +43,6 @@ COPY --chown=nestjs:nodejs --from=builder /app/packages/ ./packages/
 USER nestjs
 
 # No EXPOSE — worker doesn't serve HTTP
-# No HEALTHCHECK — managed via K8s liveness exec probes
+# No HEALTHCHECK — managed via K8s/Docker liveness
 
 CMD ["node", "dist/apps/api/src/worker.main.js"]
