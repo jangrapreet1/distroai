@@ -21,7 +21,7 @@ services:
       postgres
       -c wal_level=logical
       -c archive_mode=on
-      -c archive_command='wal-g wal-push "%p"'
+      -c archive_command='wal-push-safe "%p"'
       -c archive_timeout=60
     volumes:
       - postgres_data:/var/lib/postgresql/data
