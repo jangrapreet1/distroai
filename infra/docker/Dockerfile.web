@@ -12,7 +12,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages/ ./packages/
 COPY apps/ ./apps/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-maxtimeout 120000 && \
+    pnpm install --filter @distroai/web... --frozen-lockfile
 
 # Next.js standalone output mode
 ARG API_INTERNAL_URL
