@@ -41,4 +41,5 @@ engineer-prompt.*
 phase*-prompt.*
 implementation_plan.md.resolved
 .idea/
+.agents/
 

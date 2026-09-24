@@ -15,7 +15,7 @@ const step1Schema = z.object({
     businessType: z.string().min(1, "Business type is required"),
     sector: z.string().min(1, "Sector is required"),
     gstNumber: z.string().optional(),
-    phone: z.string().min(10, "Enter a valid phone number").optional(),
+    phone: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number starting with 6-9"),
     city: z.string().optional(),
     state: z.string().optional(),
 });
@@ -140,8 +140,9 @@ export default function RegisterPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm text-[var(--text-secondary)] mb-1">Phone</label>
-                            <input {...form1.register("phone")} placeholder="9876543210" className="w-full px-4 py-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
+                            <label className="block text-sm text-[var(--text-secondary)] mb-1">Mobile Number (WhatsApp) *</label>
+                            <input {...form1.register("phone")} placeholder="9876543210" maxLength={10} className="w-full px-4 py-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
+                            {form1.formState.errors.phone && <p className="text-sm text-[var(--red)] mt-1">{form1.formState.errors.phone.message}</p>}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">

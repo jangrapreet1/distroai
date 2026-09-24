@@ -1,6 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import apiClient, { getApiError } from "@/lib/api-client";
+import type {
+    CustomerLedgerResponse,
+    LedgerEntryWithBalance,
+    CustomerLedgerFilters,
+    CreateTransactionDto,
+    UpdateTransactionDto,
+    RTKStatementData,
+} from "@/types/customer-transactions";
 
 // ===== ORDERS =====
 export function useOrders(filters: Record<string, string | number | undefined>) {
@@ -142,6 +150,89 @@ export function useCreateCustomer() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+
+// ===== CUSTOMER LEDGER & TRANSACTIONS (Milestone M3) =====
+export function useCustomerLedger(customerId: string, filters?: CustomerLedgerFilters) {
+    return useQuery<CustomerLedgerResponse>({
+        queryKey: ["customers", customerId, "ledger", filters],
+        queryFn: () => apiClient.get(`/api/v1/customers/${customerId}/ledger`, { params: filters }).then((r) => r.data),
+        enabled: !!customerId,
+        staleTime: 15_000,
+    });
+}
+
+export function useCustomerTransaction(customerId: string, id: string) {
+    return useQuery<LedgerEntryWithBalance>({
+        queryKey: ["customers", customerId, "transactions", id],
+        queryFn: () => apiClient.get(`/api/v1/customers/${customerId}/transactions/${id}`).then((r) => r.data),
+        enabled: !!customerId && !!id,
+    });
+}
+
+export function useCreateCustomerTransaction(customerId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: CreateTransactionDto | Record<string, unknown>) =>
+            apiClient.post(`/api/v1/customers/${customerId}/transactions`, data).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["customers", customerId, "ledger"] });
+            qc.invalidateQueries({ queryKey: ["customers", customerId] });
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["payments", "outstanding"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
+            toast.success("Transaction created successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
+export function useUpdateCustomerTransaction(customerId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: UpdateTransactionDto | Record<string, unknown> }) =>
+            apiClient.patch(`/api/v1/customers/${customerId}/transactions/${id}`, data).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["customers", customerId, "ledger"] });
+            qc.invalidateQueries({ queryKey: ["customers", customerId] });
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["payments", "outstanding"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
+            toast.success("Transaction updated successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
+export function useDeleteCustomerTransaction(customerId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) =>
+            apiClient.delete(`/api/v1/customers/${customerId}/transactions/${id}`).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["customers", customerId, "ledger"] });
+            qc.invalidateQueries({ queryKey: ["customers", customerId] });
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["payments", "outstanding"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
+            toast.success("Transaction deleted successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
+export function useCustomerStatement(customerId: string, filters?: CustomerLedgerFilters) {
+    return useQuery<RTKStatementData>({
+        queryKey: ["customers", customerId, "statement", filters],
+        queryFn: () =>
+            apiClient.get(`/api/v1/customers/${customerId}/statement`, { params: filters }).then((r) => r.data),
+        enabled: !!customerId,
+    });
+}
+
+// Aliases for seamless interoperability across tests and components
+export const useCreateTransaction = useCreateCustomerTransaction;
+export const useUpdateTransaction = useUpdateCustomerTransaction;
+export const useDeleteTransaction = useDeleteCustomerTransaction;
 
 // ===== PAYMENTS =====
 export function usePayments(filters: Record<string, string | number | undefined>) {

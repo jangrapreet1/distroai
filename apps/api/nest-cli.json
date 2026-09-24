@@ -8,6 +8,12 @@
         "tsConfigPath": "tsconfig.json",
         "plugins": [
             "@nestjs/swagger"
+        ],
+        "assets": [
+            {
+                "include": "assets/**/*",
+                "watchAssets": true
+            }
         ]
     }
 }

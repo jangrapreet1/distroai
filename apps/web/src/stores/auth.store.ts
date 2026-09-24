@@ -8,6 +8,7 @@ export interface AuthUser {
     lastName?: string;
     role: string;
     avatarUrl?: string;
+    phone?: string;
 }
 
 export interface AuthOrg {
@@ -15,6 +16,10 @@ export interface AuthOrg {
     name: string;
     plan: string;
     gstNumber?: string;
+    phone?: string;
+    city?: string;
+    state?: string;
+    businessType?: string;
 }
 
 interface AuthState {

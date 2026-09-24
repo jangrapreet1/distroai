@@ -34,6 +34,13 @@ enum TransactionType {
   RETURN
 }
 
+enum CustomerTransactionType {
+  SALE
+  RETURN
+  PAYMENT
+  ADJUSTMENT
+}
+
 enum CustomerType {
   RETAILER
   WHOLESALER
@@ -161,59 +168,60 @@ model Organization {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  users           User[]
-  warehouses      Warehouse[]
-  products        Product[]
-  customers       Customer[]
-  orders          Order[]
-  invoices        Invoice[]
-  payments        Payment[]
-  salesmen        Salesman[]
-  routes          Route[]
-  suppliers       Supplier[]
-  demandForecasts DemandForecast[]
-  shelfAudits     ShelfAudit[]
-  aiQueries       AIQuery[]
-  ledgerEntries   LedgerEntry[]
-  whatsappConfig  WhatsAppConfig?
-  waSessions      WhatsAppSession[]
-  waMessages      WhatsAppMessage[]
-  schemes         Scheme[]
-  notifications   Notification[]
-  auditLogs       AuditLog[]
-  subscription    Subscription?
-  settings        OrgSettings?
-  purchaseOrders  PurchaseOrder[]
-  expenses        Expense[]
-  creditNotes     CreditNote[]
-  marketingCampaigns MarketingCampaign[]
+  users                User[]
+  warehouses           Warehouse[]
+  products             Product[]
+  customers            Customer[]
+  orders               Order[]
+  invoices             Invoice[]
+  payments             Payment[]
+  salesmen             Salesman[]
+  routes               Route[]
+  suppliers            Supplier[]
+  demandForecasts      DemandForecast[]
+  shelfAudits          ShelfAudit[]
+  aiQueries            AIQuery[]
+  ledgerEntries        LedgerEntry[]
+  whatsappConfig       WhatsAppConfig?
+  waSessions           WhatsAppSession[]
+  waMessages           WhatsAppMessage[]
+  schemes              Scheme[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  subscription         Subscription?
+  settings             OrgSettings?
+  purchaseOrders       PurchaseOrder[]
+  expenses             Expense[]
+  creditNotes          CreditNote[]
+  marketingCampaigns   MarketingCampaign[]
+  customerTransactions CustomerTransaction[]
 }
 
 model User {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   orgId         String
   email         String
   phone         String?
   passwordHash  String?
-  authProvider  String   @default("local") // local, google
-  googleId      String?  @unique
+  authProvider  String    @default("local") // local, google
+  googleId      String?   @unique
   firstName     String
   lastName      String
-  role          Role     @default(VIEWER)
+  role          Role      @default(VIEWER)
   avatarUrl     String?
-  isActive      Boolean  @default(true)
+  isActive      Boolean   @default(true)
   lastLoginAt   DateTime?
   fcmTokens     String[]
-  preferredLang String   @default("en")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  preferredLang String    @default("en")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  refreshTokens RefreshToken[]
+  organization    Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  refreshTokens   RefreshToken[]
   salesmanProfile Salesman?
-  aiQueries     AIQuery[]
-  notifications Notification[]
-  auditLogs     AuditLog[]
+  aiQueries       AIQuery[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
 
   @@unique([orgId, email])
   @@index([orgId])
@@ -246,7 +254,7 @@ model Warehouse {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
   batches      ProductBatch[]
   inventories  Inventory[]
   orders       Order[]
@@ -256,7 +264,7 @@ model Warehouse {
 }
 
 model Product {
-  id               String   @id @default(cuid())
+  id               String                      @id @default(cuid())
   orgId            String
   name             String
   sku              String
@@ -267,33 +275,34 @@ model Product {
   unit             String
   secondaryUnit    String?
   conversionFactor Float?
-  purchasePrice    Float    @default(0)
-  sellingPrice     Float    @default(0)
-  mrp              Float    @default(0)
-  gstRate          Float    @default(0)
-  cessRate         Float    @default(0)
-  minStockLevel    Int      @default(0)
+  purchasePrice    Float                       @default(0)
+  sellingPrice     Float                       @default(0)
+  mrp              Float                       @default(0)
+  gstRate          Float                       @default(0)
+  cessRate         Float                       @default(0)
+  minStockLevel    Int                         @default(0)
   maxStockLevel    Int?
-  leadTimeDays     Int      @default(0)
-  isActive         Boolean  @default(true)
+  leadTimeDays     Int                         @default(0)
+  isActive         Boolean                     @default(true)
   imageUrl         String?
-  imageUrls        String[] @default([])
-  commissionType   String?          // "FIXED" | "PERCENTAGE" | null (no commission)
-  commissionValue  Float    @default(0)  // ₹ amount if FIXED, % if PERCENTAGE
+  imageUrls        String[]                    @default([])
+  commissionType   String? // "FIXED" | "PERCENTAGE" | null (no commission)
+  commissionValue  Float                       @default(0) // ₹ amount if FIXED, % if PERCENTAGE
   description      String?
   tags             String[]
   embedding        Unsupported("vector(768)")?
-  embeddingStatus  EmbeddingStatus @default(PENDING)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  embeddingStatus  EmbeddingStatus             @default(PENDING)
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
 
-  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  batches        ProductBatch[]
-  inventories    Inventory[]
-  orderItems     OrderItem[]
-  poItems        PurchaseOrderItem[]
-  invoiceItems   InvoiceItem[]
-  demandForecast DemandForecast[]
+  organization             Organization              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  batches                  ProductBatch[]
+  inventories              Inventory[]
+  orderItems               OrderItem[]
+  poItems                  PurchaseOrderItem[]
+  invoiceItems             InvoiceItem[]
+  demandForecast           DemandForecast[]
+  customerTransactionItems CustomerTransactionItem[]
 
   @@unique([orgId, sku])
   @@index([orgId, category])
@@ -301,15 +310,15 @@ model Product {
 }
 
 model ProductBatch {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   productId       String
   warehouseId     String
   batchNumber     String
   manufactureDate DateTime?
   expiryDate      DateTime?
-  quantity        Int      @default(0)
-  purchasePrice   Float    @default(0)
-  createdAt       DateTime @default(now())
+  quantity        Int       @default(0)
+  purchasePrice   Float     @default(0)
+  createdAt       DateTime  @default(now())
 
   product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
@@ -352,61 +361,62 @@ model InventoryTransaction {
 }
 
 model Customer {
-  id               String       @id @default(cuid())
-  orgId            String
-  name             String
-  contactPerson    String?
-  phone            String?
-  altPhone         String?
-  email            String?
-  gstNumber        String?
-  panNumber        String?
-  fullAddress      String?
-  city             String?
-  state            String?
-  pincode          String?
-  latitude         Float?
-  longitude        Float?
-  type             CustomerType @default(RETAILER)
-  tier             CustomerTier @default(BRONZE)
-  creditLimit      Float        @default(0)
-  creditDays       Int          @default(0)
-  gracePeriodDays  Int          @default(7) // Allowed days past due date before blocking
-  outstandingAmount Float       @default(0)
-  paymentScore     Float        @default(100) // 0-100 AI computed
-  routeId          String?
-  beatDay          DayOfWeek?
-  salesmanId       String?
-  tags             String[]
-  notes            String?
-  photoUrl         String?
-  isActive         Boolean      @default(true)
-  whatsappNumber   String?
-  lastOrderDate    DateTime?
-  lastVisitDate    DateTime?
+  id                    String       @id @default(cuid())
+  orgId                 String
+  name                  String
+  contactPerson         String?
+  phone                 String?
+  altPhone              String?
+  email                 String?
+  gstNumber             String?
+  panNumber             String?
+  fullAddress           String?
+  city                  String?
+  state                 String?
+  pincode               String?
+  latitude              Float?
+  longitude             Float?
+  type                  CustomerType @default(RETAILER)
+  tier                  CustomerTier @default(BRONZE)
+  creditLimit           Float        @default(0)
+  creditDays            Int          @default(0)
+  gracePeriodDays       Int          @default(7) // Allowed days past due date before blocking
+  outstandingAmount     Float        @default(0)
+  paymentScore          Float        @default(100) // 0-100 AI computed
+  routeId               String?
+  beatDay               DayOfWeek?
+  salesmanId            String?
+  tags                  String[]
+  notes                 String?
+  photoUrl              String?
+  isActive              Boolean      @default(true)
+  whatsappNumber        String?
+  lastOrderDate         DateTime?
+  lastVisitDate         DateTime?
   // AR Aging cache (populated by nightly cron)
-  currentBilled          Float    @default(0)
-  overdue30              Float    @default(0)
-  overdue60              Float    @default(0)
-  overdue90              Float    @default(0)
-  avgDaysOverdue         Int      @default(0)
-  oldestDueDate          DateTime?
-  lastAgingCalculatedAt  DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  currentBilled         Float        @default(0)
+  overdue30             Float        @default(0)
+  overdue60             Float        @default(0)
+  overdue90             Float        @default(0)
+  avgDaysOverdue        Int          @default(0)
+  oldestDueDate         DateTime?
+  lastAgingCalculatedAt DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
-  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  salesman         Salesman?    @relation(fields: [salesmanId], references: [id])
-  route            Route?       @relation(fields: [routeId], references: [id])
-  orders           Order[]
-  invoices         Invoice[]
-  payments         Payment[]
-  fieldVisits      FieldVisit[]
-  paymentScoreLogs PaymentScoreLog[]
-  shelfAudits      ShelfAudit[]
-  locationRequests LocationRequest[]
-  ledgerEntries    LedgerEntry[]
-  creditNotes      CreditNote[]
+  organization         Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  salesman             Salesman?             @relation(fields: [salesmanId], references: [id])
+  route                Route?                @relation(fields: [routeId], references: [id])
+  orders               Order[]
+  invoices             Invoice[]
+  payments             Payment[]
+  fieldVisits          FieldVisit[]
+  paymentScoreLogs     PaymentScoreLog[]
+  shelfAudits          ShelfAudit[]
+  locationRequests     LocationRequest[]
+  ledgerEntries        LedgerEntry[]
+  creditNotes          CreditNote[]
+  customerTransactions CustomerTransaction[]
 
   @@index([orgId])
   @@index([salesmanId])
@@ -441,41 +451,41 @@ model Supplier {
 }
 
 model Order {
-  id             String      @id @default(cuid())
-  orgId          String
-  orderNumber    String
-  customerId     String
-  salesmanId     String?
-  warehouseId    String
-  status         OrderStatus @default(DRAFT)
-  type           OrderType   @default(SALE)
-  source         OrderSource @default(APP)
-  totalAmount    Float       @default(0)
-  discountAmount Float       @default(0)
-  taxAmount      Float       @default(0)
-  netAmount      Float       @default(0)
-  paidAmount     Float       @default(0)
-  balanceAmount  Float       @default(0)
-  notes          String?
-  deliveryDate   DateTime?
+  id              String      @id @default(cuid())
+  orgId           String
+  orderNumber     String
+  customerId      String
+  salesmanId      String?
+  warehouseId     String
+  status          OrderStatus @default(DRAFT)
+  type            OrderType   @default(SALE)
+  source          OrderSource @default(APP)
+  totalAmount     Float       @default(0)
+  discountAmount  Float       @default(0)
+  taxAmount       Float       @default(0)
+  netAmount       Float       @default(0)
+  paidAmount      Float       @default(0)
+  balanceAmount   Float       @default(0)
+  notes           String?
+  deliveryDate    DateTime?
   deliveryAddress String?
-  schemeId       String?
-  invoiceId      String?     @unique
-  utmCampaignId  String?     // nullable — set when order originates from an ad
-  commissionTo   String?     // Recipient label: "Salesman", "Mistri", "Contractor", or custom
-  commissionType String?     // "FIXED" or "PERCENTAGE"
-  commissionValue Float?     // Amount (₹) or percentage (%)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  schemeId        String?
+  invoiceId       String?     @unique
+  utmCampaignId   String? // nullable — set when order originates from an ad
+  commissionTo    String? // Recipient label: "Salesman", "Mistri", "Contractor", or custom
+  commissionType  String? // "FIXED" or "PERCENTAGE"
+  commissionValue Float? // Amount (₹) or percentage (%)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  salesman     Salesman?    @relation(fields: [salesmanId], references: [id])
-  warehouse    Warehouse    @relation(fields: [warehouseId], references: [id])
-  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
-  items        OrderItem[]
+  organization  Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer      Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  salesman      Salesman?            @relation(fields: [salesmanId], references: [id])
+  warehouse     Warehouse            @relation(fields: [warehouseId], references: [id])
+  invoice       Invoice?             @relation(fields: [invoiceId], references: [id])
+  items         OrderItem[]
   statusHistory OrderStatusHistory[]
-  creditNotes  CreditNote[]
+  creditNotes   CreditNote[]
 
   @@unique([orgId, orderNumber])
   @@index([orgId, status])
@@ -503,13 +513,13 @@ model OrderItem {
 }
 
 model OrderStatusHistory {
-  id         String      @id @default(cuid())
+  id         String       @id @default(cuid())
   orderId    String
   fromStatus OrderStatus?
   toStatus   OrderStatus
   note       String?
   changedBy  String?
-  createdAt  DateTime    @default(now())
+  createdAt  DateTime     @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -517,20 +527,20 @@ model OrderStatusHistory {
 }
 
 model PurchaseOrder {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   orgId        String
   poNumber     String
   supplierId   String
-  status       POStatus @default(DRAFT)
-  totalAmount  Float    @default(0)
+  status       POStatus  @default(DRAFT)
+  totalAmount  Float     @default(0)
   expectedDate DateTime?
   receivedDate DateTime?
   notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  supplier     Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   items        PurchaseOrderItem[]
   expenses     Expense[]
 
@@ -557,25 +567,25 @@ model PurchaseOrderItem {
 }
 
 model Invoice {
-  id             String        @id @default(cuid())
-  orgId          String
-  invoiceNumber  String
-  customerId     String
-  invoiceDate    DateTime
-  dueDate        DateTime
-  status         InvoiceStatus @default(DRAFT)
-  subtotal       Float         @default(0)
-  discountAmount Float         @default(0)
-  taxableAmount  Float         @default(0)
-  cgstAmount     Float         @default(0)
-  sgstAmount     Float         @default(0)
-  igstAmount     Float         @default(0)
-  cessAmount     Float         @default(0)
-  totalAmount    Float         @default(0)
-  paidAmount     Float         @default(0)
-  balanceAmount  Float         @default(0)
-  placeOfSupply  String?
-  reverseCharge  Boolean       @default(false)
+  id                 String        @id @default(cuid())
+  orgId              String
+  invoiceNumber      String
+  customerId         String
+  invoiceDate        DateTime
+  dueDate            DateTime
+  status             InvoiceStatus @default(DRAFT)
+  subtotal           Float         @default(0)
+  discountAmount     Float         @default(0)
+  taxableAmount      Float         @default(0)
+  cgstAmount         Float         @default(0)
+  sgstAmount         Float         @default(0)
+  igstAmount         Float         @default(0)
+  cessAmount         Float         @default(0)
+  totalAmount        Float         @default(0)
+  paidAmount         Float         @default(0)
+  balanceAmount      Float         @default(0)
+  placeOfSupply      String?
+  reverseCharge      Boolean       @default(false)
   eInvoiceIrn        String?
   eInvoiceAckNo      String?
   eInvoiceAckDate    String?
@@ -588,8 +598,8 @@ model Invoice {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
   order        Order?
   items        InvoiceItem[]
   payments     Payment[]
@@ -630,17 +640,17 @@ model InvoiceItem {
 }
 
 model Payment {
-  id                String        @id @default(cuid())
-  orgId             String
-  invoiceId         String?
-  customerId        String
-  amount            Float
-  advanceAmount     Float         @default(0)
-  method            PaymentMethod
-  referenceNumber   String?
-  status            PaymentStatus @default(COMPLETED)
-  razorpayOrderId   String?
-  razorpayPaymentId String?
+  id                 String        @id @default(cuid())
+  orgId              String
+  invoiceId          String?
+  customerId         String
+  amount             Float
+  advanceAmount      Float         @default(0)
+  method             PaymentMethod
+  referenceNumber    String?
+  status             PaymentStatus @default(COMPLETED)
+  razorpayOrderId    String?
+  razorpayPaymentId  String?
   paymentLinkId      String?
   paymentLinkUrl     String?
   tallyReceiptNumber String?
@@ -649,9 +659,9 @@ model Payment {
   notes              String?
   createdAt          DateTime      @default(now())
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
-  customer     Customer     @relation(fields: [customerId], references: [id])
+  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invoice      Invoice?            @relation(fields: [invoiceId], references: [id])
+  customer     Customer            @relation(fields: [customerId], references: [id])
   allocations  PaymentAllocation[]
 
   @@index([orgId])
@@ -693,14 +703,14 @@ model LedgerEntry {
   customerId    String
   type          LedgerEntryType
   amount        Float
-  balance       Float               // Running balance after this entry
+  balance       Float // Running balance after this entry
   referenceId   String?
   referenceType LedgerReferenceType
   notes         String?
   createdAt     DateTime            @default(now())
 
-  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  customer      Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([orgId])
   @@index([customerId])
@@ -771,14 +781,14 @@ model Salesman {
 }
 
 model Route {
-  id         String     @id @default(cuid())
+  id         String    @id @default(cuid())
   orgId      String
   salesmanId String
   name       String
   day        DayOfWeek
-  sequence   String[]   // Array of customerIds
-  isActive   Boolean    @default(true)
-  createdAt  DateTime   @default(now())
+  sequence   String[] // Array of customerIds
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   salesman     Salesman     @relation(fields: [salesmanId], references: [id], onDelete: Cascade)
@@ -832,16 +842,16 @@ model Attendance {
 }
 
 model DemandForecast {
-  id             String   @id @default(cuid())
-  orgId          String
-  productId      String
-  forecastDate   DateTime @db.Date
-  predictedQty   Float
-  lowerBound     Float?
-  upperBound     Float?
-  confidence     Float?
-  modelVersion   String?
-  createdAt      DateTime @default(now())
+  id           String   @id @default(cuid())
+  orgId        String
+  productId    String
+  forecastDate DateTime @db.Date
+  predictedQty Float
+  lowerBound   Float?
+  upperBound   Float?
+  confidence   Float?
+  modelVersion String?
+  createdAt    DateTime @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -883,15 +893,15 @@ model ShelfAudit {
 }
 
 model AIQuery {
-  id         String   @id @default(cuid())
-  orgId      String
-  userId     String
-  sessionId  String?
-  query      String
-  response   String   @db.Text
-  queryType  String?
-  latencyMs  Int?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  sessionId String?
+  query     String
+  response  String   @db.Text
+  queryType String?
+  latencyMs Int?
+  createdAt DateTime @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -904,11 +914,11 @@ model WhatsAppConfig {
   id            String   @id @default(cuid())
   orgId         String   @unique
   phoneNumberId String
-  accessToken   String   // AES-256-GCM encrypted
+  accessToken   String // AES-256-GCM encrypted
   webhookSecret String?
   businessName  String?
   wabaId        String?
-  phoneNumber   String?  // Display number e.g. "+91 98765 43210"
+  phoneNumber   String? // Display number e.g. "+91 98765 43210"
   isActive      Boolean  @default(true)
   updatedAt     DateTime @updatedAt
 
@@ -934,7 +944,7 @@ model WhatsAppMessage {
   id          String   @id @default(cuid())
   orgId       String
   phone       String
-  direction   String   // INBOUND or OUTBOUND
+  direction   String // INBOUND or OUTBOUND
   messageType String
   content     String?  @db.Text
   mediaUrl    String?
@@ -1018,50 +1028,50 @@ model Subscription {
 }
 
 model OrgSettings {
-  id                  String   @id @default(cuid())
-  orgId               String   @unique
-  invoicePrefix       String?  @default("INV-")
-  orderPrefix         String?  @default("ORD-")
-  poPrefix            String?  @default("PO-")
-  financialYearStart  Int?     @default(4) // April = 4
-  defaultWarehouseId  String?
-  autoInvoice         Boolean  @default(false)
-  enableRazorpayB2C   Boolean  @default(true) // Added for WhatsApp storefront
-  paymentReminderDays Int[]    @default([3, 7, 15, 30])
+  id                   String  @id @default(cuid())
+  orgId                String  @unique
+  invoicePrefix        String? @default("INV-")
+  orderPrefix          String? @default("ORD-")
+  poPrefix             String? @default("PO-")
+  financialYearStart   Int?    @default(4) // April = 4
+  defaultWarehouseId   String?
+  autoInvoice          Boolean @default(false)
+  enableRazorpayB2C    Boolean @default(true) // Added for WhatsApp storefront
+  paymentReminderDays  Int[]   @default([3, 7, 15, 30])
   whatsappBriefingTime String? @default("08:00") // HH:mm format
-  language            String   @default("en")
+  language             String  @default("en")
 
   // Bank & payment details (shown on invoice PDF)
-  bankName            String?
-  bankAccountNumber   String?
-  bankIfscCode        String?
-  bankBranch          String?
-  upiId               String?
+  bankName          String?
+  bankAccountNumber String?
+  bankIfscCode      String?
+  bankBranch        String?
+  upiId             String?
 
   // Meta Marketing API integration (Phase 11)
-  metaAccessToken     String?   // AES-256-GCM encrypted
-  metaAdAccountId     String?
-  metaFbPageId        String?   // Required for Ad Creative object_story_spec
-  metaInstagramActorId String?  // IG business account linked to the FB Page
-  metaTokenExpiresAt  DateTime?
-  consentGivenAt      DateTime? // Must be set before audience upload
+  metaAccessToken      String? // AES-256-GCM encrypted
+  metaAdAccountId      String?
+  metaFbPageId         String? // Required for Ad Creative object_story_spec
+  metaInstagramActorId String? // IG business account linked to the FB Page
+  metaTokenExpiresAt   DateTime?
+  consentGivenAt       DateTime? // Must be set before audience upload
 
-  updatedAt           DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }
 
 model LocationRequest {
-  id         String   @id @default(cuid())
+  id         String        @id @default(cuid())
   orgId      String
   customerId String
-  token      String   @unique
+  token      String        @unique
   status     RequestStatus @default(PENDING)
   expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@index([orgId, customerId])
@@ -1106,39 +1116,82 @@ model MarketingCampaign {
   metaCampaignId   String    @unique
   metaAdsetId      String?
   metaAdId         String?
-  objective        String    // MESSAGES | CATALOG_SALES | REACH
-  platform         String[]  // ["facebook", "instagram", "whatsapp"]
-  userType         String    // B2B | B2C
+  objective        String // MESSAGES | CATALOG_SALES | REACH
+  platform         String[] // ["facebook", "instagram", "whatsapp"]
+  userType         String // B2B | B2C
   dailyBudget      Decimal
   totalSpend       Decimal   @default(0)
-  status           String    // ACTIVE | PAUSED | DELETED | ERROR
+  status           String // ACTIVE | PAUSED | DELETED | ERROR
   errorReason      String?
   utmCampaignId    String    @unique
-  customAudienceId String?   // Meta Custom Audience ID, if uploaded
+  customAudienceId String? // Meta Custom Audience ID, if uploaded
   startDate        DateTime
   endDate          DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  organization     Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  metrics          CampaignMetrics[]
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  metrics      CampaignMetrics[]
 
   @@index([orgId])
   @@index([status])
 }
 
 model CampaignMetrics {
-  id               String    @id @default(cuid())
+  id               String   @id @default(cuid())
   campaignId       String
-  date             DateTime  @db.Date
-  impressions      Int       @default(0)
-  clicks           Int       @default(0)
-  messagesStarted  Int       @default(0)
-  spend            Decimal   @default(0)
-  ordersGenerated  Int       @default(0)
-  revenueGenerated Decimal   @default(0)
+  date             DateTime @db.Date
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  messagesStarted  Int      @default(0)
+  spend            Decimal  @default(0)
+  ordersGenerated  Int      @default(0)
+  revenueGenerated Decimal  @default(0)
 
-  campaign         MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, date])
+}
+
+model CustomerTransaction {
+  id            String                  @id @default(cuid())
+  orgId         String
+  customerId    String
+  date          DateTime                @db.Date
+  type          CustomerTransactionType
+  description   String?
+  amount        Decimal                 @db.Decimal(12, 2)
+  paymentMethod PaymentMethod?
+  reference     String?
+  notes         String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  organization Organization              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items        CustomerTransactionItem[]
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([date])
+  @@index([orgId, customerId, date])
+}
+
+model CustomerTransactionItem {
+  id            String   @id @default(cuid())
+  transactionId String
+  productId     String?
+  productName   String
+  quantity      Decimal  @db.Decimal(10, 2)
+  unitPrice     Decimal  @db.Decimal(12, 2)
+  amount        Decimal  @db.Decimal(12, 2)
+  unit          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transaction CustomerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product     Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([transactionId])
+  @@index([productId])
 }

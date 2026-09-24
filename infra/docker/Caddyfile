@@ -23,6 +23,24 @@
 	}
 }
 
+# Redirect www to apex domain with SSL
+www.{$DOMAIN:localhost} {
+	redir https://{$DOMAIN:localhost}{uri} permanent
+}
+
+# Plain HTTP fallback — directly proxy /api/* to avoid 308 redirect drops on mobile POSTs, and redirect everything else to HTTPS
+http://{$DOMAIN:localhost}, http://www.{$DOMAIN:localhost} {
+	handle /api/* {
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-Proto http
+			header_up X-Real-IP {remote_host}
+		}
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
 # Main domain — routes /api/* to API, everything else to Next.js standalone
 {$DOMAIN:localhost} {
 	import security_headers

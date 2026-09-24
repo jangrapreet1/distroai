@@ -1,20 +1,17 @@
-# ── Ignore for Docker builds ──
-.env
-.env.*
 node_modules
 .git
 .github
+*.md
+.env*
 .turbo
-.cursor
-.next
 dist
-coverage
+.next
 __tests__
 *.test.ts
 *.spec.ts
-*.md
-!pnpm-workspace.yaml
+coverage
+infra
 
-# Logs and temp files
-*.log
-.DS_Store
+venv
+.venv
+apps/ai-service/venv

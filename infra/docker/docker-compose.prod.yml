@@ -26,7 +26,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - distroai
+      distroai:
+        ipv4_address: 172.18.0.2
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-distroai}"]
@@ -43,7 +44,8 @@ services:
       - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
       - redis_data:/data
     networks:
-      - distroai
+      distroai:
+        ipv4_address: 172.18.0.3
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $REDIS_PASSWORD ping | grep PONG"]
@@ -64,7 +66,8 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - distroai
+      distroai:
+        ipv4_address: 172.18.0.4
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
@@ -92,12 +95,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      ai-service:
-        condition: service_healthy
+    extra_hosts:
+      - "postgres:172.18.0.2"
+      - "redis:172.18.0.3"
+      - "ai-service:172.18.0.4"
     networks:
-      - distroai
+      distroai:
+        ipv4_address: 172.18.0.5
     volumes:
       - uploads_data:/tmp/distroai-uploads
+    init: true
     restart: unless-stopped
 
   # ─── BullMQ Background Worker ───────────────────────────
@@ -119,10 +126,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "postgres:172.18.0.2"
+      - "redis:172.18.0.3"
+      - "ai-service:172.18.0.4"
     networks:
-      - distroai
+      distroai:
+        ipv4_address: 172.18.0.8
     volumes:
       - uploads_data:/tmp/distroai-uploads
+    init: true
     restart: unless-stopped
 
   # ─── Next.js Standalone Frontend ────────────────────────
@@ -138,8 +151,12 @@ services:
       API_INTERNAL_URL: http://api:3000
     depends_on:
       - api
+    extra_hosts:
+      - "api:172.18.0.5"
     networks:
-      - distroai
+      distroai:
+        ipv4_address: 172.18.0.7
+    init: true
     restart: unless-stopped
 
   # ─── Caddy Reverse Proxy (Auto-SSL + Security Headers) ──
@@ -157,8 +174,12 @@ services:
     depends_on:
       - api
       - web
+    extra_hosts:
+      - "api:172.18.0.5"
+      - "web:172.18.0.7"
     networks:
-      - distroai
+      distroai:
+        ipv4_address: 172.18.0.6
     restart: unless-stopped
 
 volumes:
@@ -171,3 +192,6 @@ volumes:
 networks:
   distroai:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16

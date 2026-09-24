@@ -2,8 +2,8 @@
     "name": "@distroai/db",
     "version": "1.0.0",
     "private": true,
-    "main": "index.ts",
-    "types": "index.ts",
+    "main": "index.js",
+    "types": "index.d.ts",
     "scripts": {
         "lint": "eslint \"**/*.ts*\"",
         "build": "tsc",

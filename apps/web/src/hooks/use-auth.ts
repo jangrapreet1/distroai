@@ -87,7 +87,11 @@ export function useAuth() {
         onSuccess: (data) => {
             setAuth(data.user, data.org, data.tokens);
             toast.success(`Welcome, ${data.user.firstName}!`);
-            router.push("/");
+            if (!data.user.phone) {
+                router.push("/onboarding");
+            } else {
+                router.push("/dashboard");
+            }
         },
         onError: () => {
             logout();

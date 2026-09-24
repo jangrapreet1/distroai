@@ -38,6 +38,7 @@ import { PortalModule } from './portal/portal.module';
 import { MarketingModule } from './marketing/marketing.module';
 import { CreditNotesModule } from './credit-notes/credit-notes.module';
 import { EventsModule } from './events/events.module';
+import { CustomerTransactionsModule } from './customer-transactions/customer-transactions.module';
 
 @Module({
     imports: [
@@ -73,6 +74,7 @@ import { EventsModule } from './events/events.module';
         OrdersModule,
         InvoicesModule,
         PaymentsModule,
+        CustomerTransactionsModule,
         AnalyticsModule,
         PurchaseOrdersModule,
         AuditModule,
