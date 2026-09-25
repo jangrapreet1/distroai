@@ -13,6 +13,10 @@ export class UpdateOrgDto {
     @IsOptional() @IsString() pincode?: string;
     @IsOptional() @IsString() logoUrl?: string;
     @IsOptional() @IsString() website?: string;
+    @IsOptional() @IsString() businessType?: string;
+    @IsOptional() @IsString() sector?: string;
+    @IsOptional() @IsString() gstNumber?: string;
+    @IsOptional() @IsString() panNumber?: string;
     @IsOptional() @IsString() @Matches(/^[a-z0-9-]+$/, { message: 'Slug must contain only lowercase letters, numbers, and hyphens' })
     slug?: string;
 }
