@@ -3,10 +3,12 @@ import { formatINR, exportToCSV } from "@/lib/utils";
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Upload, X } from "lucide-react";
+import { Plus, Search, Upload, X, FileSpreadsheet } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCustomers } from "@/hooks/api-hooks";
 import toast from "react-hot-toast";
 import { AddCustomerModal } from "@/components/AddCustomerModal";
+import { ExcelImportModal } from "@/components/excel-import-modal";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 
@@ -30,10 +32,12 @@ function ScoreRing({ score, size = 28 }: { score: number; size?: number }) {
 }
 
 export default function CustomersPage() {
+    const queryClient = useQueryClient();
     const [tab, setTab] = useState("All");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [showAdd, setShowAdd] = useState(false);
+    const [showImport, setShowImport] = useState(false);
     const { t } = useLanguage();
 
     const TAB_LABELS: Record<string, string> = {
@@ -61,7 +65,8 @@ export default function CustomersPage() {
         <div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                 <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{t('customers')}</h1>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--gold)]/40 bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 transition font-medium"><FileSpreadsheet size={15} /> Import Excel</button>
                     <button onClick={() => exportToCSV("customers", customers)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Upload size={14} /> Export</button>
                     <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] transition"><Plus size={16} /> {t('add_customer')}</button>
                 </div>
@@ -139,6 +144,14 @@ export default function CustomersPage() {
             </div>
 
             <AddCustomerModal open={showAdd} onClose={() => setShowAdd(false)} />
+            <ExcelImportModal
+                isOpen={showImport}
+                onClose={() => setShowImport(false)}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ["customers"] });
+                }}
+                type="customers"
+            />
         </div>
     );
 }

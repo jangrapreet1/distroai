@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter, Package, Send, X } from "lucide-react";
+import { Plus, Search, Filter, Package, Send, X, FileSpreadsheet } from "lucide-react";
 import toast from "react-hot-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { useOrders, useOrderAction, useBulkOrderAction } from "@/hooks/api-hooks";
 import { formatDate, buildWhatsAppInvoiceLink, formatINR, exportToCSV } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ExcelImportModal } from "@/components/excel-import-modal";
 
 const STATUS_TABS = ["All", "Portal", "DRAFT", "CONFIRMED", "PACKED", "DISPATCHED", "DELIVERED", "CANCELLED"] as const;
 const statusClass: Record<string, string> = {
@@ -15,10 +17,12 @@ const statusClass: Record<string, string> = {
 };
 
 export default function OrdersPage() {
+    const queryClient = useQueryClient();
     const [status, setStatus] = useState<typeof STATUS_TABS[number]>("All");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+    const [showImport, setShowImport] = useState(false);
     const { t } = useLanguage();
     const bulkOrder = useBulkOrderAction();
 
@@ -92,6 +96,9 @@ export default function OrdersPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                 <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{t('orders')}</h1>
                 <div className="flex items-center gap-2">
+                    <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-3 py-2.5 text-sm rounded-[var(--radius-md)] border border-[var(--gold)]/40 bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 transition font-medium">
+                        <FileSpreadsheet size={15} /> Import Orders
+                    </button>
                     <button onClick={() => exportToCSV("orders-export", orders)} className="flex items-center gap-1.5 px-3 py-2.5 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition">
                         Export CSV
                     </button>
@@ -256,6 +263,15 @@ export default function OrdersPage() {
                     </div>
                 </div>
             )}
+
+            <ExcelImportModal
+                isOpen={showImport}
+                onClose={() => setShowImport(false)}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ["orders"] });
+                }}
+                type="orders"
+            />
         </div>
     );
 }

@@ -20,8 +20,9 @@ RUN pnpm config set fetch-retries 5 && \
     pnpm install --filter @distroai/api... --frozen-lockfile
 RUN npx prisma generate --schema=packages/db/prisma/schema.prisma
 ENV NODE_OPTIONS="--max-old-space-size=2048"
-RUN cd apps/api && pnpm run build
-RUN npx -y tsc-alias -p apps/api/tsconfig.json
+RUN cd apps/api && (/app/node_modules/.bin/nest build || npx nest build)
+RUN /app/node_modules/.bin/tsc-alias -p apps/api/tsconfig.json || npx -y tsc-alias -p apps/api/tsconfig.json
+
 
 # =========================================================
 # Stage 2: Runner — minimal production image

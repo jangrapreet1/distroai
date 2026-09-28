@@ -1,6 +1,11 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+    Controller, Get, Post, Patch, Body, Param, Query,
+    UseGuards, UseInterceptors, UploadedFile, Res,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
+import { OrdersImportService, GroupedImportOrder, OrderImportLineRow } from './orders-import.service';
 import { CreateOrderDto, UpdateDraftOrderDto, ReturnOrderDto, DispatchOrderDto, ListOrdersQueryDto, MarkPaidDto } from './dto/orders.dto';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -10,7 +15,38 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @Controller('orders')
 export class OrdersController {
-    constructor(private readonly orders: OrdersService) { }
+    constructor(
+        private readonly orders: OrdersService,
+        private readonly ordersImport: OrdersImportService,
+    ) { }
+
+    @Post('import/preview')
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(FileInterceptor('file'))
+    previewImport(@CurrentUser() u: JwtPayload, @UploadedFile() file: any) {
+        return this.ordersImport.parseOrderExcel(u.orgId, file?.buffer);
+    }
+
+    @Post('import/execute')
+    async executeImport(
+        @CurrentUser() u: JwtPayload,
+        @Body() body: { orders?: GroupedImportOrder[]; rows?: OrderImportLineRow[]; options?: any },
+    ) {
+        let ordersToImport = body.orders;
+        if ((!ordersToImport || ordersToImport.length === 0) && body.rows) {
+            ordersToImport = await this.ordersImport.groupOrderRows(u.orgId, body.rows);
+        }
+        return this.ordersImport.executeOrderImport(u.orgId, ordersToImport || [], u.sub);
+    }
+
+    @Get('import/template')
+    downloadTemplate(@Res() res: any) {
+        const buffer = this.ordersImport.generateOrderTemplate();
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="orders-template.xlsx"');
+        return res.send(buffer);
+    }
+
     @Get() findAll(@CurrentUser() u: JwtPayload, @Query() q: ListOrdersQueryDto) { return this.orders.findAll(u.orgId, q); }
     @Post() create(@CurrentUser() u: JwtPayload, @Body() dto: CreateOrderDto) { return this.orders.create(u.orgId, dto, u.sub); }
     @Get(':id') findOne(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.findOne(u.orgId, id); }

@@ -1,6 +1,11 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+    Controller, Get, Post, Patch, Body, Param, Query,
+    UseGuards, UseInterceptors, UploadedFile, Res,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
+import { CustomersImportService, CustomerImportRow, CustomerImportOptions } from './customers-import.service';
 import { CreateCustomerDto, UpdateCustomerDto, ListCustomersQueryDto, DormantQueryDto } from './dto/customers.dto';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -10,7 +15,33 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @Controller('customers')
 export class CustomersController {
-    constructor(private readonly customers: CustomersService) { }
+    constructor(
+        private readonly customers: CustomersService,
+        private readonly customersImport: CustomersImportService,
+    ) { }
+
+    @Post('import/preview')
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(FileInterceptor('file'))
+    previewImport(@CurrentUser() user: JwtPayload, @UploadedFile() file: any) {
+        return this.customersImport.parseCustomerExcel(user.orgId, file?.buffer);
+    }
+
+    @Post('import/execute')
+    executeImport(
+        @CurrentUser() user: JwtPayload,
+        @Body() body: { rows: CustomerImportRow[]; options?: CustomerImportOptions },
+    ) {
+        return this.customersImport.executeCustomerImport(user.orgId, body.rows, body.options);
+    }
+
+    @Get('import/template')
+    downloadTemplate(@Res() res: any) {
+        const buffer = this.customersImport.generateCustomerTemplate();
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="customers-template.xlsx"');
+        return res.send(buffer);
+    }
 
     @Get()
     findAll(@CurrentUser() user: JwtPayload, @Query() query: ListCustomersQueryDto) { return this.customers.findAll(user.orgId, query); }
