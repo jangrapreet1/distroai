@@ -9,6 +9,7 @@ export function middleware(request: NextRequest) {
     // Allow public paths, landing page, and static files
     if (
         pathname === "/" ||
+        pathname === "/sw.js" ||
         publicPaths.some((p) => pathname.startsWith(p)) ||
         pathname.startsWith("/_next") ||
         pathname.startsWith("/api") ||
@@ -39,5 +40,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json).*)"],
+    matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js).*)"],
 };

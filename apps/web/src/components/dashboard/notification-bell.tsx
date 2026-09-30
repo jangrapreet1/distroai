@@ -26,14 +26,25 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [notifOpen]);
 
-    const [lastReadTs, setLastReadTs] = useState(() => {
-        if (typeof window === 'undefined') return 0;
-        return Number(localStorage.getItem('notif-read-ts') || '0');
-    });
+    const [lastReadTs, setLastReadTs] = useState(0);
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem('notif-read-ts');
+            if (stored) setLastReadTs(Number(stored));
+        } catch {
+            // Ignore storage errors in private browsing
+        }
+    }, []);
+
     const unreadCount = useMemo(() => notifications.filter(n => n.ts > lastReadTs).length, [notifications, lastReadTs]);
     const markAllRead = () => {
         const now = Date.now();
-        localStorage.setItem('notif-read-ts', String(now));
+        try {
+            localStorage.setItem('notif-read-ts', String(now));
+        } catch {
+            // Ignore storage errors in private browsing
+        }
         setLastReadTs(now);
     };
 

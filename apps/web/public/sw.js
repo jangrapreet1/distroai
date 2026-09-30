@@ -1,7 +1,9 @@
-// DistroAI Service Worker — Cache-first for static assets, network-first for API calls
-const CACHE_NAME = 'distroai-v1';
+// DistroAI Service Worker — v2
+// Network-first for HTML navigations and API calls to prevent stale ChunkLoadErrors across deployments.
+// Cache-first only for immutable hashed Next.js static assets.
+
+const CACHE_NAME = 'distroai-v2';
 const STATIC_ASSETS = [
-    '/',
     '/manifest.json',
 ];
 
@@ -23,15 +25,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
     const { request } = event;
+
+    // Only handle GET requests
+    if (request.method !== 'GET') {
+        return;
+    }
+
     const url = new URL(request.url);
 
-    // Network-first for API calls
+    // 1. Network-first for API calls
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(
             fetch(request)
                 .then((response) => {
-                    // Cache successful GET responses
-                    if (request.method === 'GET' && response.ok) {
+                    if (response.ok) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
                     }
@@ -42,17 +49,59 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Cache-first for static assets
+    // 2. Network-first for HTML / Navigation requests (Critical: ensures latest Next.js chunk references)
+    const isNavigation = request.mode === 'navigate' ||
+        (request.headers.get('accept') && request.headers.get('accept').includes('text/html'));
+
+    if (isNavigation) {
+        event.respondWith(
+            fetch(request)
+                .then((response) => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                    }
+                    return response;
+                })
+                .catch(async () => {
+                    const cached = await caches.match(request);
+                    if (cached) return cached;
+                    // Fallback to cached root if available
+                    return caches.match('/');
+                })
+        );
+        return;
+    }
+
+    // 3. Cache-first for Next.js immutable static chunks (/_next/static/*)
+    if (url.pathname.startsWith('/_next/static/')) {
+        event.respondWith(
+            caches.match(request).then((cached) => {
+                if (cached) return cached;
+                return fetch(request).then((response) => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                    }
+                    return response;
+                });
+            })
+        );
+        return;
+    }
+
+    // 4. Stale-while-revalidate for other assets (images, icons, fonts)
     event.respondWith(
         caches.match(request).then((cached) => {
-            if (cached) return cached;
-            return fetch(request).then((response) => {
-                if (response.ok && request.method === 'GET') {
+            const fetchPromise = fetch(request).then((response) => {
+                if (response.ok) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
                 }
                 return response;
-            });
+            }).catch(() => null);
+
+            return cached || fetchPromise;
         })
     );
 });
