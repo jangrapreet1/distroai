@@ -44,8 +44,17 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${playfair.variable} ${baseFont.variable} ${jetbrainsMono.variable}`}
+      style={{ backgroundColor: "#07070E", color: "#EDEDEF" }}
     >
-      <body className="antialiased">
+      <body
+        className="antialiased"
+        style={{
+          backgroundColor: "#07070E",
+          color: "#EDEDEF",
+          margin: 0,
+          minHeight: "100vh",
+        }}
+      >
         <Providers>
           <ThemeProvider>
             {children}
@@ -73,9 +82,31 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // 1. Immediately purge legacy cache stores (e.g. distroai-v1, distroai-v2)
+              if ('caches' in window) {
+                caches.keys().then(function(keys) {
+                  keys.forEach(function(k) {
+                    if (k !== 'distroai-v3') caches.delete(k);
+                  });
+                });
+              }
+
+              // 2. Auto-recover if external stylesheet fails to load
+              window.addEventListener('error', function(e) {
+                if (e.target && e.target.tagName === 'LINK' && e.target.rel === 'stylesheet') {
+                  if (!sessionStorage.getItem('css_reload_attempted')) {
+                    sessionStorage.setItem('css_reload_attempted', '1');
+                    window.location.reload();
+                  }
+                }
+              }, true);
+
+              // 3. Register service worker and trigger update
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                    reg.update();
+                  }).catch(function() {});
                 });
               }
             `,

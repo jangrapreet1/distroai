@@ -1,8 +1,8 @@
-// DistroAI Service Worker — v2
+// DistroAI Service Worker — v3
 // Network-first for HTML navigations and API calls to prevent stale ChunkLoadErrors across deployments.
-// Cache-first only for immutable hashed Next.js static assets.
+// Cache-first only for immutable hashed Next.js static assets with graceful network catch.
 
-const CACHE_NAME = 'distroai-v2';
+const CACHE_NAME = 'distroai-v3';
 const STATIC_ASSETS = [
     '/manifest.json',
 ];
@@ -84,6 +84,8 @@ self.addEventListener('fetch', (event) => {
                         caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
                     }
                     return response;
+                }).catch(() => {
+                    return caches.match(request);
                 });
             })
         );

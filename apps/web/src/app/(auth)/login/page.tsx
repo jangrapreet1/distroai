@@ -140,9 +140,18 @@ const benefits = [
 
 export default function LoginPage() {
     return (
-        <div className="min-h-screen flex">
+        <div className="min-h-screen flex" style={{ backgroundColor: "#07070E", color: "#EDEDEF" }}>
+            <style
+                dangerouslySetInnerHTML={{
+                    __html: `
+                        @media (max-width: 1023px) {
+                            .login-left-panel { display: none !important; }
+                        }
+                    `,
+                }}
+            />
             {/* Left Panel */}
-            <div className="hidden lg:flex lg:w-1/2 bg-[var(--bg-secondary)] flex-col justify-center px-16 relative overflow-hidden">
+            <div className="login-left-panel hidden lg:flex lg:w-1/2 bg-[var(--bg-secondary)] flex-col justify-center px-16 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-[var(--gold)]/5 via-transparent to-[var(--purple)]/5" />
                 <div className="relative z-10">
                     <div className="mb-2 text-[var(--gold)]">
