@@ -5,6 +5,7 @@ import { renderToBuffer } from '@react-pdf/renderer';
 import React from 'react';
 import * as QRCode from 'qrcode';
 import InvoicePDF from './invoice.document';
+import { ensureReactPdfCompat } from '../common/utils/react-pdf-compat';
 
 @Injectable()
 export class InvoicePdfService {
@@ -52,6 +53,7 @@ export class InvoicePdfService {
     }
 
     // 2. Build PDF content using @react-pdf/renderer
+    ensureReactPdfCompat(React);
     const pdfBuffer = await renderToBuffer(React.createElement(InvoicePDF as any, { invoice }) as any);
 
     const key = `invoices/${invoice.orgId}/${invoiceId}.pdf`;

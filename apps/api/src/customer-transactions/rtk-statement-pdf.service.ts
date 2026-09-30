@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { RTKStatementData } from './rtk-statement.document';
+import { ensureReactPdfCompat } from '../common/utils/react-pdf-compat';
 
 @Injectable()
 export class RtkStatementPdfService {
@@ -21,6 +22,8 @@ export class RtkStatementPdfService {
     const { renderToBuffer } = ReactPDF;
     const { RTKStatementPDFDocument } = require('./rtk-statement.document');
     const React = require('react');
+
+    ensureReactPdfCompat(React);
 
     const doc = React.createElement(RTKStatementPDFDocument, {
       statement,
