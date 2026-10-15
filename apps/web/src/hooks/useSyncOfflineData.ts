@@ -40,16 +40,19 @@ export function useSyncOfflineData() {
     }, []);
 
     useEffect(() => {
-        // Initial sync when mounted (e.g., when user opens app)
-        syncProducts();
+        // Defer initial offline sync by 5 seconds so initial dashboard and UI queries load at full speed
+        const initialTimer = setTimeout(() => {
+            syncProducts();
+        }, 5000);
 
         // Sync when device comes back online
         window.addEventListener('online', syncProducts);
 
-        // Optional: periodic sync every 5 minutes while app is open
-        const intervalId = setInterval(syncProducts, 5 * 60 * 1000);
+        // Optional: periodic sync every 10 minutes while app is open
+        const intervalId = setInterval(syncProducts, 10 * 60 * 1000);
 
         return () => {
+            clearTimeout(initialTimer);
             window.removeEventListener('online', syncProducts);
             clearInterval(intervalId);
         };

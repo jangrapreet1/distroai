@@ -23,7 +23,7 @@ export class AnalyticsService {
         const [
             todayOrders, todayRevenue, monthOrders, monthRevenue,
             newCustomers, collections, topProducts, topCustomers, recentOrders,
-            inventory, recentLocationUpdates
+            inventory, recentLocationUpdates, totalOutstanding, totalCredit
         ] = await Promise.all([
             this.prisma.order.count({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }),
             this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' }, _sum: { netAmount: true } }),
@@ -34,8 +34,10 @@ export class AnalyticsService {
             this.prisma.orderItem.groupBy({ by: ['productId'], where: { order: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }, _sum: { totalAmount: true }, orderBy: { _sum: { totalAmount: 'desc' } }, take: 5 }),
             this.prisma.customer.findMany({ where: { orgId }, orderBy: { outstandingAmount: 'desc' }, take: 5, select: { id: true, name: true, outstandingAmount: true, paymentScore: true } }),
             this.prisma.order.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' }, take: 10, include: { customer: { select: { name: true } } } }),
-            this.prisma.inventory.findMany({ where: { orgId }, include: { product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
+            this.prisma.inventory.findMany({ where: { orgId }, select: { quantity: true, product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
             this.prisma.locationRequest.findMany({ where: { orgId, status: 'COMPLETED' }, orderBy: { updatedAt: 'desc' }, take: 5, include: { customer: { select: { name: true } } } }),
+            this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { gt: 0 } }, _sum: { outstandingAmount: true } }),
+            this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { lt: 0 } }, _sum: { outstandingAmount: true } }),
         ]);
 
         const lowStockCount = inventory.filter((i: any) => i.quantity <= i.product.minStockLevel).length;
@@ -43,8 +45,6 @@ export class AnalyticsService {
             const factor = i.product.conversionFactor || 1;
             return s + ((i.quantity / factor) * i.product.purchasePrice);
         }, 0);
-        const totalOutstanding = await this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { gt: 0 } }, _sum: { outstandingAmount: true } });
-        const totalCredit = await this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { lt: 0 } }, _sum: { outstandingAmount: true } });
 
         // Enrich topProducts with product names
         const productIds = topProducts.map((p: any) => p.productId);

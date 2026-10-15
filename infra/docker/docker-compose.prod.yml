@@ -22,7 +22,10 @@ services:
       -c wal_level=logical
       -c archive_mode=on
       -c archive_command='wal-push-safe "%p"'
-      -c archive_timeout=60
+      -c archive_timeout=300
+      -c shared_buffers=32MB
+      -c max_connections=40
+      -c work_mem=2MB
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -90,6 +93,7 @@ services:
       JWT_ACCESS_SECRET: ${JWT_SECRET}
       AI_SERVICE_URL: http://ai-service:8000
       PORT: 3000
+      NODE_OPTIONS: "--max-old-space-size=120"
     depends_on:
       postgres:
         condition: service_healthy
@@ -149,6 +153,7 @@ services:
     container_name: distroai_web
     environment:
       API_INTERNAL_URL: http://api:3000
+      NODE_OPTIONS: "--max-old-space-size=120"
     depends_on:
       - api
     extra_hosts:
