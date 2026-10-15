@@ -44,26 +44,37 @@ export default function DashboardPage() {
 
     useEffect(() => {
         if (!token) return;
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-        const eventSource = new EventSource(`${apiUrl}/api/v1/events/stream?token=${token}`);
+        let eventSource: EventSource | null = null;
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+            eventSource = new EventSource(`${apiUrl}/api/v1/events/stream?token=${token}`);
 
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type) {
-                    refetch();
-                    toast(`Dashboard updated via ${data.type.replace(":", " ")}`, {
-                        icon: "🔄",
-                        id: "sse-update",
-                    });
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type) {
+                        refetch();
+                        toast(`Dashboard updated via ${data.type.replace(":", " ")}`, {
+                            icon: "🔄",
+                            id: "sse-update",
+                        });
+                    }
+                } catch (e) {
+                    // Ignore parse errors
                 }
-            } catch (e) {
-                // Ignore parse errors
-            }
-        };
+            };
+
+            eventSource.onerror = () => {
+                eventSource?.close();
+            };
+        } catch (e) {
+            console.warn("EventSource could not be initialized:", e);
+        }
 
         return () => {
-            eventSource.close();
+            if (eventSource) {
+                eventSource.close();
+            }
         };
     }, [token, refetch]);
 
