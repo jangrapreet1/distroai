@@ -2,8 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Sparkles, Package, Users, BarChart3, Clock, MessageSquare } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useAuthStore } from "@/stores/auth.store";
-import { OfflineScanner } from "@/components/Scanner/OfflineScanner";
+
+const OfflineScanner = dynamic(
+    () => import("@/components/Scanner/OfflineScanner").then((m) => m.OfflineScanner),
+    { ssr: false }
+);
 import { ChatMessage } from "@/components/ai/chat-message";
 import { ChatSidebar } from "@/components/ai/chat-sidebar";
 import { ChatInput } from "@/components/ai/chat-input";

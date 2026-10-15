@@ -47,8 +47,6 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['OWNER', 'ADMIN', 'MANAGER'],
         items: [
             { label: "analytics", href: "/analytics", icon: BarChart3 },
-            { label: "AI Chat", href: "/ai", icon: Sparkles },
-            { label: "Ads", href: "/ads", icon: Megaphone, roles: ['OWNER', 'ADMIN'] },
         ],
     },
     {

@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  compress: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "date-fns", "recharts", "@tanstack/react-query"],
+  },
   async rewrites() {
     return [
       {

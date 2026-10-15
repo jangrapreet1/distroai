@@ -21,13 +21,9 @@ scp -o GSSAPIAuthentication=no -o StrictHostKeyChecking=no -i ~/.ssh/oci.key /tm
 
 echo "=== 6. Extracting into distroai_web container and restarting ==="
 ssh -T -o GSSAPIAuthentication=no -o StrictHostKeyChecking=no -i ~/.ssh/oci.key opc@144.24.130.2 << 'EOF'
-sudo docker cp /tmp/web-standalone.tar.gz distroai_web:/tmp/web-standalone.tar.gz
-sudo docker cp /tmp/web-static.tar.gz distroai_web:/tmp/web-static.tar.gz
-sudo docker cp /tmp/web-public.tar.gz distroai_web:/tmp/web-public.tar.gz
-
-sudo docker exec -u 0 distroai_web tar --no-same-owner --overwrite -xzf /tmp/web-standalone.tar.gz -C /app/
-sudo docker exec -u 0 distroai_web tar --no-same-owner --overwrite -xzf /tmp/web-static.tar.gz -C /app/apps/web/.next/
-sudo docker exec -u 0 distroai_web tar --no-same-owner --overwrite -xzf /tmp/web-public.tar.gz -C /app/apps/web/
+sudo docker exec -u 0 -i distroai_web tar --no-same-owner --overwrite -xz -C /app/ < /tmp/web-standalone.tar.gz
+sudo docker exec -u 0 -i distroai_web tar --no-same-owner --overwrite -xz -C /app/apps/web/.next/ < /tmp/web-static.tar.gz
+sudo docker exec -u 0 -i distroai_web tar --no-same-owner --overwrite -xz -C /app/apps/web/ < /tmp/web-public.tar.gz
 sudo docker exec -u 0 distroai_web chown -R 1001:1001 /app
 sudo docker restart -t 2 distroai_web
 

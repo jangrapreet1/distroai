@@ -3,7 +3,6 @@ import { Playfair_Display, Outfit, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "./providers";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
-import { FacebookSDK } from "@/components/facebook-sdk";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -78,7 +77,6 @@ export default function RootLayout({
             }}
           />
         </Providers>
-        <FacebookSDK />
         <script
           dangerouslySetInnerHTML={{
             __html: `
