@@ -121,11 +121,11 @@ export default function ProductDetailPage({
                     {/* Pricing */}
                     <div className="mt-6 flex items-baseline gap-3">
                         <span className="text-3xl font-bold text-[var(--gold)] font-mono">
-                            ₹{product.price.toLocaleString("en-IN")}
+                            ₹{(product.price ?? 0).toLocaleString("en-IN")}
                         </span>
                         {product.isB2B && product.price < product.originalPrice && (
                             <span className="text-lg text-zinc-500 line-through font-mono">
-                                ₹{product.originalPrice.toLocaleString("en-IN")}
+                                ₹{(product.originalPrice ?? 0).toLocaleString("en-IN")}
                             </span>
                         )}
                         {product.isB2B && (
@@ -217,7 +217,7 @@ export default function ProductDetailPage({
                                 </div>
                                 <div className="p-3">
                                     <h3 className="text-sm font-semibold text-zinc-200 line-clamp-1">{rp.name}</h3>
-                                    <p className="text-sm font-bold text-[var(--gold)] font-mono mt-1">₹{rp.price.toLocaleString("en-IN")}</p>
+                                    <p className="text-sm font-bold text-[var(--gold)] font-mono mt-1">₹{(rp.price ?? 0).toLocaleString("en-IN")}</p>
                                 </div>
                             </Link>
                         ))}

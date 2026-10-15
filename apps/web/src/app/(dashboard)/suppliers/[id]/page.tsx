@@ -24,7 +24,7 @@ export default function SupplierDetailPage() {
     if (!supplier) return <div className="p-12 text-center text-[var(--red)]">Supplier not found</div>;
 
     const totalPos = Array.isArray(pos) ? pos.length : 0;
-    const totalSpent = Array.isArray(pos) ? pos.reduce((s: number, po: any) => s + (po.netAmount || 0), 0) : 0;
+    const totalSpent = Array.isArray(pos) ? pos.reduce((s: number, po: any) => s + (po.netAmount || po.totalAmount || 0), 0) : 0;
     const itemsPending = Array.isArray(pos) ? pos.filter(po => po.status === "ISSUED").length : 0;
 
     return (
@@ -113,7 +113,7 @@ export default function SupplierDetailPage() {
                                                         {po.status}
                                                     </span>
                                                 </td>
-                                                <td className="py-3 px-2 text-right font-medium" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(po.netAmount)}</td>
+                                                <td className="py-3 px-2 text-right font-medium" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(po.netAmount ?? po.totalAmount ?? 0)}</td>
                                             </tr>
                                         ))
                                     )}

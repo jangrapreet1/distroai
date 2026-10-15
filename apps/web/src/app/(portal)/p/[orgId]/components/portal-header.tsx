@@ -99,7 +99,7 @@ export function PortalHeader({ storeInfo }: { storeInfo: StoreInfo | undefined }
                                             <div className="p-3 border-b border-[#222]">
                                                 <p className="text-sm font-semibold text-white truncate">{auth.customer.name}</p>
                                                 <p className="text-xs text-zinc-500 mt-0.5">
-                                                    Balance: <span className="text-[var(--gold)] font-mono">₹{auth.customer.outstandingAmount.toLocaleString("en-IN")}</span>
+                                                    Balance: <span className="text-[var(--gold)] font-mono">₹{(auth.customer.outstandingAmount ?? 0).toLocaleString("en-IN")}</span>
                                                 </p>
                                             </div>
                                             <Link

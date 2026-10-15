@@ -163,8 +163,8 @@ export default function OrderDetailPage({
                                 <p className="text-xs text-zinc-500">{item.product.category} · {item.product.unit}</p>
                             </div>
                             <div className="text-right shrink-0">
-                                <p className="text-sm font-mono text-white">₹{item.totalAmount.toLocaleString("en-IN")}</p>
-                                <p className="text-xs text-zinc-500">{item.quantity} × ₹{item.price.toLocaleString("en-IN")}</p>
+                                <p className="text-sm font-mono text-white">₹{(item.totalAmount ?? 0).toLocaleString("en-IN")}</p>
+                                <p className="text-xs text-zinc-500">{item.quantity} × ₹{(item.price ?? 0).toLocaleString("en-IN")}</p>
                             </div>
                         </div>
                     ))}
@@ -174,7 +174,7 @@ export default function OrderDetailPage({
                 <div className="p-4 border-t border-[#333] bg-[#0a0a0a]">
                     <div className="flex justify-between items-center">
                         <span className="text-zinc-400 font-medium">Total</span>
-                        <span className="text-xl font-bold font-mono text-[var(--gold)]">₹{order.totalAmount.toLocaleString("en-IN")}</span>
+                        <span className="text-xl font-bold font-mono text-[var(--gold)]">₹{(order.totalAmount ?? 0).toLocaleString("en-IN")}</span>
                     </div>
                 </div>
             </div>

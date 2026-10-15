@@ -60,7 +60,7 @@ export function UpiPaymentModal({
                         <span>Instant NPCI UPI Settlement</span>
                     </div>
                     <h3 className="text-xl font-bold text-[var(--text-primary)]">
-                        Pay ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        Pay ₹{(amount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </h3>
                     <p className="text-xs text-[var(--text-secondary)]">
                         For Invoice <span className="font-mono font-bold text-[var(--gold)]">{invoiceNumber}</span> • {orgName}
@@ -99,7 +99,7 @@ export function UpiPaymentModal({
                     <div className="flex items-center justify-between text-xs">
                         <span className="text-[var(--text-secondary)]">Payable Amount:</span>
                         <span className="font-mono font-bold text-[var(--green-bright)]">
-                            ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            ₹{(amount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </span>
                     </div>
                 </div>

@@ -5,9 +5,8 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { SpotlightCard } from "@/components/ui/SpotlightCard";
 
-export function formatINR(n: number): string {
-    return "₹" + n.toLocaleString("en-IN");
-}
+import { formatINR } from "@/lib/utils";
+export { formatINR };
 
 export function KPICard({
     title,

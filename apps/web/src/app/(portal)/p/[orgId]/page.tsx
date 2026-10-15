@@ -84,11 +84,11 @@ function ProductCard({ product, orgId, cart, isB2BContext, onQuickView }: { prod
                 <div className="mt-4 flex items-end justify-between">
                     <div>
                         <p className={`text-[15px] font-bold font-mono tracking-tight ${isOOS ? 'text-zinc-500' : 'text-[var(--gold)]'}`}>
-                            ₹{product.price.toLocaleString("en-IN")}
+                            ₹{(product.price ?? 0).toLocaleString("en-IN")}
                         </p>
                         {isB2BContext && product.price < product.originalPrice && (
                             <p className="text-[10px] text-zinc-500 line-through">
-                                MRP ₹{product.originalPrice.toLocaleString("en-IN")}
+                                MRP ₹{(product.originalPrice ?? 0).toLocaleString("en-IN")}
                             </p>
                         )}
                     </div>

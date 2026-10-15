@@ -71,7 +71,7 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
                                 </div>
                                 <h3 className="font-bold text-white">{auth.customer.name}</h3>
                                 <p className="text-xs text-zinc-400 mt-1">
-                                    Outstanding: <span className="font-mono text-white">₹{auth.customer.outstandingAmount.toLocaleString("en-IN")}</span>
+                                    Outstanding: <span className="font-mono text-white">₹{(auth.customer.outstandingAmount ?? 0).toLocaleString("en-IN")}</span>
                                 </p>
                             </div>
                         ) : (
@@ -122,14 +122,14 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
                             {items.map((item) => (
                                 <div key={item.product.id} className="flex justify-between text-sm">
                                     <span className="text-zinc-300 w-2/3 truncate">{item.quantity} × {item.product.name}</span>
-                                    <span className="text-zinc-100 font-mono">₹{(item.quantity * item.product.price).toLocaleString("en-IN")}</span>
+                                    <span className="text-zinc-100 font-mono">₹{((item.quantity || 0) * (item.product.price || 0)).toLocaleString("en-IN")}</span>
                                 </div>
                             ))}
                         </div>
                         <div className="border-t border-[#333] pt-4 mt-auto">
                             <div className="flex justify-between items-end mb-4">
                                 <span className="text-zinc-400 font-medium">Total</span>
-                                <span className="text-2xl font-bold font-mono text-[var(--gold)]">₹{total.toLocaleString("en-IN")}</span>
+                                <span className="text-2xl font-bold font-mono text-[var(--gold)]">₹{(total ?? 0).toLocaleString("en-IN")}</span>
                             </div>
                             <button
                                 onClick={handlePlaceOrder}

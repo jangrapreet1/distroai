@@ -247,7 +247,7 @@ export function InteractiveDemo() {
                                                 </div>
                                             </div>
                                             <span className="text-[11px] bg-emerald-500 text-[#07070E] font-extrabold px-3 py-1 rounded-lg shadow-sm">
-                                                Pay ₹{active.invoice.amount.toLocaleString('en-IN')}
+                                                Pay ₹{(active.invoice.amount ?? 0).toLocaleString('en-IN')}
                                             </span>
                                         </div>
                                     )}

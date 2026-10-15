@@ -72,7 +72,7 @@ export default function OrdersPage() {
                                     )}
                                 </div>
                                 <div className="text-right shrink-0">
-                                    <p className="text-base font-bold font-mono text-white">₹{order.totalAmount.toLocaleString("en-IN")}</p>
+                                    <p className="text-base font-bold font-mono text-white">₹{(order.totalAmount ?? 0).toLocaleString("en-IN")}</p>
                                     <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1.5 ${STATUS_COLORS[order.status] || "text-zinc-400 bg-zinc-800"}`}>
                                         {order.status}
                                     </span>

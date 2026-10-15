@@ -116,7 +116,7 @@ export function SlideOverCart({ isOpen, onClose }: SlideOverCartProps) {
 
                                             <div className="mt-1 mb-auto">
                                                 <p className="text-[13px] font-bold text-[var(--gold)] font-mono tracking-tight">
-                                                    ₹{item.product.price.toLocaleString("en-IN")}
+                                                    ₹{(item.product.price ?? 0).toLocaleString("en-IN")}
                                                     {item.product.unit && <span className="text-zinc-500 font-normal text-[10px] ml-1">/{item.product.unit}</span>}
                                                 </p>
                                             </div>
@@ -138,7 +138,7 @@ export function SlideOverCart({ isOpen, onClose }: SlideOverCartProps) {
                                                     </button>
                                                 </div>
                                                 <span className="text-[15px] font-bold text-white font-mono">
-                                                    ₹{(item.quantity * item.product.price).toLocaleString("en-IN")}
+                                                    ₹{((item.quantity || 0) * (item.product.price || 0)).toLocaleString("en-IN")}
                                                 </span>
                                             </div>
                                         </div>
@@ -162,7 +162,7 @@ export function SlideOverCart({ isOpen, onClose }: SlideOverCartProps) {
                                 )}
                             </div>
                             <span className="text-3xl font-bold font-mono text-white tracking-tighter">
-                                ₹{total.toLocaleString("en-IN")}
+                                ₹{(total ?? 0).toLocaleString("en-IN")}
                             </span>
                         </div>
 

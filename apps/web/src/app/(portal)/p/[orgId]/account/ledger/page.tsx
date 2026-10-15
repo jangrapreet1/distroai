@@ -46,15 +46,15 @@ export default function LedgerPage() {
                     </div>
                     <div>
                         <p className="text-xs text-zinc-500 uppercase tracking-wider">Outstanding Balance</p>
-                        <p className="text-3xl font-bold font-mono text-white">₹{ledger.outstandingAmount.toLocaleString("en-IN")}</p>
+                        <p className="text-3xl font-bold font-mono text-white">₹{(ledger.outstandingAmount ?? 0).toLocaleString("en-IN")}</p>
                     </div>
                 </div>
 
                 {ledger.creditLimit > 0 && (
                     <div>
                         <div className="flex justify-between text-xs text-zinc-500 mb-2">
-                            <span>₹{ledger.outstandingAmount.toLocaleString("en-IN")} used</span>
-                            <span>₹{ledger.creditLimit.toLocaleString("en-IN")} limit</span>
+                            <span>₹{(ledger.outstandingAmount ?? 0).toLocaleString("en-IN")} used</span>
+                            <span>₹{(ledger.creditLimit ?? 0).toLocaleString("en-IN")} limit</span>
                         </div>
                         <div className="h-3 bg-[#222] rounded-full overflow-hidden">
                             <div
@@ -70,7 +70,7 @@ export default function LedgerPage() {
                             />
                         </div>
                         <p className="text-xs text-zinc-400 mt-2">
-                            Available credit: <span className="text-white font-mono font-medium">₹{(ledger.creditLimit - ledger.outstandingAmount).toLocaleString("en-IN")}</span>
+                            Available credit: <span className="text-white font-mono font-medium">₹{((ledger.creditLimit ?? 0) - (ledger.outstandingAmount ?? 0)).toLocaleString("en-IN")}</span>
                         </p>
                     </div>
                 )}
@@ -103,7 +103,7 @@ export default function LedgerPage() {
                                 </p>
                             </div>
                             <span className={`text-sm font-bold font-mono ${order.status === "CANCELLED" || order.status === "RETURNED" ? "text-green-400" : "text-red-400"}`}>
-                                {order.status === "CANCELLED" || order.status === "RETURNED" ? "+" : "-"}₹{order.totalAmount.toLocaleString("en-IN")}
+                                {order.status === "CANCELLED" || order.status === "RETURNED" ? "+" : "-"}₹{(order.totalAmount ?? 0).toLocaleString("en-IN")}
                             </span>
                         </Link>
                     ))}

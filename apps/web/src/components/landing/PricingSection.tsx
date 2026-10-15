@@ -168,7 +168,7 @@ export function PricingSection() {
                                             <div>
                                                 <div className="flex items-baseline gap-1.5">
                                                     <span className="text-4xl font-black text-white font-mono">
-                                                        ₹{price?.toLocaleString("en-IN")}
+                                                        ₹{(price ?? 0).toLocaleString("en-IN")}
                                                     </span>
                                                     <span className="text-xs text-[var(--text-muted)] font-medium">/ month</span>
                                                 </div>

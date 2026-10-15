@@ -1,15 +1,33 @@
 import { format, formatDistanceToNow } from "date-fns";
 
-export function formatDate(date: string | Date): string {
-    return format(new Date(date), "dd MMM yyyy");
+export function formatDate(date: string | Date | null | undefined): string {
+    if (!date) return "—";
+    try {
+        const d = new Date(date);
+        return isNaN(d.getTime()) ? "—" : format(d, "dd MMM yyyy");
+    } catch {
+        return "—";
+    }
 }
 
-export function formatDateTime(date: string | Date): string {
-    return format(new Date(date), "dd MMM yyyy, hh:mm a");
+export function formatDateTime(date: string | Date | null | undefined): string {
+    if (!date) return "—";
+    try {
+        const d = new Date(date);
+        return isNaN(d.getTime()) ? "—" : format(d, "dd MMM yyyy, hh:mm a");
+    } catch {
+        return "—";
+    }
 }
 
-export function timeAgo(date: string | Date): string {
-    return formatDistanceToNow(new Date(date), { addSuffix: true });
+export function timeAgo(date: string | Date | null | undefined): string {
+    if (!date) return "—";
+    try {
+        const d = new Date(date);
+        return isNaN(d.getTime()) ? "—" : formatDistanceToNow(d, { addSuffix: true });
+    } catch {
+        return "—";
+    }
 }
 
 export function greeting(): string {
@@ -19,8 +37,11 @@ export function greeting(): string {
     return "Good evening";
 }
 
-export function formatINR(n: number): string {
-    return "₹" + n.toLocaleString("en-IN");
+export function formatINR(n: number | string | null | undefined): string {
+    if (n === null || n === undefined || n === "") return "₹0";
+    const num = Number(n);
+    if (isNaN(num)) return "₹0";
+    return "₹" + num.toLocaleString("en-IN");
 }
 
 /**

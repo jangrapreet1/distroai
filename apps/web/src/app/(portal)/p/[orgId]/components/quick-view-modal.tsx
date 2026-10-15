@@ -131,11 +131,11 @@ export function QuickViewModal({ product, onClose, isB2BContext }: QuickViewModa
                         <div className="mt-6 flex flex-col gap-1">
                             <div className="flex items-baseline gap-3">
                                 <span className={`text-3xl font-bold font-mono tracking-tight ${isOOS ? 'text-zinc-500' : 'text-[var(--gold)]'}`}>
-                                    ₹{product.price.toLocaleString("en-IN")}
+                                    ₹{(product.price ?? 0).toLocaleString("en-IN")}
                                 </span>
                                 {isB2BContext && product.price < product.originalPrice && (
                                     <span className="text-lg text-zinc-500 line-through font-mono">
-                                        ₹{product.originalPrice.toLocaleString("en-IN")}
+                                        ₹{(product.originalPrice ?? 0).toLocaleString("en-IN")}
                                     </span>
                                 )}
                             </div>

@@ -79,7 +79,7 @@ export default function CartPage() {
                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">{item.product.category}</p>
                             )}
                             <p className="text-[var(--gold)] font-mono text-sm font-semibold mt-2">
-                                ₹{item.product.price.toLocaleString("en-IN")}
+                                ₹{(item.product.price ?? 0).toLocaleString("en-IN")}
                                 {item.product.unit && <span className="text-zinc-500 font-normal text-xs"> / {item.product.unit}</span>}
                             </p>
 
@@ -101,7 +101,7 @@ export default function CartPage() {
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="text-sm font-semibold text-white font-mono">
-                                        ₹{(item.quantity * item.product.price).toLocaleString("en-IN")}
+                                        ₹{((item.quantity || 0) * (item.product.price || 0)).toLocaleString("en-IN")}
                                     </span>
                                     <button
                                         onClick={() => cart.removeItem(item.product.id)}
@@ -126,7 +126,7 @@ export default function CartPage() {
                         )}
                     </div>
                     <span className="text-2xl font-bold font-mono text-white">
-                        ₹{total.toLocaleString("en-IN")}
+                        ₹{(total ?? 0).toLocaleString("en-IN")}
                     </span>
                 </div>
 

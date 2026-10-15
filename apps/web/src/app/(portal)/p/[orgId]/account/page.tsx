@@ -119,7 +119,7 @@ export default function AccountPage() {
                             </div>
                             <div>
                                 <p className="text-xs text-zinc-500 uppercase tracking-wider">Outstanding Balance</p>
-                                <p className="text-2xl font-bold font-mono text-white">₹{ledger.outstandingAmount.toLocaleString("en-IN")}</p>
+                                <p className="text-2xl font-bold font-mono text-white">₹{(ledger.outstandingAmount ?? 0).toLocaleString("en-IN")}</p>
                             </div>
                         </div>
                         {/* Credit Gauge */}
@@ -127,7 +127,7 @@ export default function AccountPage() {
                             <div>
                                 <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
                                     <span>Credit Used</span>
-                                    <span>₹{ledger.creditLimit.toLocaleString("en-IN")} limit</span>
+                                    <span>₹{(ledger.creditLimit ?? 0).toLocaleString("en-IN")} limit</span>
                                 </div>
                                 <div className="h-2 bg-[#222] rounded-full overflow-hidden">
                                     <div
@@ -214,7 +214,7 @@ export default function AccountPage() {
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-bold font-mono text-white">₹{order.totalAmount.toLocaleString("en-IN")}</p>
+                                        <p className="text-sm font-bold font-mono text-white">₹{(order.totalAmount ?? 0).toLocaleString("en-IN")}</p>
                                         <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 ${STATUS_COLORS[order.status] || "text-zinc-400 bg-zinc-800"}`}>
                                             {order.status}
                                         </span>

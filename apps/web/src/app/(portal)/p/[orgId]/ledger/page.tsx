@@ -89,12 +89,12 @@ export default function LedgerPage({ params }: { params: Promise<{ orgId: string
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-[#111] border border-[#222] rounded-xl p-6">
                         <p className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-2">Total Outstanding</p>
-                        <h2 className="text-4xl font-bold font-mono text-[var(--gold)]">₹{outstandingAmount.toLocaleString('en-IN')}</h2>
+                        <h2 className="text-4xl font-bold font-mono text-[var(--gold)]">₹{(outstandingAmount ?? 0).toLocaleString('en-IN')}</h2>
                         <p className="text-xs text-zinc-500 mt-2">Please clear dues within 15 days to avoid account hold.</p>
                     </div>
                     <div className="bg-[#111] border border-[#222] rounded-xl p-6">
                         <p className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-2">Available Credit Limit</p>
-                        <h2 className="text-4xl font-bold font-mono text-white">₹{Math.max(0, creditLimit - outstandingAmount).toLocaleString('en-IN')}</h2>
+                        <h2 className="text-4xl font-bold font-mono text-white">₹{Math.max(0, (creditLimit ?? 0) - (outstandingAmount ?? 0)).toLocaleString('en-IN')}</h2>
                         <div className="w-full bg-black h-2 rounded-full mt-4 overflow-hidden border border-[#333]">
                             <div
                                 className="h-full bg-[var(--gold)]"
@@ -129,7 +129,7 @@ export default function LedgerPage({ params }: { params: Promise<{ orgId: string
                                             </td>
                                             <td className="px-6 py-4 text-white font-medium">{order.orderNumber}</td>
                                             <td className="px-6 py-4 font-medium text-right font-mono text-[var(--gold)]">
-                                                ₹{order.totalAmount.toLocaleString('en-IN')}
+                                                ₹{(order.totalAmount ?? 0).toLocaleString('en-IN')}
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-white/10 text-white`}>
