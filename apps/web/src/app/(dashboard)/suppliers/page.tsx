@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, X, Truck, Clock, Star, MapPin } from "lucide-react";
+import { Plus, Search, X, Truck, Clock, Star, MapPin, FileSpreadsheet } from "lucide-react";
 import { useSuppliers, useCreateSupplier } from "@/hooks/api-hooks";
+import { SupplierStatementModal } from "./[id]/components/supplier-statement-modal";
 
 /* ─── Add Supplier Modal ─── */
 function AddSupplierModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -69,6 +70,7 @@ function AddSupplierModal({ open, onClose }: { open: boolean; onClose: () => voi
 /* ─── Main Page ─── */
 export default function SuppliersPage() {
     const [showAdd, setShowAdd] = useState(false);
+    const [statementSupplier, setStatementSupplier] = useState<{ id: string; name: string } | null>(null);
     const [search, setSearch] = useState("");
     const { data, isLoading } = useSuppliers();
     const suppliers: Record<string, any>[] = data?.data ?? [];
@@ -168,13 +170,33 @@ export default function SuppliersPage() {
                                                     "bg-[var(--text-muted)]/15 text-[var(--text-muted)]"
                                             }`}>{(s.performanceScore as number) || "—"}</span>
                                     </td>
-                                    <td className="p-4 text-right"><Link href={`/suppliers/${s.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">View →</Link></td>
+                                    <td className="p-4 text-right">
+                                        <div className="flex items-center justify-end gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setStatementSupplier({ id: s.id as string, name: s.name as string })}
+                                                className="text-xs text-[var(--gold)] hover:underline flex items-center gap-1 font-medium"
+                                                title="View Account Summary Statement"
+                                            >
+                                                <FileSpreadsheet size={13} /> Statement
+                                            </button>
+                                            <Link href={`/suppliers/${s.id}`} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">View →</Link>
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                     </tbody>
                 </table>
             </div>
             <AddSupplierModal open={showAdd} onClose={() => setShowAdd(false)} />
+            {statementSupplier && (
+                <SupplierStatementModal
+                    open={Boolean(statementSupplier)}
+                    onClose={() => setStatementSupplier(null)}
+                    supplierId={statementSupplier.id}
+                    supplierName={statementSupplier.name}
+                />
+            )}
         </div>
     );
 }

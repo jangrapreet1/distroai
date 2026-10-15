@@ -292,6 +292,28 @@ export function useCreateSupplier() {
     });
 }
 
+export function useSupplierStatement(supplierId: string, params?: { startDate?: string; endDate?: string; statementDate?: string }) {
+    return useQuery({
+        queryKey: ["supplier-statement", supplierId, params],
+        queryFn: () => apiClient.get(`/api/v1/suppliers/${supplierId}/statement`, { params }).then((r) => r.data?.data ?? r.data),
+        enabled: Boolean(supplierId),
+    });
+}
+export function useRecordSupplierPayment() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ supplierId, data }: { supplierId: string; data: Record<string, unknown> }) =>
+            apiClient.post(`/api/v1/suppliers/${supplierId}/payments`, data).then((r) => r.data),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: ["supplier-statement", variables.supplierId] });
+            qc.invalidateQueries({ queryKey: ["suppliers"] });
+            qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+            toast.success("Payment recorded successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
 // ===== PURCHASE ORDERS =====
 export function usePurchaseOrders(page = 1, limit = 20) {
     return useQuery({ queryKey: ["purchase-orders", page, limit], queryFn: () => apiClient.get("/api/v1/purchase-orders", { params: { page, limit } }).then((r) => r.data) });
