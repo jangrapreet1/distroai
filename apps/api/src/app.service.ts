@@ -11,7 +11,10 @@ export class AppService {
         private readonly queueService: QueueService,
     ) { }
 
-    async getHealth() {
+    private lastQueueMetrics: Record<string, any> = {};
+    private lastQueueMetricsTime = 0;
+
+    async getHealth(includeQueues = false) {
         let dbStatus = 'connected';
         let redisStatus = 'connected';
 
@@ -27,15 +30,22 @@ export class AppService {
             redisStatus = 'disconnected';
         }
 
-        // Gather Queue Depths
-        const queueMetrics: Record<string, any> = {};
-        for (const [name, q] of this.queueService.getAllQueues()) {
-            try {
-                const counts = await q.getJobCounts();
-                queueMetrics[name] = counts;
-            } catch {
-                queueMetrics[name] = 'unreachable';
+        // Cache queue metrics for 60s so healthcheck probes don't flood Redis
+        const now = Date.now();
+        let queues = this.lastQueueMetrics;
+        if (includeQueues || (now - this.lastQueueMetricsTime > 60000)) {
+            const queueMetrics: Record<string, any> = {};
+            for (const [name, q] of this.queueService.getAllQueues()) {
+                try {
+                    const counts = await q.getJobCounts();
+                    queueMetrics[name] = counts;
+                } catch {
+                    queueMetrics[name] = 'unreachable';
+                }
             }
+            this.lastQueueMetrics = queueMetrics;
+            this.lastQueueMetricsTime = now;
+            queues = queueMetrics;
         }
 
         const isHealthy = dbStatus === 'connected' && redisStatus === 'connected';
@@ -43,7 +53,7 @@ export class AppService {
             status: isHealthy ? 'ok' : 'degraded',
             db: dbStatus,
             redis: redisStatus,
-            queues: queueMetrics,
+            queues,
             timestamp: new Date().toISOString(),
         };
 

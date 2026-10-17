@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service';
 import { Public } from './common/decorators/public.decorator';
@@ -10,7 +10,7 @@ export class AppController {
 
     @Public()
     @Get('health')
-    getHealth() {
-        return this.appService.getHealth();
+    getHealth(@Query('includeQueues') includeQueues?: string) {
+        return this.appService.getHealth(includeQueues === 'true');
     }
 }
