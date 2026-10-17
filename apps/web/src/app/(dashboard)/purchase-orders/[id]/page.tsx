@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { usePurchaseOrder, useReceivePurchaseOrder } from "@/hooks/api-hooks";
 import { ArrowLeft, CheckCircle2, ChevronDown, Package, Plus, Truck } from "lucide-react";
 import Link from "next/link";
-import { formatDate, formatINR } from "@/lib/utils";
+import { formatDate, formatINR, getPendingQty } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
 const statusClass: Record<string, string> = {
@@ -37,9 +37,8 @@ export default function PurchaseOrderDetailPage() {
         if (!receiving) {
             // Initialize with remaining quantities
             const initial: typeof receiveData = {};
-            po.items.forEach((item: any) => {
-                const received = item.deliveredQty ?? item.receivedQty ?? 0;
-                const remaining = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, item.orderedQty - received);
+            (po.items ?? []).forEach((item: any) => {
+                const remaining = getPendingQty(item);
                 if (remaining > 0) {
                     initial[item.id] = { qty: remaining, batchNumber: "", expiryDate: "" };
                 }
@@ -70,10 +69,7 @@ export default function PurchaseOrderDetailPage() {
         });
     };
 
-    const allReceived = po.items.every((i: any) => {
-        const received = i.deliveredQty ?? i.receivedQty ?? 0;
-        return received >= i.orderedQty;
-    });
+    const allReceived = (po.items ?? []).every((i: any) => getPendingQty(i) <= 0);
 
     return (
         <div className="max-w-5xl mx-auto pb-12">
@@ -145,11 +141,11 @@ export default function PurchaseOrderDetailPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {po.items.map((item: any) => {
+                                    {(po.items ?? []).map((item: any) => {
                                         const p = item.product;
                                         const hasSecondary = p.secondaryUnit && p.conversionFactor;
                                         const received = item.deliveredQty ?? item.receivedQty ?? 0;
-                                        const pending = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, item.orderedQty - received);
+                                        const pending = getPendingQty(item);
 
                                         return (
                                             <tr key={item.id} className="border-b border-[var(--border)]">
@@ -173,8 +169,30 @@ export default function PurchaseOrderDetailPage() {
                                                     </div>
                                                     {hasSecondary && <div className="text-xs font-normal text-[var(--text-muted)]">{(received * p.conversionFactor).toFixed(2)} {p.secondaryUnit}</div>}
                                                 </td>
-                                                <td className="p-4 text-center font-bold text-[var(--orange)] font-mono">
-                                                    {pending} <span className="font-normal text-xs">{p.unit}</span>
+                                                <td className="p-4 text-center">
+                                                    {receiving && pending > 0 ? (
+                                                        <div className="inline-flex flex-col items-center">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max={pending}
+                                                                value={receiveData[item.id]?.qty ?? 0}
+                                                                onChange={(e) => setReceiveData({
+                                                                    ...receiveData,
+                                                                    [item.id]: {
+                                                                        ...(receiveData[item.id] || { batchNumber: "", expiryDate: "" }),
+                                                                        qty: Math.max(0, Math.min(pending, Number(e.target.value)))
+                                                                    }
+                                                                })}
+                                                                className="w-20 px-2 py-1 text-center font-bold text-sm rounded bg-[var(--bg-primary)] border border-[var(--gold)] text-[var(--gold)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)] font-mono"
+                                                            />
+                                                            <span className="text-[10px] text-[var(--text-muted)] mt-0.5">of {pending} {p.unit}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`font-bold font-mono ${pending > 0 ? "text-[var(--orange)]" : "text-[var(--text-muted)]"}`}>
+                                                            {pending} <span className="font-normal text-xs">{p.unit}</span>
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-right font-mono font-medium">{formatINR(item.totalAmount)}</td>
                                             </tr>
@@ -266,32 +284,43 @@ export default function PurchaseOrderDetailPage() {
                             </h3>
 
                             <form onSubmit={handleReceiveSubmit} className="space-y-5">
-                                {po.items.map((item: any) => {
-                                    const received = item.deliveredQty ?? item.receivedQty ?? 0;
-                                    const remaining = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, item.orderedQty - received);
+                                {(po.items ?? []).map((item: any) => {
+                                    const remaining = getPendingQty(item);
                                     if (remaining <= 0) return null;
 
                                     return (
                                         <div key={item.id} className="p-3 bg-[var(--bg-secondary)] rounded-[var(--radius-md)] border border-[var(--border)]">
-                                            <p className="text-sm font-semibold mb-2 truncate" title={item.product.name}>{item.product.name}</p>
+                                            <p className="text-sm font-semibold mb-2 truncate" title={item.product?.name}>{item.product?.name}</p>
                                             <div className="grid grid-cols-2 flex-col gap-2">
                                                 <div>
                                                     <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Qty (Max {remaining})</span>
                                                     <input
                                                         type="number" min="0" max={remaining}
                                                         value={receiveData[item.id]?.qty ?? 0}
-                                                        onChange={(e) => setReceiveData({ ...receiveData, [item.id]: { ...receiveData[item.id], qty: Number(e.target.value) } })}
-                                                        className="w-full px-2 py-1.5 text-sm rounded bg-[var(--bg-primary)] border border-[var(--border)]"
+                                                        onChange={(e) => setReceiveData({
+                                                            ...receiveData,
+                                                            [item.id]: {
+                                                                ...(receiveData[item.id] || { batchNumber: "", expiryDate: "" }),
+                                                                qty: Math.max(0, Math.min(remaining, Number(e.target.value)))
+                                                            }
+                                                        })}
+                                                        className="w-full px-2 py-1.5 text-sm rounded bg-[var(--bg-primary)] border border-[var(--border)] font-mono focus:border-[var(--gold)] focus:outline-none"
                                                     />
                                                 </div>
                                                 <div>
                                                     <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Batch No.</span>
                                                     <input
                                                         type="text"
-                                                        placeholder="Opt"
+                                                        placeholder="Optional"
                                                         value={receiveData[item.id]?.batchNumber ?? ""}
-                                                        onChange={(e) => setReceiveData({ ...receiveData, [item.id]: { ...receiveData[item.id], batchNumber: e.target.value } })}
-                                                        className="w-full px-2 py-1.5 text-sm rounded bg-[var(--bg-primary)] border border-[var(--border)]"
+                                                        onChange={(e) => setReceiveData({
+                                                            ...receiveData,
+                                                            [item.id]: {
+                                                                ...(receiveData[item.id] || { qty: remaining, expiryDate: "" }),
+                                                                batchNumber: e.target.value
+                                                            }
+                                                        })}
+                                                        className="w-full px-2 py-1.5 text-sm rounded bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] focus:outline-none"
                                                     />
                                                 </div>
                                                 <div className="col-span-2">
@@ -299,8 +328,14 @@ export default function PurchaseOrderDetailPage() {
                                                     <input
                                                         type="date"
                                                         value={receiveData[item.id]?.expiryDate ?? ""}
-                                                        onChange={(e) => setReceiveData({ ...receiveData, [item.id]: { ...receiveData[item.id], expiryDate: e.target.value } })}
-                                                        className="w-full px-2 py-1.5 text-sm rounded bg-[var(--bg-primary)] border border-[var(--border)]"
+                                                        onChange={(e) => setReceiveData({
+                                                            ...receiveData,
+                                                            [item.id]: {
+                                                                ...(receiveData[item.id] || { qty: remaining, batchNumber: "" }),
+                                                                expiryDate: e.target.value
+                                                            }
+                                                        })}
+                                                        className="w-full px-2 py-1.5 text-sm rounded bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] focus:outline-none"
                                                     />
                                                 </div>
                                             </div>

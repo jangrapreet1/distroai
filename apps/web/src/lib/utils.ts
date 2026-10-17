@@ -45,6 +45,24 @@ export function formatINR(n: number | string | null | undefined): string {
 }
 
 /**
+ * Safely computes the pending (unfulfilled) quantity for order items and PO items.
+ * Handles legacy items where pendingQty may have defaulted to 0 in the database
+ * as well as items with explicit partial deliveries or cancellations.
+ */
+export function getPendingQty(item: any): number {
+    if (!item) return 0;
+    const ordered = Number(item.orderedQty ?? item.quantity ?? 0);
+    const fulfilled = Number(item.deliveredQty ?? item.receivedQty ?? 0);
+    const cancelled = Number(item.cancelledQty ?? 0);
+    const computed = Math.max(0, ordered - fulfilled - cancelled);
+
+    if (typeof item.pendingQty === "number" && item.pendingQty > 0) {
+        return Math.min(item.pendingQty, computed);
+    }
+    return computed;
+}
+
+/**
  * Build a wa.me click-to-chat link for sending an invoice to a customer.
  * Opens WhatsApp with a pre-filled message containing invoice details and a view link.
  */

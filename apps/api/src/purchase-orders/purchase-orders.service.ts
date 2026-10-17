@@ -192,7 +192,10 @@ export class PurchaseOrdersService {
 
             // Check if fully received across all line items
             const updatedItems = await tx.purchaseOrderItem.findMany({ where: { poId: id } });
-            const allReceived = updatedItems.every((i: any) => i.receivedQty >= i.orderedQty || i.pendingQty === 0);
+            const allReceived = updatedItems.every((i: any) => {
+                const ordered = i.orderedQty > 0 ? i.orderedQty : i.quantity;
+                return (i.receivedQty || 0) + (i.cancelledQty || 0) >= ordered;
+            });
             const newStatus = allReceived ? 'RECEIVED' : 'PARTIALLY_DELIVERED';
 
             await tx.purchaseOrder.update({

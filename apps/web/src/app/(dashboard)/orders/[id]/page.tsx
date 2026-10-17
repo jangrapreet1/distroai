@@ -7,7 +7,7 @@ import {
     RotateCcw, Clock, Send, Edit, Plus, Trash2, Search, AlertCircle
 } from "lucide-react";
 import { useOrder, useOrderAction, useUpdateDraftOrder, useProducts } from "@/hooks/api-hooks";
-import { formatDate, formatDateTime, buildWhatsAppInvoiceLink, formatINR } from "@/lib/utils";
+import { formatDate, formatDateTime, buildWhatsAppInvoiceLink, formatINR, getPendingQty } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 const statusClass: Record<string, string> = {
@@ -190,10 +190,7 @@ function DispatchModal({ order, open, onClose }: { order: any; open: boolean; on
         if (order && open) {
             const initial: Record<string, number> = {};
             (order.items ?? []).forEach((item: any) => {
-                const ordered = item.orderedQty ?? item.quantity;
-                const delivered = item.deliveredQty ?? 0;
-                const cancelled = item.cancelledQty ?? 0;
-                const pending = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, ordered - delivered - cancelled);
+                const pending = getPendingQty(item);
                 if (pending > 0) {
                     initial[item.id] = pending; // default to full pending for convenience
                 }
@@ -205,11 +202,7 @@ function DispatchModal({ order, open, onClose }: { order: any; open: boolean; on
     if (!open) return null;
 
     const pendingItems = (order.items ?? []).filter((item: any) => {
-        const ordered = item.orderedQty ?? item.quantity;
-        const delivered = item.deliveredQty ?? 0;
-        const cancelled = item.cancelledQty ?? 0;
-        const pending = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, ordered - delivered - cancelled);
-        return pending > 0;
+        return getPendingQty(item) > 0;
     });
 
     const totalToDispatch = Object.values(dispatchQuantities).reduce((s, q) => s + (Number(q) || 0), 0);
@@ -231,10 +224,7 @@ function DispatchModal({ order, open, onClose }: { order: any; open: boolean; on
         // Validate over-delivery guard on the client
         for (const it of itemsToDispatch) {
             const item = order.items.find((i: any) => i.id === it.orderItemId);
-            const ordered = item.orderedQty ?? item.quantity;
-            const delivered = item.deliveredQty ?? 0;
-            const cancelled = item.cancelledQty ?? 0;
-            const maxAllowed = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, ordered - delivered - cancelled);
+            const maxAllowed = getPendingQty(item);
             if (it.dispatchQty > maxAllowed) {
                 toast.error(`Cannot dispatch ${it.dispatchQty} for ${item.product?.name ?? 'item'}. Max pending is ${maxAllowed}.`);
                 return;
@@ -292,8 +282,7 @@ function DispatchModal({ order, open, onClose }: { order: any; open: boolean; on
                                         {pendingItems.map((item: any) => {
                                             const ordered = item.orderedQty ?? item.quantity;
                                             const delivered = item.deliveredQty ?? 0;
-                                            const cancelled = item.cancelledQty ?? 0;
-                                            const pending = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, ordered - delivered - cancelled);
+                                            const pending = getPendingQty(item);
                                             const currentVal = dispatchQuantities[item.id] ?? 0;
 
                                             return (
@@ -587,13 +576,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
     // Check line items state
     const items = order.items ?? [];
-    const hasPendingItems = items.some((it: any) => {
-        const ordered = it.orderedQty ?? it.quantity;
-        const delivered = it.deliveredQty ?? 0;
-        const cancelled = it.cancelledQty ?? 0;
-        const pending = it.pendingQty !== undefined ? it.pendingQty : Math.max(0, ordered - delivered - cancelled);
-        return pending > 0;
-    });
+    const hasPendingItems = items.some((it: any) => getPendingQty(it) > 0);
     const hasDeliveredItems = items.some((it: any) => {
         const delivered = it.deliveredQty ?? 0;
         const returned = it.returnedQty ?? 0;
@@ -656,7 +639,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         <>
                             {hasPendingItems && (
                                 <button onClick={() => setShowDispatch(true)} className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] font-semibold hover:bg-[var(--gold-light)] transition">
-                                    <Truck size={14} /> Dispatch Remaining ({items.filter((it: any) => (it.pendingQty ?? 0) > 0).length} SKUs)
+                                    <Truck size={14} /> Dispatch Remaining ({items.filter((it: any) => getPendingQty(it) > 0).length} SKUs)
                                 </button>
                             )}
                             {hasDeliveredItems && (
@@ -807,8 +790,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                         const ordered = item.orderedQty ?? item.quantity;
                                         const delivered = item.deliveredQty ?? 0;
                                         const returned = item.returnedQty ?? 0;
-                                        const cancelled = item.cancelledQty ?? 0;
-                                        const pending = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, ordered - delivered - cancelled);
+                                        const pending = getPendingQty(item);
 
                                         let lineStatusBadge = "badge-draft";
                                         let lineStatusLabel = "Pending";

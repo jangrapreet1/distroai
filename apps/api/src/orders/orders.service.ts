@@ -676,7 +676,8 @@ export class OrdersService {
       const allUpdatedItems = await tx.orderItem.findMany({ where: { orderId: id } });
       const hasPending = allUpdatedItems.some((it: any) => {
         const ordered = it.orderedQty > 0 ? it.orderedQty : it.quantity;
-        const pending = it.pendingQty !== undefined ? it.pendingQty : Math.max(0, ordered - it.deliveredQty - it.cancelledQty);
+        const computed = Math.max(0, ordered - (it.deliveredQty || 0) - (it.cancelledQty || 0));
+        const pending = typeof it.pendingQty === "number" && it.pendingQty > 0 ? Math.min(it.pendingQty, computed) : computed;
         return pending > 0;
       });
 
