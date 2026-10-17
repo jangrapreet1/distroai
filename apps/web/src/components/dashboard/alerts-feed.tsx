@@ -20,7 +20,9 @@ export function AlertsFeed({ alerts, t }: { alerts: Alert[]; t: (key: string) =>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--red)]/15 text-[var(--red)]">{alerts.length}</span>
             </div>
             <div className="space-y-3 max-h-80 overflow-y-auto">
-                {alerts.map((alert, i) => (
+                {alerts.length === 0 ? (
+                    <p className="text-sm text-[var(--text-muted)] py-6 text-center">No active alerts requiring attention</p>
+                ) : alerts.map((alert, i) => (
                     <Link key={i} href={alert.href ?? "#"} className="block group">
                         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-secondary)]/50 border border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
                             <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: alert.color }} />

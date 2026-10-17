@@ -33,12 +33,15 @@ function calculateOrderTotals(items: OrderLineItem[]) {
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
     DRAFT: ['CONFIRMED', 'CANCELLED'],
-    CONFIRMED: ['PACKED', 'CANCELLED'],
-    PACKED: ['DISPATCHED', 'CANCELLED'],
-    DISPATCHED: ['DELIVERED', 'CANCELLED'],
-    DELIVERED: ['RETURNED'],
+    CONFIRMED: ['PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'CANCELLED'],
+    PACKED: ['DISPATCHED', 'PARTIALLY_DELIVERED', 'CANCELLED'],
+    DISPATCHED: ['PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED'],
+    PARTIALLY_DELIVERED: ['PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED'],
+    DELIVERED: ['PARTIALLY_RETURNED', 'RETURNED', 'COMPLETED'],
+    PARTIALLY_RETURNED: ['PARTIALLY_RETURNED', 'RETURNED'],
     CANCELLED: [],
     RETURNED: [],
+    COMPLETED: ['PARTIALLY_RETURNED', 'RETURNED'],
 };
 
 function canTransition(from: string, to: string): boolean {
@@ -47,6 +50,29 @@ function canTransition(from: string, to: string): boolean {
 
 function calculateBalance(netAmount: number, paidAmount: number) {
     return Math.max(0, netAmount - paidAmount);
+}
+
+function validatePartialDispatch(
+    items: { id: string; orderedQty: number; deliveredQty: number; cancelledQty?: number }[],
+    dispatch: { id: string; dispatchQty: number }[]
+) {
+    for (const d of dispatch) {
+        const item = items.find(i => i.id === d.id);
+        if (!item) throw new Error(`Item ${d.id} not found`);
+        const pending = Math.max(0, item.orderedQty - item.deliveredQty - (item.cancelledQty || 0));
+        if (d.dispatchQty > pending) {
+            throw new Error(`OVER_DELIVERY: Dispatch qty ${d.dispatchQty} exceeds pending ${pending}`);
+        }
+    }
+    return true;
+}
+
+function validateReturnQty(deliveredQty: number, returnedQty: number, requestedReturnQty: number) {
+    const returnable = Math.max(0, deliveredQty - returnedQty);
+    if (requestedReturnQty > returnable) {
+        throw new Error(`CONFLICT: Return qty ${requestedReturnQty} exceeds returnable ${returnable}`);
+    }
+    return true;
 }
 
 // ── Tests ──────────────────────────────────────────────────────
@@ -102,8 +128,17 @@ describe('Order Status Transitions', () => {
         expect(canTransition('DRAFT', 'DELIVERED')).toBe(false);
     });
 
-    it('should allow DELIVERED → RETURNED', () => {
+    it('should allow CONFIRMED → PARTIALLY_DELIVERED', () => {
+        expect(canTransition('CONFIRMED', 'PARTIALLY_DELIVERED')).toBe(true);
+    });
+
+    it('should allow PARTIALLY_DELIVERED → DELIVERED', () => {
+        expect(canTransition('PARTIALLY_DELIVERED', 'DELIVERED')).toBe(true);
+    });
+
+    it('should allow DELIVERED → RETURNED or PARTIALLY_RETURNED', () => {
         expect(canTransition('DELIVERED', 'RETURNED')).toBe(true);
+        expect(canTransition('DELIVERED', 'PARTIALLY_RETURNED')).toBe(true);
     });
 
     it('should NOT allow CANCELLED → anything', () => {
@@ -111,11 +146,32 @@ describe('Order Status Transitions', () => {
         expect(canTransition('CANCELLED', 'CONFIRMED')).toBe(false);
     });
 
-    it('should follow the full happy path', () => {
-        const path = ['DRAFT', 'CONFIRMED', 'PACKED', 'DISPATCHED', 'DELIVERED'];
+    it('should follow the full happy path with partial fulfillment', () => {
+        const path = ['DRAFT', 'CONFIRMED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'];
         for (let i = 0; i < path.length - 1; i++) {
             expect(canTransition(path[i], path[i + 1])).toBe(true);
         }
+    });
+});
+
+describe('Partial Fulfillment & Returns Validation', () => {
+    it('should allow valid partial dispatch within pendingQty', () => {
+        const items = [{ id: 'item-1', orderedQty: 10, deliveredQty: 2 }];
+        expect(validatePartialDispatch(items, [{ id: 'item-1', dispatchQty: 5 }])).toBe(true);
+    });
+
+    it('should reject over-delivery when dispatchQty exceeds pendingQty', () => {
+        const items = [{ id: 'item-1', orderedQty: 10, deliveredQty: 8 }];
+        expect(() => validatePartialDispatch(items, [{ id: 'item-1', dispatchQty: 5 }]))
+            .toThrow(/OVER_DELIVERY/);
+    });
+
+    it('should allow valid return when requested <= deliveredQty - returnedQty', () => {
+        expect(validateReturnQty(10, 2, 8)).toBe(true);
+    });
+
+    it('should reject return exceeding deliveredQty - returnedQty', () => {
+        expect(() => validateReturnQty(10, 4, 7)).toThrow(/CONFLICT/);
     });
 });
 

@@ -10,10 +10,18 @@ import { formatDate, buildWhatsAppInvoiceLink, formatINR, exportToCSV } from "@/
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ExcelImportModal } from "@/components/excel-import-modal";
 
-const STATUS_TABS = ["All", "Portal", "DRAFT", "CONFIRMED", "PACKED", "DISPATCHED", "DELIVERED", "CANCELLED"] as const;
+const STATUS_TABS = ["All", "Portal", "DRAFT", "CONFIRMED", "PACKED", "PARTIALLY_DELIVERED", "DISPATCHED", "DELIVERED", "COMPLETED", "PARTIALLY_RETURNED", "RETURNED", "CANCELLED"] as const;
 const statusClass: Record<string, string> = {
-    DRAFT: "badge-draft", CONFIRMED: "badge-confirmed", PACKED: "badge-packed",
-    DISPATCHED: "badge-dispatched", DELIVERED: "badge-delivered", CANCELLED: "badge-cancelled", RETURNED: "badge-cancelled",
+    DRAFT: "badge-draft",
+    CONFIRMED: "badge-confirmed",
+    PACKED: "badge-packed",
+    DISPATCHED: "badge-dispatched",
+    PARTIALLY_DELIVERED: "badge-partial",
+    DELIVERED: "badge-delivered",
+    COMPLETED: "badge-delivered",
+    PARTIALLY_RETURNED: "badge-partial",
+    RETURNED: "badge-cancelled",
+    CANCELLED: "badge-cancelled",
 };
 
 export default function OrdersPage() {
@@ -27,8 +35,18 @@ export default function OrdersPage() {
     const bulkOrder = useBulkOrderAction();
 
     const STATUS_TAB_LABELS: Record<string, string> = {
-        All: t('all'), Portal: t('portal'), DRAFT: t('draft'), CONFIRMED: t('confirmed'),
-        PACKED: t('packed'), DISPATCHED: t('dispatched'), DELIVERED: t('delivered'), CANCELLED: t('cancelled')
+        All: t('all'),
+        Portal: t('portal'),
+        DRAFT: t('draft'),
+        CONFIRMED: t('confirmed'),
+        PACKED: t('packed'),
+        PARTIALLY_DELIVERED: "Partially Delivered",
+        DISPATCHED: t('dispatched'),
+        DELIVERED: t('delivered'),
+        COMPLETED: "Completed",
+        PARTIALLY_RETURNED: "Partially Returned",
+        RETURNED: "Returned",
+        CANCELLED: t('cancelled')
     };
 
     const handleBulkDispatch = () => {

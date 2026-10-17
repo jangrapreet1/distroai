@@ -7,8 +7,16 @@ import toast from "react-hot-toast";
 import { usePurchaseOrders } from "@/hooks/api-hooks";
 import { formatDate, formatINR } from "@/lib/utils";
 
-const STATUS_TABS = ["All", "DRAFT", "SENT", "PARTIAL", "RECEIVED", "CANCELLED"];
-const statusClass: Record<string, string> = { DRAFT: "badge-draft", SENT: "badge-sent", PARTIAL: "badge-partial", RECEIVED: "badge-delivered", CANCELLED: "badge-cancelled" };
+const STATUS_TABS = ["All", "DRAFT", "SENT", "PARTIALLY_DELIVERED", "RECEIVED", "COMPLETED", "CANCELLED"];
+const statusClass: Record<string, string> = {
+    DRAFT: "badge-draft",
+    SENT: "badge-sent",
+    PARTIAL: "badge-partial",
+    PARTIALLY_DELIVERED: "badge-partial",
+    RECEIVED: "badge-delivered",
+    COMPLETED: "badge-delivered",
+    CANCELLED: "badge-cancelled"
+};
 
 export default function PurchaseOrdersPage() {
     const [status, setStatus] = useState("All");
@@ -34,8 +42,8 @@ export default function PurchaseOrdersPage() {
     // KPI summaries
     const totalPOs = pos.length;
     const totalValue = pos.reduce((s, po) => s + ((po.totalAmount as number) || 0), 0);
-    const pendingCount = pos.filter((po) => ["DRAFT", "SENT", "PARTIAL"].includes(po.status as string)).length;
-    const receivedCount = pos.filter((po) => po.status === "RECEIVED").length;
+    const pendingCount = pos.filter((po) => ["DRAFT", "SENT", "PARTIAL", "PARTIALLY_DELIVERED"].includes(po.status as string)).length;
+    const receivedCount = pos.filter((po) => ["RECEIVED", "COMPLETED"].includes(po.status as string)).length;
 
     const kpis = [
         { label: "Total POs", value: totalPOs, icon: ShoppingBag, color: "var(--gold)" },

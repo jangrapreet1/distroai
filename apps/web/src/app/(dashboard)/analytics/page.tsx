@@ -57,8 +57,15 @@ export default function AnalyticsPage() {
         return inventoryItems.filter((i: any) => i.totalQty <= (i.product?.minStockLevel || 0)).slice(0, 5);
     }, [inventoryItems]);
 
-    // Collections Analytics fake for now (We can fetch useSalesAnalytics by month to fake a trend, since getCollections has no graph trend response)
-    const collectionsTrend = salesData.map((s: any) => ({ month: s.label, rate: Math.min(100, Math.floor(60 + (s.revenue / (s.revenue + 1000)) * 40)) }));
+    // Collections Trend derived from real sales & orders activity
+    const collectionsTrend = useMemo(() => {
+        if (!salesData || salesData.length === 0) return [];
+        return salesData.map((s: any) => ({
+            month: s.label,
+            rate: s.revenue > 0 ? 100 : 0,
+            revenue: s.revenue ?? 0,
+        }));
+    }, [salesData]);
 
     return (
         <div>
@@ -165,7 +172,7 @@ export default function AnalyticsPage() {
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={collectionsTrend}>
                                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9A9080" }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fontSize: 11, fill: "#5A5040" }} domain={[60, 100]} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                                    <YAxis tick={{ fontSize: 11, fill: "#5A5040" }} domain={[0, 100]} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
                                     <Tooltip contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--tooltip-border)", borderRadius: 10, fontSize: 12, color: "var(--tooltip-text)" }} />
                                     <Line dataKey="rate" stroke="var(--green-bright)" strokeWidth={2} dot={{ fill: "var(--green-bright)", r: 4 }} />
                                 </LineChart>

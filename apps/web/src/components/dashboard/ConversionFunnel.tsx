@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { MessageSquare, Cpu, Truck, CheckCircle2, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { formatINR } from "./kpi-card";
 
 interface FunnelStep {
     id: string;
@@ -15,26 +16,43 @@ interface FunnelStep {
     icon: React.ElementType;
 }
 
-interface ConversionFunnelProps {
+export interface ConversionFunnelProps {
     totalVisits?: number;
+    totalVisitsAmount?: number;
     totalOrders?: number;
+    totalOrdersAmount?: number;
     totalDispatched?: number;
+    totalDispatchedAmount?: number;
     totalReconciled?: number;
+    totalReconciledAmount?: number;
+    avgAiTranscriptionTime?: number;
+    upiInstantCaptureRate?: number;
 }
 
 export function ConversionFunnel({
-    totalVisits = 184,
-    totalOrders = 162,
-    totalDispatched = 154,
-    totalReconciled = 148,
+    totalVisits = 0,
+    totalVisitsAmount = 0,
+    totalOrders = 0,
+    totalOrdersAmount = 0,
+    totalDispatched = 0,
+    totalDispatchedAmount = 0,
+    totalReconciled = 0,
+    totalReconciledAmount = 0,
+    avgAiTranscriptionTime = 0,
+    upiInstantCaptureRate,
 }: ConversionFunnelProps) {
+    const aiTranscribePct = totalVisits > 0 ? Math.min(100, Math.round((totalOrders / totalVisits) * 100)) : 0;
+    const dispatchPct = totalOrders > 0 ? Math.min(100, Math.round((totalDispatched / totalOrders) * 100)) : 0;
+    const reconcilePct = totalDispatched > 0 ? Math.min(100, Math.round((totalReconciled / totalDispatched) * 100)) : 0;
+
     const steps: FunnelStep[] = [
         {
             id: "inbound",
             label: "Inbound Demands",
             sublabel: "WhatsApp Voice + SFA Beats",
             count: totalVisits,
-            conversionPct: 100,
+            totalAmount: formatINR(totalVisitsAmount),
+            conversionPct: totalVisits > 0 ? 100 : 0,
             color: "#3B82F6", // Blue
             icon: MessageSquare,
         },
@@ -43,8 +61,8 @@ export function ConversionFunnel({
             label: "AI Transcribed",
             sublabel: "SKUs Auto-Matched",
             count: totalOrders,
-            totalAmount: "₹2.45L",
-            conversionPct: Math.round((totalOrders / totalVisits) * 100),
+            totalAmount: formatINR(totalOrdersAmount),
+            conversionPct: aiTranscribePct,
             color: "#C9A84C", // Gold
             icon: Cpu,
         },
@@ -53,8 +71,8 @@ export function ConversionFunnel({
             label: "Dispatched + UPI QR",
             sublabel: "PDF Invoice Dispatched",
             count: totalDispatched,
-            totalAmount: "₹2.31L",
-            conversionPct: Math.round((totalDispatched / totalOrders) * 100),
+            totalAmount: formatINR(totalDispatchedAmount),
+            conversionPct: dispatchPct,
             color: "#8B5CF6", // Purple
             icon: Truck,
         },
@@ -63,12 +81,14 @@ export function ConversionFunnel({
             label: "Tally Reconciled",
             sublabel: "Auto-Posted to Ledger",
             count: totalReconciled,
-            totalAmount: "₹2.24L",
-            conversionPct: Math.round((totalReconciled / totalDispatched) * 100),
+            totalAmount: formatINR(totalReconciledAmount),
+            conversionPct: reconcilePct,
             color: "#10B981", // Emerald
             icon: CheckCircle2,
         },
     ];
+
+    const hasPipelineData = totalVisits > 0 || totalOrders > 0 || totalDispatched > 0 || totalReconciled > 0;
 
     return (
         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 relative overflow-hidden">
@@ -84,7 +104,9 @@ export function ConversionFunnel({
                         </h3>
                     </div>
                     <p className="text-xs text-[var(--text-muted)] mt-1">
-                        End-to-end retail order intake to Tally Prime automated settlement
+                        {hasPipelineData
+                            ? "End-to-end retail order intake to Tally Prime automated settlement"
+                            : "No pipeline records detected yet for current tenant. Stage yields will compute dynamically as orders are processed."}
                     </p>
                 </div>
                 <Link
@@ -123,7 +145,9 @@ export function ConversionFunnel({
                                             color: step.color,
                                         }}
                                     >
-                                        {idx === 0 ? "100% Volume" : `${step.conversionPct}% Yield`}
+                                        {idx === 0
+                                            ? `${step.conversionPct}% Volume`
+                                            : `${step.conversionPct}% Yield`}
                                     </span>
                                 </div>
 
@@ -164,10 +188,10 @@ export function ConversionFunnel({
             <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
                 <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-[var(--green-bright)] animate-pulse" />
-                    <span>Average AI order transcription time: <strong className="font-mono text-[var(--text-primary)]">2.4s</strong></span>
+                    <span>Average AI order transcription time: <strong className="font-mono text-[var(--text-primary)]">{avgAiTranscriptionTime > 0 ? `${avgAiTranscriptionTime}s` : "—"}</strong></span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span>UPI instant payment capture: <strong className="font-mono text-[var(--green-bright)]">98.2%</strong></span>
+                    <span>UPI instant payment capture: <strong className="font-mono text-[var(--green-bright)]">{upiInstantCaptureRate !== undefined ? `${upiInstantCaptureRate}%` : "—"}</strong></span>
                 </div>
             </div>
         </div>

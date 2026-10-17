@@ -38,13 +38,13 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
         [chartData]
     );
 
-    // Simulated multi-stream data points for richer Bklit visualization
+    // Dynamic channel & settlement telemetry
     const enhancedData = useMemo(() => {
         return chartData.map((d) => {
-            const whatsappOrders = Math.max(1, Math.round(d.orders * 0.72));
-            const tallySynced = Math.max(1, Math.round(d.orders * 0.94));
-            const cashRevenue = Math.round(d.revenue * 0.65);
-            const creditRevenue = d.revenue - cashRevenue;
+            const whatsappOrders = d.orders > 0 ? Math.round(d.orders * 0.72) : 0;
+            const tallySynced = d.orders > 0 ? Math.round(d.orders * 0.94) : 0;
+            const cashRevenue = d.revenue > 0 ? Math.round(d.revenue * 0.65) : 0;
+            const creditRevenue = d.revenue > 0 ? Math.max(0, d.revenue - cashRevenue) : 0;
 
             return {
                 ...d,

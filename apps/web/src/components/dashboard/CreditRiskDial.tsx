@@ -15,11 +15,11 @@ interface CreditRiskDialProps {
 }
 
 export function CreditRiskDial({
-    score = 88,
-    totalOutstanding,
-    totalCreditLimit = 1500000,
-    highRiskCount = 2,
-    avgDsoDays = 22,
+    score = 100,
+    totalOutstanding = 0,
+    totalCreditLimit = 0,
+    highRiskCount = 0,
+    avgDsoDays = 0,
 }: CreditRiskDialProps) {
     const { status, color, bgColor, label } = useMemo(() => {
         if (score >= 80) {
@@ -135,7 +135,9 @@ export function CreditRiskDial({
                         <span>Avg DSO</span>
                     </div>
                     <p className="font-mono font-semibold text-[var(--text-primary)]">{avgDsoDays} Days</p>
-                    <span className="text-[10px] text-[var(--green-bright)]">14d faster than avg</span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-mono">
+                        {avgDsoDays === 0 ? "No aging debt" : avgDsoDays <= 30 ? "Within 30d terms" : "Exceeds 30d terms"}
+                    </span>
                 </div>
 
                 <div className="p-2 rounded-lg bg-[var(--bg-secondary)]/60 border border-white/[0.04]">
@@ -144,7 +146,9 @@ export function CreditRiskDial({
                         <span>Watchlist</span>
                     </div>
                     <p className="font-mono font-semibold text-[var(--text-primary)]">{highRiskCount} Retailers</p>
-                    <span className="text-[10px] text-[var(--gold)]">₹42k at risk</span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-mono">
+                        {highRiskCount === 0 ? "Zero default risk" : `${highRiskCount} need review`}
+                    </span>
                 </div>
             </div>
 

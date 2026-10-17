@@ -29,7 +29,18 @@ export function useOrderAction() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ id, action, data }: { id: string; action: string; data?: Record<string, unknown> }) => apiClient.post(`/api/v1/orders/${id}/${action}`, data ?? {}).then((r) => r.data),
-        onSuccess: (_, v) => { qc.invalidateQueries({ queryKey: ["orders"] }); toast.success(`Order ${v.action}ed`); },
+        onSuccess: (_, v) => {
+            qc.invalidateQueries({ queryKey: ["orders"] });
+            qc.invalidateQueries({ queryKey: ["orders", v.id] });
+            qc.invalidateQueries({ queryKey: ["inventory"] });
+            qc.invalidateQueries({ queryKey: ["products"] });
+            qc.invalidateQueries({ queryKey: ["invoices"] });
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["payments"] });
+            qc.invalidateQueries({ queryKey: ["credit-notes"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
+            toast.success(`Order ${v.action}ed successfully`);
+        },
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
@@ -42,10 +53,13 @@ export function useBulkOrderAction() {
         },
         onSuccess: (_, v) => {
             qc.invalidateQueries({ queryKey: ["orders"] });
-            qc.invalidateQueries({ queryKey: ["analytics"] });
+            qc.invalidateQueries({ queryKey: ["inventory"] });
+            qc.invalidateQueries({ queryKey: ["products"] });
             qc.invalidateQueries({ queryKey: ["invoices"] });
             qc.invalidateQueries({ queryKey: ["payments"] });
             qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["credit-notes"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
             toast.success(`Successfully ${v.action === 'mark-paid' ? 'marked' : v.action + 'ed'} ${v.ids.length} orders`);
         },
         onError: (e) => toast.error(getApiError(e).message),
@@ -242,7 +256,14 @@ export function useRecordPayment() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/payments", data).then((r) => r.data),
-        onSuccess: () => { qc.invalidateQueries({ queryKey: ["payments"] }); qc.invalidateQueries({ queryKey: ["invoices"] }); qc.invalidateQueries({ queryKey: ["customers"] }); toast.success("Payment recorded"); },
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["payments"] });
+            qc.invalidateQueries({ queryKey: ["invoices"] });
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["orders"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
+            toast.success("Payment recorded");
+        },
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
@@ -308,6 +329,8 @@ export function useRecordSupplierPayment() {
             qc.invalidateQueries({ queryKey: ["supplier-statement", variables.supplierId] });
             qc.invalidateQueries({ queryKey: ["suppliers"] });
             qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+            qc.invalidateQueries({ queryKey: ["expenses"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
             toast.success("Payment recorded successfully");
         },
         onError: (e) => toast.error(getApiError(e).message),
@@ -333,7 +356,16 @@ export function useReceivePurchaseOrder() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => apiClient.post(`/api/v1/purchase-orders/${id}/receive`, data).then((r) => r.data),
-        onSuccess: (_, v) => { qc.invalidateQueries({ queryKey: ["purchase-orders", v.id] }); qc.invalidateQueries({ queryKey: ["purchase-orders"] }); qc.invalidateQueries({ queryKey: ["inventory"] }); toast.success("Items received"); },
+        onSuccess: (_, v) => {
+            qc.invalidateQueries({ queryKey: ["purchase-orders", v.id] });
+            qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+            qc.invalidateQueries({ queryKey: ["inventory"] });
+            qc.invalidateQueries({ queryKey: ["products"] });
+            qc.invalidateQueries({ queryKey: ["suppliers"] });
+            qc.invalidateQueries({ queryKey: ["expenses"] });
+            qc.invalidateQueries({ queryKey: ["analytics"] });
+            toast.success("Items received");
+        },
         onError: (e) => toast.error(getApiError(e).message),
     });
 }

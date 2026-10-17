@@ -26,6 +26,7 @@ export class ReturnItemDto {
     @IsString() orderItemId!: string;
     @IsNumber() @Min(1) returnQty!: number;
     @IsOptional() @IsString() reason?: string;
+    @IsOptional() @IsEnum(['RESTOCKABLE', 'DAMAGED']) condition?: 'RESTOCKABLE' | 'DAMAGED';
 }
 
 export class ReturnOrderDto {
@@ -33,8 +34,14 @@ export class ReturnOrderDto {
     @IsOptional() @IsString() reason?: string;
 }
 
+export class DispatchOrderItemDto {
+    @IsString() orderItemId!: string;
+    @IsNumber() @Min(0) dispatchQty!: number;
+}
+
 export class DispatchOrderDto {
     @IsOptional() @IsString() vehicleNumber?: string;
+    @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => DispatchOrderItemDto) items?: DispatchOrderItemDto[];
 }
 
 export class ListOrdersQueryDto {

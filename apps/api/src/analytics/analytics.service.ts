@@ -23,7 +23,9 @@ export class AnalyticsService {
         const [
             todayOrders, todayRevenue, monthOrders, monthRevenue,
             newCustomers, collections, topProducts, topCustomers, recentOrders,
-            inventory, recentLocationUpdates, totalOutstanding, totalCredit
+            inventory, recentLocationUpdates, totalOutstanding, totalCredit,
+            allOrdersAgg, confirmedOrdersAgg, dispatchedOrdersAgg, reconciledOrdersAgg,
+            aiLatencyAgg, upiTotal, upiCompleted, customerRiskStats, highRiskCount
         ] = await Promise.all([
             this.prisma.order.count({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }),
             this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' }, _sum: { netAmount: true } }),
@@ -38,6 +40,15 @@ export class AnalyticsService {
             this.prisma.locationRequest.findMany({ where: { orgId, status: 'COMPLETED' }, orderBy: { updatedAt: 'desc' }, take: 5, include: { customer: { select: { name: true } } } }),
             this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { gt: 0 } }, _sum: { outstandingAmount: true } }),
             this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { lt: 0 } }, _sum: { outstandingAmount: true } }),
+            this.prisma.order.aggregate({ where: { orgId, status: { not: 'CANCELLED' }, type: 'SALE' }, _count: { id: true }, _sum: { netAmount: true } }),
+            this.prisma.order.aggregate({ where: { orgId, status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' }, _count: { id: true }, _sum: { netAmount: true } }),
+            this.prisma.order.aggregate({ where: { orgId, status: { in: ['DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' }, _count: { id: true }, _sum: { netAmount: true } }),
+            this.prisma.order.aggregate({ where: { orgId, status: { in: ['DELIVERED', 'COMPLETED', 'DISPATCHED'] }, paidAmount: { gt: 0 }, type: 'SALE' }, _count: { id: true }, _sum: { paidAmount: true } }),
+            this.prisma.aIQuery.aggregate({ where: { orgId, latencyMs: { not: null } }, _avg: { latencyMs: true } }),
+            this.prisma.payment.count({ where: { orgId, method: 'UPI' } }),
+            this.prisma.payment.count({ where: { orgId, method: 'UPI', status: 'COMPLETED' } }),
+            this.prisma.customer.aggregate({ where: { orgId }, _avg: { paymentScore: true, avgDaysOverdue: true }, _sum: { creditLimit: true } }),
+            this.prisma.customer.count({ where: { orgId, OR: [{ paymentScore: { lt: 60 } }, { overdue30: { gt: 0 } }] } }),
         ]);
 
         const lowStockCount = inventory.filter((i: any) => i.quantity <= i.product.minStockLevel).length;
@@ -58,6 +69,27 @@ export class AnalyticsService {
             productSku: productMap.get(p.productId)?.sku ?? '',
         }));
 
+        const funnel = {
+            totalVisits: allOrdersAgg._count.id ?? 0,
+            totalVisitsAmount: allOrdersAgg._sum.netAmount ?? 0,
+            totalOrders: confirmedOrdersAgg._count.id ?? 0,
+            totalOrdersAmount: confirmedOrdersAgg._sum.netAmount ?? 0,
+            totalDispatched: dispatchedOrdersAgg._count.id ?? 0,
+            totalDispatchedAmount: dispatchedOrdersAgg._sum.netAmount ?? 0,
+            totalReconciled: reconciledOrdersAgg._count.id ?? 0,
+            totalReconciledAmount: reconciledOrdersAgg._sum.paidAmount ?? 0,
+            avgAiTranscriptionTime: aiLatencyAgg._avg.latencyMs ? Math.round((aiLatencyAgg._avg.latencyMs / 1000) * 10) / 10 : 0,
+            upiInstantCaptureRate: upiTotal > 0 ? Math.round((upiCompleted / upiTotal) * 1000) / 10 : 100,
+        };
+
+        const creditRisk = {
+            score: customerRiskStats._avg.paymentScore ? Math.round(customerRiskStats._avg.paymentScore) : 100,
+            totalOutstanding: totalOutstanding._sum.outstandingAmount ?? 0,
+            totalCreditLimit: customerRiskStats._sum.creditLimit ?? 0,
+            highRiskCount,
+            avgDsoDays: customerRiskStats._avg.avgDaysOverdue ? Math.round(customerRiskStats._avg.avgDaysOverdue) : 0,
+        };
+
         const result = {
             today: { revenue: todayRevenue._sum.netAmount ?? 0, orders: todayOrders, collections: collections._sum.amount ?? 0, newCustomers: 0 },
             thisMonth: { revenue: monthRevenue._sum.netAmount ?? 0, orders: monthOrders, collections: 0, avgOrderValue: monthOrders > 0 ? (monthRevenue._sum.netAmount ?? 0) / monthOrders : 0, newCustomers },
@@ -68,6 +100,8 @@ export class AnalyticsService {
             recentOrders,
             recentLocationUpdates,
             alerts: [],
+            funnel,
+            creditRisk,
         };
 
         await this.redis.setJson(cacheKey, result, 300);

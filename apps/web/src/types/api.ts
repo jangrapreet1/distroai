@@ -29,6 +29,25 @@ export interface DashboardData {
         customer: { name: string } | null;
         source?: string;
     }[];
+    funnel?: {
+        totalVisits: number;
+        totalVisitsAmount: number;
+        totalOrders: number;
+        totalOrdersAmount: number;
+        totalDispatched: number;
+        totalDispatchedAmount: number;
+        totalReconciled: number;
+        totalReconciledAmount: number;
+        avgAiTranscriptionTime: number;
+        upiInstantCaptureRate: number;
+    };
+    creditRisk?: {
+        score: number;
+        totalOutstanding: number;
+        totalCreditLimit: number;
+        highRiskCount: number;
+        avgDsoDays: number;
+    };
 }
 
 export interface CatalogProduct {

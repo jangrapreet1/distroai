@@ -452,21 +452,27 @@ export default function DashboardPage() {
                 </div>
                 <div className="lg:col-span-1">
                     <CreditRiskDial
-                        score={88}
+                        score={d?.creditRisk?.score ?? 100}
                         totalOutstanding={outstanding}
-                        totalCreditLimit={1500000}
-                        highRiskCount={2}
-                        avgDsoDays={22}
+                        totalCreditLimit={d?.creditRisk?.totalCreditLimit ?? 0}
+                        highRiskCount={d?.creditRisk?.highRiskCount ?? 0}
+                        avgDsoDays={d?.creditRisk?.avgDsoDays ?? 0}
                     />
                 </div>
             </div>
 
             {/* Pipeline Row: Conversion Funnel */}
             <ConversionFunnel
-                totalVisits={todayOrders > 0 ? todayOrders + 24 : 184}
-                totalOrders={todayOrders > 0 ? todayOrders : 162}
-                totalDispatched={todayOrders > 0 ? Math.max(1, todayOrders - 8) : 154}
-                totalReconciled={todayOrders > 0 ? Math.max(1, todayOrders - 14) : 148}
+                totalVisits={d?.funnel?.totalVisits ?? 0}
+                totalVisitsAmount={d?.funnel?.totalVisitsAmount ?? 0}
+                totalOrders={d?.funnel?.totalOrders ?? 0}
+                totalOrdersAmount={d?.funnel?.totalOrdersAmount ?? 0}
+                totalDispatched={d?.funnel?.totalDispatched ?? 0}
+                totalDispatchedAmount={d?.funnel?.totalDispatchedAmount ?? 0}
+                totalReconciled={d?.funnel?.totalReconciled ?? 0}
+                totalReconciledAmount={d?.funnel?.totalReconciledAmount ?? 0}
+                avgAiTranscriptionTime={d?.funnel?.avgAiTranscriptionTime ?? 0}
+                upiInstantCaptureRate={d?.funnel?.upiInstantCaptureRate}
             />
 
             {/* Alerts Feed + Portal Orders */}

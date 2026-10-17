@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CustomersPage from '@/app/(dashboard)/customers/page';
 import { useCustomers, useCreateCustomer } from '@/hooks/api-hooks';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock the dependencies
 jest.mock('@/hooks/api-hooks');
@@ -9,6 +10,15 @@ jest.mock('next/navigation', () => ({
         push: jest.fn(),
     }),
 }));
+
+const renderWithClient = (ui: React.ReactElement) => {
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+        },
+    });
+    return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+};
 
 describe('CustomersPage and AddCustomerModal behavior', () => {
     const mockMutate = jest.fn();
@@ -30,7 +40,7 @@ describe('CustomersPage and AddCustomerModal behavior', () => {
     });
 
     it('opens modal, fills data, and submits when Create Customer button is clicked', async () => {
-        render(<CustomersPage />);
+        renderWithClient(<CustomersPage />);
 
         // 1. Find and click the "Add Customer" button on the main page
         const addCustomerBtn = screen.getByRole('button', { name: /add customer/i });
@@ -67,7 +77,7 @@ describe('CustomersPage and AddCustomerModal behavior', () => {
     });
 
     it('closes the modal when Cancel button is clicked', () => {
-        render(<CustomersPage />);
+        renderWithClient(<CustomersPage />);
 
         // Open modal
         fireEvent.click(screen.getByRole('button', { name: /add customer/i }));

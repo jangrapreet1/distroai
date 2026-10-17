@@ -40,7 +40,7 @@ export class OrdersService {
     });
     const prefix = settings?.orderPrefix ?? "ORD";
     const count = await this.prisma.order.count({ where: { orgId } });
-    return `${prefix} -${String(count + 1).padStart(5, "0")} `;
+    return `${prefix}-${String(count + 1).padStart(5, "0")}`;
   }
 
   async findAll(orgId: string, query: ListOrdersQueryDto) {
@@ -237,6 +237,11 @@ export class OrdersService {
           create: itemsWithTax.map((i: any) => ({
             productId: i.productId,
             quantity: i.quantity,
+            orderedQty: i.quantity,
+            deliveredQty: 0,
+            pendingQty: i.quantity,
+            returnedQty: 0,
+            cancelledQty: 0,
             unit: i.unit,
             price: i.price,
             discount: i.discount ?? 0,
@@ -317,8 +322,9 @@ export class OrdersService {
         await tx.orderItem.deleteMany({ where: { orderId: id } });
         await tx.orderItem.createMany({
           data: itemsWithTax.map((i: any) => ({
-            orderId: id, productId: i.productId, quantity: i.quantity, unit: i.unit,
-            price: i.price, discount: i.discount ?? 0, taxRate: i.taxRate, taxAmount: i.taxAmount, totalAmount: i.totalAmount,
+            orderId: id, productId: i.productId, quantity: i.quantity,
+            orderedQty: i.quantity, deliveredQty: 0, pendingQty: i.quantity, returnedQty: 0, cancelledQty: 0,
+            unit: i.unit, price: i.price, discount: i.discount ?? 0, taxRate: i.taxRate, taxAmount: i.taxAmount, totalAmount: i.totalAmount,
           })),
         });
 
@@ -565,23 +571,90 @@ export class OrdersService {
         code: "NOT_FOUND",
         message: "Order not found",
       });
-    if (!["CONFIRMED", "PACKED"].includes(order.status)) {
+    if (!["CONFIRMED", "PACKED", "DISPATCHED", "PARTIALLY_DELIVERED"].includes(order.status)) {
       throw new BadRequestException({
         code: "UNPROCESSABLE",
-        message: `Cannot dispatch order in status ${order.status} `,
+        message: `Cannot dispatch order in status ${order.status}`,
       });
     }
 
-    await this.prisma.$transaction(async (tx: any) => {
-      await tx.order.update({ where: { id }, data: { status: "DISPATCHED" } });
+    // Determine dispatch quantities per line item
+    const dispatchMap = new Map<string, number>();
+    if (dto.items && dto.items.length > 0) {
+      for (const itemDto of dto.items) {
+        const orderItem = order.items.find((i: any) => i.id === itemDto.orderItemId);
+        if (!orderItem) {
+          throw new NotFoundException({
+            code: "NOT_FOUND",
+            message: `OrderItem ${itemDto.orderItemId} not found in this order`,
+          });
+        }
+        if (itemDto.dispatchQty < 0) {
+          throw new BadRequestException({
+            code: "INVALID_QUANTITY",
+            message: "Dispatch quantity cannot be negative",
+          });
+        }
+        const ordered = orderItem.orderedQty > 0 ? orderItem.orderedQty : orderItem.quantity;
+        const currentPending = orderItem.pendingQty > 0
+          ? orderItem.pendingQty
+          : Math.max(0, ordered - orderItem.deliveredQty - orderItem.cancelledQty);
+
+        if (itemDto.dispatchQty > currentPending) {
+          throw new BadRequestException({
+            code: "OVER_DELIVERY",
+            message: `Dispatch qty (${itemDto.dispatchQty}) exceeds pending qty (${currentPending}) for item ${orderItem.productId}`,
+          });
+        }
+        dispatchMap.set(orderItem.id, itemDto.dispatchQty);
+      }
+    } else {
+      // Default: dispatch all remaining pending quantities
       for (const item of order.items) {
+        const ordered = item.orderedQty > 0 ? item.orderedQty : item.quantity;
+        const currentPending = item.pendingQty > 0
+          ? item.pendingQty
+          : Math.max(0, ordered - item.deliveredQty - item.cancelledQty);
+        dispatchMap.set(item.id, currentPending);
+      }
+    }
+
+    const totalDispatchedThisBatch = Array.from(dispatchMap.values()).reduce((sum, q) => sum + q, 0);
+    if (totalDispatchedThisBatch <= 0) {
+      throw new BadRequestException({
+        code: "NO_QUANTITY",
+        message: "At least one item must have a dispatch quantity greater than 0",
+      });
+    }
+
+    let finalStatus: "PARTIALLY_DELIVERED" | "DELIVERED" = "DELIVERED";
+
+    await this.prisma.$transaction(async (tx: any) => {
+      for (const item of order.items) {
+        const dispatchQty = dispatchMap.get(item.id) ?? 0;
+        if (dispatchQty <= 0) continue;
+
+        const ordered = item.orderedQty > 0 ? item.orderedQty : item.quantity;
+        const newDelivered = item.deliveredQty + dispatchQty;
+        const newPending = Math.max(0, ordered - newDelivered - item.cancelledQty);
+
+        await tx.orderItem.update({
+          where: { id: item.id },
+          data: {
+            deliveredQty: newDelivered,
+            pendingQty: newPending,
+          },
+        });
+
+        // Deduct inventory physical stock and reservedQty
         await tx.inventory.updateMany({
           where: { productId: item.productId, warehouseId: order.warehouseId },
           data: {
-            quantity: { decrement: item.quantity },
-            reservedQty: { decrement: item.quantity },
+            quantity: { decrement: dispatchQty },
+            reservedQty: { decrement: dispatchQty },
           },
         });
+
         const inv = await tx.inventory.findFirst({
           where: { productId: item.productId, warehouseId: order.warehouseId },
         });
@@ -590,7 +663,7 @@ export class OrdersService {
             data: {
               inventoryId: inv.id,
               type: "OUT",
-              quantity: -item.quantity,
+              quantity: -dispatchQty,
               referenceId: id,
               referenceType: "ORDER",
               createdBy: userId,
@@ -598,21 +671,36 @@ export class OrdersService {
           });
         }
       }
+
+      // Check all items to see if any pending remain
+      const allUpdatedItems = await tx.orderItem.findMany({ where: { orderId: id } });
+      const hasPending = allUpdatedItems.some((it: any) => {
+        const ordered = it.orderedQty > 0 ? it.orderedQty : it.quantity;
+        const pending = it.pendingQty !== undefined ? it.pendingQty : Math.max(0, ordered - it.deliveredQty - it.cancelledQty);
+        return pending > 0;
+      });
+
+      finalStatus = hasPending ? "PARTIALLY_DELIVERED" : "DELIVERED";
+
+      await tx.order.update({
+        where: { id },
+        data: { status: finalStatus },
+      });
+
       await tx.orderStatusHistory.create({
         data: {
           orderId: id,
-          fromStatus: order.status as "CONFIRMED" | "PACKED",
-          toStatus: "DISPATCHED",
+          fromStatus: order.status,
+          toStatus: finalStatus,
           note: dto.vehicleNumber,
           changedBy: userId,
         },
       });
     });
 
-
     await this.invalidateAnalytics(orgId);
-    this.eventsService.emit(orgId, 'order:status_changed', { id, status: 'DISPATCHED' });
-    return { success: true, status: "DISPATCHED" };
+    this.eventsService.emit(orgId, 'order:status_changed', { id, status: finalStatus });
+    return { success: true, status: finalStatus };
   }
 
   async deliver(orgId: string, id: string, userId: string) {
@@ -720,10 +808,10 @@ export class OrdersService {
         code: "NOT_FOUND",
         message: "Order not found",
       });
-    if (original.status !== "DELIVERED")
+    if (!["DELIVERED", "PARTIALLY_DELIVERED", "COMPLETED"].includes(original.status))
       throw new BadRequestException({
         code: "UNPROCESSABLE",
-        message: "Can only return DELIVERED orders",
+        message: "Can only return delivered orders",
       });
 
     const txResult = await this.prisma.$transaction(async (tx: any) => {
@@ -732,14 +820,22 @@ export class OrdersService {
       const r2 = (n: number) => Math.round(n * 100) / 100;
       const returnNumber = await this.generateOrderNumber(orgId);
 
-      // If items weren't provided, default to returning everything
+      // If items weren't provided, default to returning everything delivered
       const itemsToReturn = dto.items && dto.items.length > 0
         ? dto.items
         : original.items.map((i: any) => ({
           orderItemId: i.id,
-          returnQty: i.quantity,
+          returnQty: Math.max(0, (i.deliveredQty > 0 ? i.deliveredQty : i.quantity) - (i.returnedQty || 0)),
           reason: dto.reason ?? "Returned entirely",
-        }));
+          condition: "RESTOCKABLE" as const,
+        })).filter(i => i.returnQty > 0);
+
+      if (itemsToReturn.length === 0) {
+        throw new BadRequestException({
+          code: "NOTHING_TO_RETURN",
+          message: "No delivered items remaining to return",
+        });
+      }
 
       // Build return items and calculate return value
       let returnTotalAmount = 0;
@@ -756,13 +852,18 @@ export class OrdersService {
             code: "NOT_FOUND",
             message: `OrderItem ${ri.orderItemId} not found`,
           });
-        if (ri.returnQty > origItem.quantity)
+
+        const delivered = origItem.deliveredQty > 0 ? origItem.deliveredQty : origItem.quantity;
+        const alreadyReturned = origItem.returnedQty ?? 0;
+        const returnable = Math.max(0, delivered - alreadyReturned);
+
+        if (ri.returnQty > returnable)
           throw new BadRequestException({
             code: "CONFLICT",
-            message: "Return qty exceeds ordered qty",
+            message: `Return qty (${ri.returnQty}) exceeds delivered returnable qty (${returnable}) for product ${origItem.productId}`,
           });
 
-        const ratio = ri.returnQty / origItem.quantity;
+        const ratio = origItem.quantity > 0 ? ri.returnQty / origItem.quantity : 1;
         const lineTotal = r2((origItem.price * origItem.quantity) * ratio); // Tax-exclusive
         const lineDiscount = r2((origItem.discount || 0) * ratio);
         const lineTax = r2((origItem.taxAmount || 0) * ratio);
@@ -776,6 +877,11 @@ export class OrdersService {
         return {
           productId: origItem.productId,
           quantity: ri.returnQty,
+          orderedQty: ri.returnQty,
+          deliveredQty: ri.returnQty,
+          pendingQty: 0,
+          returnedQty: 0,
+          cancelledQty: 0,
           unit: origItem.unit,
           price: origItem.price,
           discount: lineDiscount,
@@ -793,7 +899,7 @@ export class OrdersService {
       const returnOrder = await tx.order.create({
         data: {
           orgId,
-          orderNumber: `RET - ${returnNumber} `,
+          orderNumber: `RET-${returnNumber}`,
           customerId: original.customerId,
           warehouseId: original.warehouseId,
           status: "RETURNED",
@@ -807,33 +913,69 @@ export class OrdersService {
         include: { items: true },
       });
 
-      // Restore inventory
+      // Update original line items returnedQty and conditionally restore inventory
       for (const ri of itemsToReturn) {
         const origItem = original.items.find((i: any) => i.id === ri.orderItemId);
         if (!origItem) continue;
+
+        await tx.orderItem.update({
+          where: { id: origItem.id },
+          data: { returnedQty: { increment: ri.returnQty } },
+        });
+
+        const isRestockable = ri.condition !== "DAMAGED";
         const inv = await tx.inventory.findFirst({
           where: {
             productId: origItem.productId,
             warehouseId: original.warehouseId,
           },
         });
+
         if (inv) {
-          await tx.inventory.update({
-            where: { id: inv.id },
-            data: { quantity: { increment: ri.returnQty } },
-          });
-          await tx.inventoryTransaction.create({
-            data: {
-              inventoryId: inv.id,
-              type: "RETURN",
-              quantity: ri.returnQty,
-              referenceId: id,
-              referenceType: "RETURN",
-              createdBy: userId,
-            },
-          });
+          if (isRestockable) {
+            await tx.inventory.update({
+              where: { id: inv.id },
+              data: { quantity: { increment: ri.returnQty } },
+            });
+            await tx.inventoryTransaction.create({
+              data: {
+                inventoryId: inv.id,
+                type: "RETURN",
+                quantity: ri.returnQty,
+                referenceId: id,
+                referenceType: "RETURN",
+                createdBy: userId,
+                note: "Restockable customer return",
+              },
+            });
+          } else {
+            // Damaged goods do NOT inflate sellable inventory; log audit entry
+            await tx.inventoryTransaction.create({
+              data: {
+                inventoryId: inv.id,
+                type: "RETURN",
+                quantity: 0,
+                referenceId: id,
+                referenceType: "RETURN_DAMAGED",
+                createdBy: userId,
+                note: `Damaged return of ${ri.returnQty} units — quarantined without increasing sellable stock`,
+              },
+            });
+          }
         }
       }
+
+      // Check whether original order is fully or partially returned
+      const allOrigItems = await tx.orderItem.findMany({ where: { orderId: original.id } });
+      const isFullyReturned = allOrigItems.every((it: any) => {
+        const del = it.deliveredQty > 0 ? it.deliveredQty : it.quantity;
+        return it.returnedQty >= del;
+      });
+
+      await tx.order.update({
+        where: { id: original.id },
+        data: { status: isFullyReturned ? "RETURNED" : "PARTIALLY_RETURNED" },
+      });
 
       // ── GST Credit Note + Financial Reversal ──
       if (original.invoiceId && returnNetAmount > 0) {

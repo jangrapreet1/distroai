@@ -8,7 +8,15 @@ import Link from "next/link";
 import { formatDate, formatINR } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
-const statusClass: Record<string, string> = { DRAFT: "badge-draft", SENT: "badge-sent", ACKNOWLEDGED: "badge-partial", RECEIVED: "badge-delivered", CANCELLED: "badge-cancelled" };
+const statusClass: Record<string, string> = {
+    DRAFT: "badge-draft",
+    SENT: "badge-sent",
+    ACKNOWLEDGED: "badge-partial",
+    PARTIALLY_DELIVERED: "badge-partial",
+    RECEIVED: "badge-delivered",
+    COMPLETED: "badge-delivered",
+    CANCELLED: "badge-cancelled"
+};
 
 
 export default function PurchaseOrderDetailPage() {
@@ -25,28 +33,13 @@ export default function PurchaseOrderDetailPage() {
     if (isLoading) return <div className="p-12 flex justify-center"><div className="w-8 h-8 rounded-full border-4 border-[var(--gold)] border-t-transparent animate-spin"></div></div>;
     if (!po) return <div className="p-12 text-center text-[var(--test-muted)]">Purchase Order not found.</div>;
 
-    const handleReceive = () => {
-        const payload = {
-            id: poId,
-            data: {
-                items: po.items.map((i: any) => ({
-                    poItemId: i.id,
-                    receivedQty: i.orderedQty - i.receivedQty,
-                }))
-            }
-        };
-
-        receivePo.mutate(payload, {
-            onSuccess: () => toast.success("Purchase order marked as received and inventory updated!")
-        });
-    }
-
     const handleReceiveToggle = () => {
         if (!receiving) {
             // Initialize with remaining quantities
             const initial: typeof receiveData = {};
             po.items.forEach((item: any) => {
-                const remaining = item.orderedQty - item.receivedQty;
+                const received = item.deliveredQty ?? item.receivedQty ?? 0;
+                const remaining = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, item.orderedQty - received);
                 if (remaining > 0) {
                     initial[item.id] = { qty: remaining, batchNumber: "", expiryDate: "" };
                 }
@@ -77,7 +70,10 @@ export default function PurchaseOrderDetailPage() {
         });
     };
 
-    const allReceived = po.items.every((i: any) => i.receivedQty >= i.orderedQty);
+    const allReceived = po.items.every((i: any) => {
+        const received = i.deliveredQty ?? i.receivedQty ?? 0;
+        return received >= i.orderedQty;
+    });
 
     return (
         <div className="max-w-5xl mx-auto pb-12">
@@ -144,6 +140,7 @@ export default function PurchaseOrderDetailPage() {
                                         <th className="text-right p-4">Price</th>
                                         <th className="text-center p-4">Ordered</th>
                                         <th className="text-center p-4">Received</th>
+                                        <th className="text-center p-4">Pending</th>
                                         <th className="text-right p-4">Total</th>
                                     </tr>
                                 </thead>
@@ -151,6 +148,9 @@ export default function PurchaseOrderDetailPage() {
                                     {po.items.map((item: any) => {
                                         const p = item.product;
                                         const hasSecondary = p.secondaryUnit && p.conversionFactor;
+                                        const received = item.deliveredQty ?? item.receivedQty ?? 0;
+                                        const pending = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, item.orderedQty - received);
+
                                         return (
                                             <tr key={item.id} className="border-b border-[var(--border)]">
                                                 <td className="p-4">
@@ -168,10 +168,13 @@ export default function PurchaseOrderDetailPage() {
                                                     {hasSecondary && <div className="text-xs font-normal text-[var(--text-muted)]">{(item.orderedQty * p.conversionFactor).toFixed(2)} {p.secondaryUnit}</div>}
                                                 </td>
                                                 <td className="p-4 text-center">
-                                                    <div className={`font-bold ${item.receivedQty >= item.orderedQty ? "text-[var(--green-bright)]" : item.receivedQty > 0 ? "text-[var(--orange)]" : "text-[var(--text-muted)]"}`}>
-                                                        {item.receivedQty} <span className="font-normal text-xs">{p.unit}</span>
+                                                    <div className={`font-bold ${received >= item.orderedQty ? "text-[var(--green-bright)]" : received > 0 ? "text-[var(--orange)]" : "text-[var(--text-muted)]"}`}>
+                                                        {received} <span className="font-normal text-xs">{p.unit}</span>
                                                     </div>
-                                                    {hasSecondary && <div className="text-xs font-normal text-[var(--text-muted)]">{(item.receivedQty * p.conversionFactor).toFixed(2)} {p.secondaryUnit}</div>}
+                                                    {hasSecondary && <div className="text-xs font-normal text-[var(--text-muted)]">{(received * p.conversionFactor).toFixed(2)} {p.secondaryUnit}</div>}
+                                                </td>
+                                                <td className="p-4 text-center font-bold text-[var(--orange)] font-mono">
+                                                    {pending} <span className="font-normal text-xs">{p.unit}</span>
                                                 </td>
                                                 <td className="p-4 text-right font-mono font-medium">{formatINR(item.totalAmount)}</td>
                                             </tr>
@@ -264,7 +267,8 @@ export default function PurchaseOrderDetailPage() {
 
                             <form onSubmit={handleReceiveSubmit} className="space-y-5">
                                 {po.items.map((item: any) => {
-                                    const remaining = item.orderedQty - item.receivedQty;
+                                    const received = item.deliveredQty ?? item.receivedQty ?? 0;
+                                    const remaining = item.pendingQty !== undefined ? item.pendingQty : Math.max(0, item.orderedQty - received);
                                     if (remaining <= 0) return null;
 
                                     return (

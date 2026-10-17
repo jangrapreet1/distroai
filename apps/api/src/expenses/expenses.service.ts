@@ -40,31 +40,59 @@ export class ExpensesService {
     }
 
     async create(orgId: string, data: any) {
-        // Validate PO ownership if linking to a purchase order
-        if (data.purchaseOrderId) {
-            const po = await this.prisma.purchaseOrder.findFirst({
-                where: { id: data.purchaseOrderId, orgId },
-            });
-            if (!po) {
-                throw new NotFoundException('Purchase order not found or does not belong to your organization');
-            }
-        }
+        const amount = Number(data.amount);
 
-        return this.prisma.expense.create({
-            data: {
-                orgId,
-                type: data.type === 'PURCHASE' ? 'PURCHASE' : 'OPERATIONAL',
-                vendorName: data.vendorName,
-                amount: Number(data.amount),
-                taxAmount: data.taxAmount ? Number(data.taxAmount) : null,
-                date: new Date(data.date),
-                category: data.category || null,
-                paymentMethod: data.paymentMethod || null,
-                purchaseOrderId: data.purchaseOrderId || null,
-                receiptUrl: data.receiptUrl || null,
-                notes: data.notes || null,
-            },
-            include: { purchaseOrder: { select: { id: true, poNumber: true } } },
+        return this.prisma.$transaction(async (tx: any) => {
+            let po: any = null;
+            if (data.purchaseOrderId) {
+                po = await tx.purchaseOrder.findFirst({
+                    where: { id: data.purchaseOrderId, orgId },
+                });
+                if (!po) {
+                    throw new NotFoundException('Purchase order not found or does not belong to your organization');
+                }
+            }
+
+            const expense = await tx.expense.create({
+                data: {
+                    orgId,
+                    type: data.type === 'PURCHASE' ? 'PURCHASE' : 'OPERATIONAL',
+                    vendorName: data.vendorName,
+                    amount,
+                    taxAmount: data.taxAmount ? Number(data.taxAmount) : null,
+                    date: new Date(data.date),
+                    category: data.category || null,
+                    paymentMethod: data.paymentMethod || null,
+                    purchaseOrderId: data.purchaseOrderId || null,
+                    receiptUrl: data.receiptUrl || null,
+                    notes: data.notes || null,
+                },
+                include: { purchaseOrder: { select: { id: true, poNumber: true } } },
+            });
+
+            if (po) {
+                const newPaid = (po.paidAmount || 0) + amount;
+                const newPaymentStatus = newPaid >= po.totalAmount ? 'PAID' : (newPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
+
+                await tx.purchaseOrder.update({
+                    where: { id: po.id },
+                    data: {
+                        paidAmount: newPaid,
+                        paymentStatus: newPaymentStatus,
+                    },
+                });
+
+                if (po.supplierId) {
+                    await tx.supplier.update({
+                        where: { id: po.supplierId },
+                        data: {
+                            outstandingBalance: { decrement: amount },
+                        },
+                    });
+                }
+            }
+
+            return expense;
         });
     }
 

@@ -59,9 +59,12 @@ enum OrderStatus {
   CONFIRMED
   PACKED
   DISPATCHED
+  PARTIALLY_DELIVERED
   DELIVERED
-  CANCELLED
+  COMPLETED
+  PARTIALLY_RETURNED
   RETURNED
+  CANCELLED
 }
 
 enum OrderType {
@@ -83,7 +86,9 @@ enum POStatus {
   DRAFT
   SENT
   ACKNOWLEDGED
+  PARTIALLY_DELIVERED
   RECEIVED
+  COMPLETED
   CANCELLED
 }
 
@@ -436,10 +441,13 @@ model Supplier {
   city             String?
   state            String?
   pincode          String?
-  creditDays       Int      @default(0)
-  leadTimeDays     Int      @default(0)
-  performanceScore Float    @default(100)
-  notes            String?
+  creditDays         Int       @default(0)
+  leadTimeDays       Int       @default(0)
+  performanceScore   Float     @default(100)
+  outstandingBalance Float     @default(0)
+  lastDeliveryDate   DateTime?
+  fulfillmentRate    Float     @default(100)
+  notes              String?
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -494,16 +502,21 @@ model Order {
 }
 
 model OrderItem {
-  id          String @id @default(cuid())
-  orderId     String
-  productId   String
-  quantity    Int
-  unit        String
-  price       Float
-  discount    Float  @default(0)
-  taxRate     Float  @default(0)
-  taxAmount   Float  @default(0)
-  totalAmount Float
+  id           String @id @default(cuid())
+  orderId      String
+  productId    String
+  quantity     Int
+  orderedQty   Int    @default(0)
+  deliveredQty Int    @default(0)
+  pendingQty   Int    @default(0)
+  returnedQty  Int    @default(0)
+  cancelledQty Int    @default(0)
+  unit         String
+  price        Float
+  discount     Float  @default(0)
+  taxRate      Float  @default(0)
+  taxAmount    Float  @default(0)
+  totalAmount  Float
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
@@ -527,17 +540,19 @@ model OrderStatusHistory {
 }
 
 model PurchaseOrder {
-  id           String    @id @default(cuid())
-  orgId        String
-  poNumber     String
-  supplierId   String
-  status       POStatus  @default(DRAFT)
-  totalAmount  Float     @default(0)
-  expectedDate DateTime?
-  receivedDate DateTime?
-  notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  orgId         String
+  poNumber      String
+  supplierId    String
+  status        POStatus  @default(DRAFT)
+  totalAmount   Float     @default(0)
+  paidAmount    Float     @default(0)
+  paymentStatus String    @default("UNPAID")
+  expectedDate  DateTime?
+  receivedDate  DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -550,14 +565,18 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id          String @id @default(cuid())
-  poId        String
-  productId   String
-  orderedQty  Int
-  receivedQty Int    @default(0)
-  price       Float
-  taxRate     Float  @default(0)
-  totalAmount Float
+  id           String @id @default(cuid())
+  poId         String
+  productId    String
+  orderedQty   Int
+  receivedQty  Int    @default(0)
+  deliveredQty Int    @default(0)
+  pendingQty   Int    @default(0)
+  returnedQty  Int    @default(0)
+  cancelledQty Int    @default(0)
+  price        Float
+  taxRate      Float  @default(0)
+  totalAmount  Float
 
   purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
   product       Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
