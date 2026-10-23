@@ -6,6 +6,7 @@ import { ArrowLeft, Package, Edit, X, RefreshCcw, Trash2, AlertTriangle, CheckCi
 import { useProduct, useUpdateProduct, useDeleteProduct, useRestoreProduct, useHardDeleteProduct, useUploadFile, usePublishProduct } from "@/hooks/api-hooks";
 import { useRouter } from "next/navigation";
 import { MultiImageUpload } from "@/components/ui/multi-image-upload";
+import toast from "react-hot-toast";
 
 
 export default function ProductDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -85,19 +86,50 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
 
     const handleEditSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Ensure all variant SKUs are unique within the product and non-empty
+        const seenSkus = new Set<string>();
+        const sanitizedVariants = editVariants.map((v, i) => {
+            let sku = (v.sku || "").trim();
+            if (!sku) {
+                const nameSuffix = (v.name || `VAR${i + 1}`).trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                sku = `${editData.sku?.trim() || product?.sku?.trim() || "PRD"}-${nameSuffix}`;
+            }
+            let uniqueSku = sku;
+            let counter = 1;
+            while (seenSkus.has(uniqueSku.toLowerCase())) {
+                counter++;
+                uniqueSku = `${sku}-${counter}`;
+            }
+            seenSkus.add(uniqueSku.toLowerCase());
+            return {
+                ...v,
+                sku: uniqueSku,
+            };
+        });
+
+        setEditVariants(sanitizedVariants);
+
         updateProduct.mutate({
             id: product.id,
             data: {
                 ...editData,
                 imageUrl: editImages[0] || "",
                 imageUrls: editImages,
-                ...(editVariants.length > 0 ? {
+                ...(sanitizedVariants.length > 0 ? {
                     hasVariants: true,
-                    variants: editVariants
+                    variants: sanitizedVariants
                 } : {})
             }
         }, {
-            onSuccess: () => setIsEditing(false)
+            onSuccess: () => {
+                toast.success("Product updated successfully");
+                setIsEditing(false);
+            },
+            onError: (err: any) => {
+                const msg = err?.response?.data?.message || err?.message || "Failed to update product";
+                toast.error(msg);
+            }
         });
     };
 
@@ -645,12 +677,20 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                                                 type="button"
                                                 onClick={() => {
                                                     if (!newVariantName.trim()) return;
-                                                    const baseSku = newVariantSku.trim() || `${editData.sku || 'PRD'}-${newVariantName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4)}`;
+                                                    const cleanSuffix = newVariantName.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                                                    const prefix = editData.sku?.trim() || product?.sku?.trim() || "PRD";
+                                                    let candidateSku = newVariantSku.trim() || `${prefix}-${cleanSuffix || "VAR"}`;
+                                                    let uniqueSku = candidateSku;
+                                                    let counter = 1;
+                                                    while (editVariants.some(v => (v.sku || "").trim().toLowerCase() === uniqueSku.toLowerCase())) {
+                                                        counter++;
+                                                        uniqueSku = `${candidateSku}-${counter}`;
+                                                    }
                                                     setEditVariants([
                                                         ...editVariants,
                                                         {
                                                             name: newVariantName.trim(),
-                                                            sku: baseSku,
+                                                            sku: uniqueSku,
                                                             sellingPrice: Number(editData.sellingPrice) || 0,
                                                             mrp: Number(editData.mrp) || Number(editData.sellingPrice) || 0,
                                                             purchasePrice: Number(editData.purchasePrice) || 0,

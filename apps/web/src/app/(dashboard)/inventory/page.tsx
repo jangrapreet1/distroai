@@ -205,14 +205,23 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
         const baseMrp = Number(mrp) || baseSell;
         const baseBuy = Number(purchasePrice) || 0;
 
+        const seenSkus = new Set<string>();
         const generated = combinations.map(combo => {
             const variantName = Object.values(combo).join(" / ");
             const skuSuffix = Object.values(combo)
-                .map(v => v.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 4))
+                .map(v => v.replace(/[^a-zA-Z0-9]/g, "").toUpperCase())
                 .join("-");
+            const initialSku = `${baseSku}-${skuSuffix || "VAR"}`;
+            let finalSku = initialSku;
+            let counter = 1;
+            while (seenSkus.has(finalSku.toLowerCase())) {
+                counter++;
+                finalSku = `${initialSku}-${counter}`;
+            }
+            seenSkus.add(finalSku.toLowerCase());
             return {
                 name: variantName,
-                sku: `${baseSku}-${skuSuffix}`,
+                sku: finalSku,
                 attributes: combo,
                 sellingPrice: baseSell,
                 mrp: baseMrp,
@@ -262,7 +271,18 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 payload.variantAttributes = attributes
                     .filter(a => a.name.trim() && a.values.length > 0)
                     .map(a => ({ name: a.name.trim(), values: a.values }));
-                payload.variants = variants;
+                const seenVarSkus = new Set<string>();
+                payload.variants = variants.map((v, i) => {
+                    let vSku = (v.sku || "").trim() || `${sku.trim() || 'PRD'}-VAR${i + 1}`;
+                    let candidate = vSku;
+                    let counter = 1;
+                    while (seenVarSkus.has(candidate.toLowerCase())) {
+                        counter++;
+                        candidate = `${vSku}-${counter}`;
+                    }
+                    seenVarSkus.add(candidate.toLowerCase());
+                    return { ...v, sku: candidate };
+                });
             }
 
             create.mutate(payload as any, {
@@ -299,7 +319,18 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 payload.variantAttributes = attributes
                     .filter(a => a.name.trim() && a.values.length > 0)
                     .map(a => ({ name: a.name.trim(), values: a.values }));
-                payload.variants = variants;
+                const seenVarSkus = new Set<string>();
+                payload.variants = variants.map((v, i) => {
+                    let vSku = (v.sku || "").trim() || `${sku.trim() || 'PRD'}-VAR${i + 1}`;
+                    let candidate = vSku;
+                    let counter = 1;
+                    while (seenVarSkus.has(candidate.toLowerCase())) {
+                        counter++;
+                        candidate = `${vSku}-${counter}`;
+                    }
+                    seenVarSkus.add(candidate.toLowerCase());
+                    return { ...v, sku: candidate };
+                });
             }
 
             create.mutate(payload as any, {

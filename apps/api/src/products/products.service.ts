@@ -117,6 +117,29 @@ export class ProductsService {
         const defaultWarehouse = await this.prisma.warehouse.findFirst({ where: { orgId, isDefault: true } });
         const hasVariants = Boolean(dto.hasVariants && Array.isArray(variants) && variants.length > 0);
 
+        // Deduplicate & ensure uniqueness of variants' SKUs
+        let processedVariants = variants;
+        if (hasVariants && Array.isArray(variants)) {
+            const seenVarSkus = new Set<string>();
+            processedVariants = await Promise.all(variants.map(async (v: any) => {
+                let vSku = (v.sku || "").trim() || `${sku}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                let candidate = vSku;
+                let counter = 1;
+                while (seenVarSkus.has(candidate.toLowerCase())) {
+                    counter++;
+                    candidate = `${vSku}-${counter}`;
+                }
+                const exists = await this.prisma.productVariant.findUnique({
+                    where: { orgId_sku: { orgId, sku: candidate } }
+                });
+                if (exists) {
+                    candidate = `${candidate}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                }
+                seenVarSkus.add(candidate.toLowerCase());
+                return { ...v, sku: candidate };
+            }));
+        }
+
         const product = await this.prisma.product.create({
             data: {
                 orgId,
@@ -135,10 +158,10 @@ export class ProductsService {
                 }),
                 ...(hasVariants && defaultWarehouse && {
                     variants: {
-                        create: variants!.map((v: any) => ({
+                        create: processedVariants!.map((v: any) => ({
                             orgId,
                             name: v.name,
-                            sku: v.sku || `${sku}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+                            sku: v.sku,
                             barcode: v.barcode || null,
                             attributes: v.attributes || {},
                             sellingPrice: v.sellingPrice !== undefined ? Number(v.sellingPrice) : sellingPrice,
@@ -282,13 +305,33 @@ export class ProductsService {
         if (Array.isArray(variants)) {
             const defaultWarehouse = await this.prisma.warehouse.findFirst({ where: { orgId, isDefault: true } })
                 || await this.prisma.warehouse.findFirst({ where: { orgId } });
+            const batchSkus = new Set<string>();
+
             for (const v of variants) {
                 if (v.id) {
+                    let updateSku = v.sku ? String(v.sku).trim() : undefined;
+                    if (updateSku) {
+                        let candidate = updateSku;
+                        let counter = 1;
+                        while (batchSkus.has(candidate.toLowerCase())) {
+                            counter++;
+                            candidate = `${updateSku}-${counter}`;
+                        }
+                        const existingWithSku = await this.prisma.productVariant.findUnique({
+                            where: { orgId_sku: { orgId, sku: candidate } },
+                        });
+                        if (existingWithSku && existingWithSku.id !== v.id) {
+                            candidate = `${candidate}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                        }
+                        updateSku = candidate;
+                        batchSkus.add(updateSku.toLowerCase());
+                    }
+
                     await this.prisma.productVariant.update({
                         where: { id: v.id },
                         data: {
                             name: v.name,
-                            sku: v.sku,
+                            sku: updateSku,
                             barcode: v.barcode !== undefined ? v.barcode : undefined,
                             attributes: v.attributes,
                             sellingPrice: v.sellingPrice !== undefined ? Number(v.sellingPrice) : undefined,
@@ -322,7 +365,25 @@ export class ProductsService {
                         }
                     }
                 } else if (v.name) {
-                    const newSku = v.sku || `${product.sku}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                    let newSku = (v.sku || "").trim();
+                    if (!newSku) {
+                        newSku = `${product.sku}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                    }
+                    let candidate = newSku;
+                    let counter = 1;
+                    while (batchSkus.has(candidate.toLowerCase())) {
+                        counter++;
+                        candidate = `${newSku}-${counter}`;
+                    }
+                    const existingWithSku = await this.prisma.productVariant.findUnique({
+                        where: { orgId_sku: { orgId, sku: candidate } },
+                    });
+                    if (existingWithSku) {
+                        candidate = `${candidate}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                    }
+                    newSku = candidate;
+                    batchSkus.add(newSku.toLowerCase());
+
                     const targetStock = v.stock !== undefined ? Number(v.stock) : (v.quantity !== undefined ? Number(v.quantity) : (v.initialQuantity !== undefined ? Number(v.initialQuantity) : 0));
                     await this.prisma.productVariant.create({
                         data: {
