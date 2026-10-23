@@ -2,8 +2,8 @@
 import { formatINR } from "@/lib/utils";
 import { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, Package, Edit, X, RefreshCcw, Trash2, AlertTriangle } from "lucide-react";
-import { useProduct, useUpdateProduct, useDeleteProduct, useRestoreProduct, useHardDeleteProduct, useUploadFile } from "@/hooks/api-hooks";
+import { ArrowLeft, Package, Edit, X, RefreshCcw, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useProduct, useUpdateProduct, useDeleteProduct, useRestoreProduct, useHardDeleteProduct, useUploadFile, usePublishProduct } from "@/hooks/api-hooks";
 import { useRouter } from "next/navigation";
 import { MultiImageUpload } from "@/components/ui/multi-image-upload";
 
@@ -13,6 +13,7 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
     const { data, isLoading } = useProduct(id);
     const product = data?.data ?? data;
     const updateProduct = useUpdateProduct();
+    const publishProduct = usePublishProduct();
     const deleteProduct = useDeleteProduct();
     const restoreProduct = useRestoreProduct();
     const hardDeleteProduct = useHardDeleteProduct();
@@ -42,6 +43,10 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
         unit: "", secondaryUnit: "", conversionFactor: 1, minStockLevel: 0,
         commissionType: null as string | null, commissionValue: 0,
     });
+    const [editVariants, setEditVariants] = useState<any[]>([]);
+    const [newVariantName, setNewVariantName] = useState("");
+    const [newVariantSku, setNewVariantSku] = useState("");
+    const [newVariantStock, setNewVariantStock] = useState<number>(0);
 
     const handleEditOpen = () => {
         if (product) {
@@ -63,6 +68,17 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 commissionValue: product.commissionValue || 0,
             });
             setEditImages(parsedImages);
+            setEditVariants((product.variants || []).map((v: any) => ({
+                id: v.id,
+                name: v.name,
+                sku: v.sku,
+                attributes: v.attributes || {},
+                sellingPrice: v.sellingPrice ?? product.sellingPrice,
+                mrp: v.mrp ?? product.mrp,
+                purchasePrice: v.purchasePrice ?? product.purchasePrice,
+                stock: (v.inventories || []).reduce((sum: number, inv: any) => sum + (inv.quantity - inv.reservedQty), 0),
+                isActive: v.isActive !== false,
+            })));
             setIsEditing(true);
         }
     };
@@ -74,7 +90,11 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
             data: {
                 ...editData,
                 imageUrl: editImages[0] || "",
-                imageUrls: editImages
+                imageUrls: editImages,
+                ...(editVariants.length > 0 ? {
+                    hasVariants: true,
+                    variants: editVariants
+                } : {})
             }
         }, {
             onSuccess: () => setIsEditing(false)
@@ -122,6 +142,15 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                     <ArrowLeft size={16} /> Back to Inventory
                 </Link>
                 <div className="flex gap-2">
+                    {product.isDraft && (
+                        <button
+                            onClick={() => publishProduct.mutate(product.id)}
+                            disabled={publishProduct.isPending}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-[var(--radius-md)] transition shadow-sm disabled:opacity-50"
+                        >
+                            <CheckCircle2 size={16} /> {publishProduct.isPending ? "Publishing..." : "Publish Product"}
+                        </button>
+                    )}
                     <button
                         onClick={handleEditOpen}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] hover:bg-[var(--border)] transition font-medium"
@@ -157,6 +186,26 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                 </div>
             </div>
 
+            {product.isDraft && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle size={20} className="shrink-0 text-amber-400" />
+                        <div>
+                            <p className="text-sm font-semibold text-amber-300">Draft Product</p>
+                            <p className="text-xs text-amber-300/80">This product is saved as a draft. It is hidden from your customer storefront and catalog until published.</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => publishProduct.mutate(product.id)}
+                        disabled={publishProduct.isPending}
+                        className="px-4 py-2 text-xs font-semibold rounded-[var(--radius-md)] bg-amber-500 text-black hover:bg-amber-400 transition whitespace-nowrap shadow-sm disabled:opacity-50"
+                    >
+                        {publishProduct.isPending ? "Publishing..." : "Publish Product"}
+                    </button>
+                </div>
+            )}
+
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 flex flex-col md:flex-row items-start gap-6">
                 {parsedImages.length > 0 ? (
                     <div className="flex flex-col gap-3 shrink-0 mx-auto md:mx-0">
@@ -185,9 +234,15 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                     <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: "var(--font-playfair)" }}>{product.name}</h1>
                     <p className="text-sm text-[var(--text-muted)] mb-4">{product.sku} • {product.brand || "No Brand"}</p>
                     <div className="flex justify-center md:justify-start gap-3">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${product.isActive ? 'bg-[var(--green)]/15 text-[var(--green-bright)]' : 'bg-[var(--red)]/15 text-[var(--red)]'}`}>
-                            {product.isActive ? "Active" : "Inactive"}
-                        </span>
+                        {product.isDraft ? (
+                            <span className="inline-block px-3 py-1 bg-amber-500/15 border border-amber-500/30 rounded-full text-xs font-semibold text-amber-400">
+                                Draft
+                            </span>
+                        ) : (
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${product.isActive ? 'bg-[var(--green)]/15 text-[var(--green-bright)]' : 'bg-[var(--red)]/15 text-[var(--red)]'}`}>
+                                {product.isActive ? "Active" : "Inactive"}
+                            </span>
+                        )}
                         <span className="inline-block px-3 py-1 bg-[var(--bg-secondary)] rounded-full text-xs font-semibold text-[var(--text-secondary)]">
                             {product.category || "Uncategorized"}
                         </span>
@@ -255,6 +310,68 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                     </dl>
                 </div>
             </div>
+
+            {/* Product Variations Card */}
+            {(product.hasVariants || (product.variants && product.variants.length > 0)) && (
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Product Variations</h2>
+                            <p className="text-xs text-[var(--text-muted)]">Independent stock, pricing, and SKU per variant</p>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded bg-[var(--gold)]/15 text-[var(--gold)] border border-[var(--gold)]/20">
+                            {product.variants?.length || 0} Variations
+                        </span>
+                    </div>
+
+                    <div className="overflow-x-auto border border-[var(--border)] rounded-[var(--radius-md)]">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-[var(--bg-secondary)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th className="p-3">Variant</th>
+                                    <th className="p-3">SKU</th>
+                                    <th className="p-3 text-right">Selling Price</th>
+                                    <th className="p-3 text-right">MRP</th>
+                                    <th className="p-3 text-right">In Stock</th>
+                                    <th className="p-3 text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border)]">
+                                {(product.variants || []).map((v: any) => {
+                                    const vStock = (v.inventories || []).reduce((sum: number, inv: any) => sum + (inv.quantity - inv.reservedQty), 0);
+                                    return (
+                                        <tr key={v.id} className="hover:bg-[var(--bg-secondary)]/30">
+                                            <td className="p-3 font-medium text-[var(--text-primary)]">
+                                                <div>{v.name}</div>
+                                                {v.attributes && typeof v.attributes === "object" && (
+                                                    <div className="flex gap-1 mt-1">
+                                                        {Object.entries(v.attributes).map(([k, val]) => (
+                                                            <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-muted)] border border-[var(--border)]">
+                                                                {k}: {String(val)}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="p-3 font-mono text-xs text-[var(--text-secondary)]">{v.sku}</td>
+                                            <td className="p-3 text-right font-mono font-medium">{formatINR(v.sellingPrice ?? product.sellingPrice)}</td>
+                                            <td className="p-3 text-right font-mono text-[var(--text-muted)]">{formatINR(v.mrp ?? product.mrp)}</td>
+                                            <td className="p-3 text-right font-mono font-semibold" style={{ color: vStock > 0 ? "var(--green-bright)" : "var(--red)" }}>
+                                                {vStock} {product.unit}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${v.isActive !== false ? "bg-[var(--green)]/15 text-[var(--green-bright)]" : "bg-[var(--red)]/15 text-[var(--red)]"}`}>
+                                                    {v.isActive !== false ? "Active" : "Inactive"}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
 
             {/* Edit Product Modal */}
             {isEditing && (
@@ -378,6 +495,179 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                                                     className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" />
                                             </label>
                                         )}
+                                    </div>
+                                </div>
+
+                                {/* Variations Management in Edit Modal */}
+                                <div className="space-y-4 lg:col-span-3 border-t border-[var(--border)] pt-4">
+                                    <div className="flex justify-between items-center">
+                                        <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                                            Product Variations ({editVariants.length})
+                                        </h4>
+                                    </div>
+
+                                    {editVariants.length > 0 && (
+                                        <div className="overflow-x-auto border border-[var(--border)] rounded-[var(--radius-md)]">
+                                            <table className="w-full text-left text-xs">
+                                                <thead className="bg-[var(--bg-secondary)] text-[var(--text-muted)]">
+                                                    <tr>
+                                                        <th className="p-2.5">Variant Name</th>
+                                                        <th className="p-2.5">SKU</th>
+                                                        <th className="p-2.5">Selling Price (₹)</th>
+                                                        <th className="p-2.5">MRP (₹)</th>
+                                                        <th className="p-2.5">Purchase Price (₹)</th>
+                                                        <th className="p-2.5">In Stock ({editData.unit || product.unit || 'Units'})</th>
+                                                        <th className="p-2.5 text-center">Active</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-[var(--border)]">
+                                                    {editVariants.map((v, idx) => (
+                                                        <tr key={idx} className="hover:bg-[var(--bg-secondary)]/20">
+                                                            <td className="p-2 font-medium text-[var(--text-primary)]">
+                                                                <input
+                                                                    value={v.name}
+                                                                    onChange={(e) => {
+                                                                        const next = [...editVariants];
+                                                                        next[idx] = { ...next[idx], name: e.target.value };
+                                                                        setEditVariants(next);
+                                                                    }}
+                                                                    className="w-full px-2 py-1 rounded bg-[var(--bg-primary)] border border-[var(--border)]"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input
+                                                                    value={v.sku}
+                                                                    onChange={(e) => {
+                                                                        const next = [...editVariants];
+                                                                        next[idx] = { ...next[idx], sku: e.target.value };
+                                                                        setEditVariants(next);
+                                                                    }}
+                                                                    className="w-28 px-2 py-1 rounded bg-[var(--bg-primary)] border border-[var(--border)] font-mono text-[11px]"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={v.sellingPrice}
+                                                                    onChange={(e) => {
+                                                                        const next = [...editVariants];
+                                                                        next[idx] = { ...next[idx], sellingPrice: Number(e.target.value) };
+                                                                        setEditVariants(next);
+                                                                    }}
+                                                                    className="w-20 px-2 py-1 rounded bg-[var(--bg-primary)] border border-[var(--border)] text-right"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={v.mrp}
+                                                                    onChange={(e) => {
+                                                                        const next = [...editVariants];
+                                                                        next[idx] = { ...next[idx], mrp: Number(e.target.value) };
+                                                                        setEditVariants(next);
+                                                                    }}
+                                                                    className="w-20 px-2 py-1 rounded bg-[var(--bg-primary)] border border-[var(--border)] text-right"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={v.purchasePrice}
+                                                                    onChange={(e) => {
+                                                                        const next = [...editVariants];
+                                                                        next[idx] = { ...next[idx], purchasePrice: Number(e.target.value) };
+                                                                        setEditVariants(next);
+                                                                    }}
+                                                                    className="w-20 px-2 py-1 rounded bg-[var(--bg-primary)] border border-[var(--border)] text-right"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="1"
+                                                                    value={v.stock ?? 0}
+                                                                    onChange={(e) => {
+                                                                        const next = [...editVariants];
+                                                                        next[idx] = { ...next[idx], stock: Math.max(0, Number(e.target.value)) };
+                                                                        setEditVariants(next);
+                                                                    }}
+                                                                    className="w-20 px-2 py-1 rounded bg-[var(--bg-primary)] border border-[var(--border)] text-right font-mono font-medium text-[var(--gold)]"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2 text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={v.isActive !== false}
+                                                                    onChange={(e) => {
+                                                                        const next = [...editVariants];
+                                                                        next[idx] = { ...next[idx], isActive: e.target.checked };
+                                                                        setEditVariants(next);
+                                                                    }}
+                                                                    className="w-4 h-4 rounded text-[var(--gold)]"
+                                                                />
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+
+                                    {/* Add New Variant Inline Form */}
+                                    <div className="bg-[var(--bg-secondary)]/40 p-3 rounded-[var(--radius-md)] border border-dashed border-[var(--border)] space-y-2">
+                                        <span className="text-xs font-semibold text-[var(--text-secondary)] block">+ Add Another Variation</span>
+                                        <div className="flex gap-2 items-center flex-wrap">
+                                            <input
+                                                placeholder="Variant Name (e.g. Blue / L)"
+                                                value={newVariantName}
+                                                onChange={(e) => setNewVariantName(e.target.value)}
+                                                className="flex-1 min-w-[140px] px-2.5 py-1.5 text-xs rounded bg-[var(--bg-primary)] border border-[var(--border)]"
+                                            />
+                                            <input
+                                                placeholder="SKU (optional)"
+                                                value={newVariantSku}
+                                                onChange={(e) => setNewVariantSku(e.target.value)}
+                                                className="w-32 px-2.5 py-1.5 text-xs rounded bg-[var(--bg-primary)] border border-[var(--border)] font-mono text-[11px]"
+                                            />
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                placeholder="Stock"
+                                                value={newVariantStock || ""}
+                                                onChange={(e) => setNewVariantStock(Number(e.target.value))}
+                                                className="w-20 px-2.5 py-1.5 text-xs rounded bg-[var(--bg-primary)] border border-[var(--border)] text-right font-mono"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!newVariantName.trim()) return;
+                                                    const baseSku = newVariantSku.trim() || `${editData.sku || 'PRD'}-${newVariantName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4)}`;
+                                                    setEditVariants([
+                                                        ...editVariants,
+                                                        {
+                                                            name: newVariantName.trim(),
+                                                            sku: baseSku,
+                                                            sellingPrice: Number(editData.sellingPrice) || 0,
+                                                            mrp: Number(editData.mrp) || Number(editData.sellingPrice) || 0,
+                                                            purchasePrice: Number(editData.purchasePrice) || 0,
+                                                            stock: Math.max(0, Number(newVariantStock) || 0),
+                                                            isActive: true,
+                                                            attributes: { Option: newVariantName.trim() },
+                                                        }
+                                                    ]);
+                                                    setNewVariantName("");
+                                                    setNewVariantSku("");
+                                                    setNewVariantStock(0);
+                                                }}
+                                                className="px-3 py-1.5 text-xs bg-[var(--gold)] text-[var(--bg-primary)] font-semibold rounded hover:opacity-90 transition"
+                                            >
+                                                Add Variant
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
