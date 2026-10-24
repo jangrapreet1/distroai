@@ -1,82 +1,182 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Req } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Res,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags, ApiQuery } from '@nestjs/swagger';
+import { Response, Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Request } from 'express';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { TallyService, TallyExportQuery } from './tally.service';
 
-interface TallyConfig {
-    companyName: string;
-    tallySyncEnabled: boolean;
-    tallyPort: number;
+interface TallyConfigBody {
+  companyName: string;
+  tallySyncEnabled: boolean;
+  tallyPort?: number;
 }
 
+@ApiTags('tally')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('tally')
-@UseGuards(JwtAuthGuard)
 export class TallyController {
-    constructor(private prisma: PrismaService) { }
+  constructor(private readonly tallyService: TallyService) {}
 
-    @Get('pending-sync')
-    async getPendingSync(@Req() req: Request) {
-        const orgId = (req.user as Record<string, string>)?.orgId;
+  @Get('summary')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'MANAGER')
+  @ApiOperation({ summary: 'Get summary counts and totals for Tally export' })
+  async getSummary(@CurrentUser() user: any, @Req() req: Request) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    const summary = await this.tallyService.getSummary(orgId);
+    return { success: true, data: summary };
+  }
 
-        const invoices = await this.prisma.invoice.findMany({
-            where: { orgId, status: { not: 'DRAFT' }, tallySyncedAt: null },
-            include: { items: { include: { product: true } }, customer: true, organization: true },
-            take: 50,
-        }) as any;
+  @Get('pending-sync')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'MANAGER')
+  @ApiOperation({ summary: 'Get list of pending unsynced vouchers' })
+  async getPendingSync(@CurrentUser() user: any, @Req() req: Request) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    const data = await this.tallyService.getPendingList(orgId);
+    return { success: true, data };
+  }
 
-        const payments = await this.prisma.payment.findMany({
-            where: { orgId, status: 'COMPLETED', tallySyncedAt: null },
-            include: { customer: true, organization: true },
-            take: 50,
-        }) as any;
+  @Get('export/sales-xml')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Download Tally Prime Sales Vouchers XML' })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'onlyUnsynced', required: false })
+  async exportSalesXML(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Query() query: TallyExportQuery,
+    @Res() res: Response
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.exportSalesXML(orgId, query, res);
+  }
 
-        return { success: true, data: { invoices, payments } };
-    }
+  @Get('export/receipts-xml')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Download Tally Prime Receipt Vouchers XML' })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'onlyUnsynced', required: false })
+  async exportReceiptsXML(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Query() query: TallyExportQuery,
+    @Res() res: Response
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.exportReceiptsXML(orgId, query, res);
+  }
 
-    @Post('sync-complete')
-    async markSynced(@Body() body: { invoiceIds?: string[]; paymentIds?: string[] }) {
-        const now = new Date();
+  @Get('export/combined-xml')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Download All Tally Vouchers (Sales + Receipts) XML' })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'onlyUnsynced', required: false })
+  async exportCombinedXML(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Query() query: TallyExportQuery,
+    @Res() res: Response
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.exportCombinedXML(orgId, query, res);
+  }
 
-        if (body.invoiceIds?.length) {
-            await this.prisma.invoice.updateMany({
-                where: { id: { in: body.invoiceIds } },
-                data: { tallySyncedAt: now },
-            });
-        }
-        if (body.paymentIds?.length) {
-            await this.prisma.payment.updateMany({
-                where: { id: { in: body.paymentIds } },
-                data: { tallySyncedAt: now },
-            });
-        }
+  @Get('export/masters-xml')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Download Tally Masters XML (Customers & Stock Items)' })
+  async exportMastersXML(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Res() res: Response
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.exportMastersXML(orgId, res);
+  }
 
-        return { success: true };
-    }
+  @Get('export/csv')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Download Daybook CSV (Sales or Receipts)' })
+  @ApiQuery({ name: 'type', enum: ['sales', 'receipts'] })
+  async exportCSV(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Query('type') type: 'sales' | 'receipts',
+    @Query() query: TallyExportQuery,
+    @Res() res: Response
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.exportCSV(orgId, type || 'sales', query, res);
+  }
 
-    @Get('config')
-    async getConfig(@Req() req: Request) {
-        const orgId = (req.user as Record<string, string>)?.orgId;
-        const settings = await this.prisma.orgSettings.findUnique({ where: { orgId } });
-        return {
-            success: true,
-            data: {
-                companyName: (settings as Record<string, unknown>)?.tallyCompanyName ?? '',
-                tallySyncEnabled: (settings as Record<string, unknown>)?.tallySyncEnabled ?? false,
-                tallyPort: 9000,
-            },
-        };
-    }
+  @Post('sync-complete')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Mark vouchers as synced with Tally (legacy)' })
+  async markSyncedLegacy(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Body() body: { invoiceIds?: string[]; paymentIds?: string[] }
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.markSynced(orgId, body);
+  }
 
-    @Post('config')
-    async saveConfig(@Req() req: Request, @Body() body: TallyConfig) {
-        const orgId = (req.user as Record<string, string>)?.orgId;
-        await this.prisma.orgSettings.update({
-            where: { orgId },
-            data: {
-                tallyCompanyName: body.companyName,
-                tallySyncEnabled: body.tallySyncEnabled,
-            } as Record<string, unknown>,
-        });
-        return { success: true };
-    }
+  @Post('mark-synced')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Mark vouchers as synced with Tally' })
+  async markSynced(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Body() body: { invoiceIds?: string[]; paymentIds?: string[] }
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.markSynced(orgId, body);
+  }
+
+  @Post('reset-sync')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Reset sync status for re-exporting' })
+  async resetSync(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Body() body: { invoiceIds?: string[]; paymentIds?: string[] }
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    return this.tallyService.resetSync(orgId, body);
+  }
+
+  @Get('config')
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiOperation({ summary: 'Get Tally integration configuration' })
+  async getConfig(@CurrentUser() user: any, @Req() req: Request) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    const config = await this.tallyService.getConfig(orgId);
+    return { success: true, data: config };
+  }
+
+  @Post('config')
+  @Roles('OWNER', 'ADMIN')
+  @ApiOperation({ summary: 'Save Tally integration configuration' })
+  async saveConfig(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Body() body: TallyConfigBody
+  ) {
+    const orgId = user?.orgId || (req.user as any)?.orgId;
+    await this.tallyService.saveConfig(orgId, body);
+    return { success: true };
+  }
 }

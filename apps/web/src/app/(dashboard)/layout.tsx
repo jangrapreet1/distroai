@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
     LayoutDashboard, ShoppingCart, FileText, Package, Users, Truck,
     CreditCard, ClipboardList, Receipt, BarChart3, Sparkles, Megaphone,
-    Settings, Menu, X, Search, Command, Sun, Moon, Undo2, PieChart, Clock, Coins,
+    Settings, Menu, X, Search, Command, Sun, Moon, Undo2, PieChart, Clock, Coins, FileSpreadsheet,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth.store";
@@ -56,6 +56,7 @@ const NAV_GROUPS: NavGroup[] = [
             { label: "P&L", href: "/reports", icon: PieChart },
             { label: "Aging", href: "/reports/aging", icon: Clock },
             { label: "Commissions", href: "/reports/commissions", icon: Coins, roles: ['OWNER', 'ADMIN'] },
+            { label: "Tally Export", href: "/reports/tally", icon: FileSpreadsheet, roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
         ],
     },
     {

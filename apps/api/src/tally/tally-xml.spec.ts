@@ -1,4 +1,12 @@
-import { invoiceToTallyXML, paymentToTallyXML } from './tally-xml';
+import {
+    invoiceToTallyXML,
+    paymentToTallyXML,
+    buildSalesVouchersEnvelope,
+    buildReceiptVouchersEnvelope,
+    buildCombinedVouchersEnvelope,
+    buildMastersEnvelope,
+    buildSalesCSV,
+} from './tally-xml';
 
 describe('invoiceToTallyXML', () => {
     const sampleInvoice = {
@@ -102,5 +110,62 @@ describe('paymentToTallyXML', () => {
     it('should use Cash for cash payments', () => {
         const xml = paymentToTallyXML({ ...samplePayment, paymentMethod: 'CASH' });
         expect(xml).toContain('<LEDGERNAME>Cash</LEDGERNAME>');
+    });
+});
+
+describe('buildSalesVouchersEnvelope & buildMastersEnvelope', () => {
+    const invoices = [
+        {
+            invoiceNumber: 'INV-1',
+            invoiceDate: new Date('2026-10-01'),
+            netAmount: 1000,
+            taxAmount: 180,
+            totalAmount: 1180,
+            customer: { name: 'Client A', gstin: '27AABCT1234F1Z1' },
+            org: { name: 'Distro Corp' },
+            items: [
+                {
+                    product: { name: 'Tile Adhesive 20kg', hsnCode: '3214', unit: 'Bags' },
+                    quantity: 10,
+                    price: 100,
+                    totalAmount: 1180,
+                    cgstAmount: 90,
+                    sgstAmount: 90,
+                    igstAmount: 0,
+                    gstRate: 18,
+                },
+            ],
+        },
+    ];
+
+    it('should build multi-voucher sales envelope', () => {
+        const xml = buildSalesVouchersEnvelope('Distro Corp', invoices);
+        expect(xml).toContain('<REPORTNAME>Vouchers</REPORTNAME>');
+        expect(xml).toContain('<SVCURRENTCOMPANY>Distro Corp</SVCURRENTCOMPANY>');
+        expect(xml).toContain('INV-1');
+        expect(xml).toContain('Client A');
+        expect(xml).toContain('Tile Adhesive 20kg');
+    });
+
+    it('should build masters envelope with customers and stock items', () => {
+        const customers = [
+            { id: '1', name: 'Sharma Hardware', gstin: '27AABCS1234F1Z2', state: 'Maharashtra', pincode: '400001' },
+        ];
+        const items = [
+            { id: '1', name: 'Roff Adhesive', hsnCode: '3214', unit: 'Bags', sellingPrice: 360, gstRate: 18 },
+        ];
+        const xml = buildMastersEnvelope('Distro Corp', customers, items);
+        expect(xml).toContain('<REPORTNAME>All Masters</REPORTNAME>');
+        expect(xml).toContain('<LEDGER NAME="Sharma Hardware"');
+        expect(xml).toContain('<PARENT>Sundry Debtors</PARENT>');
+        expect(xml).toContain('<STOCKITEM NAME="Roff Adhesive"');
+        expect(xml).toContain('<HSNCODE>3214</HSNCODE>');
+    });
+
+    it('should build sales daybook CSV', () => {
+        const csv = buildSalesCSV(invoices);
+        expect(csv).toContain('Invoice Number,Date,Customer Name');
+        expect(csv).toContain('INV-1');
+        expect(csv).toContain('Tile Adhesive 20kg');
     });
 });

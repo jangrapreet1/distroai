@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TallyController } from './tally.controller';
+import { TallyService } from './tally.service';
 
 @Module({
-    controllers: [TallyController],
+  controllers: [TallyController],
+  providers: [TallyService],
+  exports: [TallyService],
 })
-export class TallyModule { }
+export class TallyModule {}
