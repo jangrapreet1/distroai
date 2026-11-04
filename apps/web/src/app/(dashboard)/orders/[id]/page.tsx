@@ -4,11 +4,14 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import {
     ArrowLeft, CheckCircle, Package, Truck, MapPin, XCircle,
-    RotateCcw, Clock, Send, Edit, Plus, Trash2, Search, AlertCircle
+    RotateCcw, Clock, Send, Edit, Plus, Trash2, Search, AlertCircle,
+    CreditCard
 } from "lucide-react";
-import { useOrder, useOrderAction, useUpdateDraftOrder, useProducts } from "@/hooks/api-hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useOrder, useOrderAction, useUpdateDraftOrder, useProducts, useSendOrderWhatsApp } from "@/hooks/api-hooks";
 import { formatDate, formatDateTime, buildWhatsAppInvoiceLink, formatINR, getPendingQty } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { MarkPaidModal, type OrderToPay } from "@/components/modals/MarkPaidModal";
 
 const statusClass: Record<string, string> = {
     DRAFT: "badge-draft",
@@ -41,7 +44,7 @@ function EditDraftModal({ order, open, onClose }: { order: any; open: boolean; o
     const [productSearch, setProductSearch] = useState("");
     const [showPicker, setShowPicker] = useState(false);
 
-    const { data: productsData } = useProducts({ search: productSearch || undefined, limit: 20, isActive: true }) || {};
+    const { data: productsData } = useProducts({ search: productSearch || undefined, limit: 20, isActive: true, isDraft: false }) || {};
     const products = productsData?.data?.data ?? productsData?.data ?? [];
 
     useEffect(() => {
@@ -94,8 +97,8 @@ function EditDraftModal({ order, open, onClose }: { order: any; open: boolean; o
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-card)] z-10">
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-primary)] z-10">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Edit Order {order.orderNumber}</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition text-xl">✕</button>
                 </div>
@@ -248,8 +251,8 @@ function DispatchModal({ order, open, onClose }: { order: any; open: boolean; on
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-card)] z-10">
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-primary)] z-10">
                     <div>
                         <h2 className="text-lg font-bold flex items-center gap-2" style={{ fontFamily: "var(--font-playfair)" }}>
                             <Truck size={18} className="text-[var(--gold)]" /> Dispatch Batch / Partial Delivery
@@ -404,6 +407,7 @@ function ReturnModal({ order, open, onClose }: { order: any; open: boolean; onCl
             .filter(([_, data]) => Number(data.qty) > 0)
             .map(([orderItemId, data]) => ({
                 orderItemId,
+                returnQty: Number(data.qty),
                 quantity: Number(data.qty),
                 condition: data.condition,
             }));
@@ -419,8 +423,8 @@ function ReturnModal({ order, open, onClose }: { order: any; open: boolean; onCl
             const delivered = item.deliveredQty ?? 0;
             const returned = item.returnedQty ?? 0;
             const maxReturnable = Math.max(0, delivered - returned);
-            if (pi.quantity > maxReturnable) {
-                toast.error(`Return quantity (${pi.quantity}) exceeds delivered balance (${maxReturnable}) for ${item.product?.name ?? 'item'}.`);
+            if (pi.returnQty > maxReturnable) {
+                toast.error(`Return quantity (${pi.returnQty}) exceeds delivered balance (${maxReturnable}) for ${item.product?.name ?? 'item'}.`);
                 return;
             }
         }
@@ -441,8 +445,8 @@ function ReturnModal({ order, open, onClose }: { order: any; open: boolean; onCl
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-card)] z-10">
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-primary)] z-10">
                     <div>
                         <h2 className="text-lg font-bold flex items-center gap-2" style={{ fontFamily: "var(--font-playfair)" }}>
                             <RotateCcw size={18} className="text-[var(--red)]" /> Create Customer Return & Credit Note
@@ -565,11 +569,14 @@ function ReturnModal({ order, open, onClose }: { order: any; open: boolean; onCl
 /* ─── Main Order Detail Page ─── */
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    const queryClient = useQueryClient();
     const { data: order, isLoading } = useOrder(id);
     const orderAction = useOrderAction();
+    const sendWhatsApp = useSendOrderWhatsApp();
     const [showEdit, setShowEdit] = useState(false);
     const [showDispatch, setShowDispatch] = useState(false);
     const [showReturn, setShowReturn] = useState(false);
+    const [showMarkPaid, setShowMarkPaid] = useState(false);
 
     if (isLoading) return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-[var(--radius-md)]" />)}</div>;
     if (!order) return <div className="text-center py-20"><p className="text-[var(--text-muted)]">Order not found</p></div>;
@@ -583,6 +590,31 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         return (delivered - returned) > 0;
     });
 
+    const isCancelled = order.status === "CANCELLED" || order.status === "RETURNED";
+    const isDraft = order.status === "DRAFT";
+    const balanceDue = order.invoice?.balanceAmount != null
+        ? Number(order.invoice.balanceAmount)
+        : order.balanceAmount != null
+        ? Number(order.balanceAmount)
+        : Math.max(0, (Number(order.netAmount) || 0) - (Number(order.paidAmount) || 0));
+
+    const isFullyPaid = !isDraft && !isCancelled && (
+        (balanceDue <= 0 && (Number(order.paidAmount) > 0 || Number(order.netAmount) === 0)) ||
+        (Number(order.paidAmount) >= Number(order.netAmount) && Number(order.netAmount) > 0)
+    );
+
+    const canMarkPaid = !isDraft && !isCancelled && !isFullyPaid;
+
+    const orderToPay: OrderToPay = {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerName: order.customer?.name ?? "Customer",
+        netAmount: Number(order.netAmount) || 0,
+        paidAmount: Number(order.paidAmount) || 0,
+        balanceAmount: balanceDue,
+        invoiceBalance: order.invoice?.balanceAmount != null ? Number(order.invoice.balanceAmount) : undefined,
+    };
+
     return (
         <div>
             {/* Header */}
@@ -590,7 +622,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <Link href="/orders" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><ArrowLeft size={20} /></Link>
                 <div className="flex-1">
                     <div className="flex items-center gap-3">
-                        <h1 className="text-xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{order.orderNumber}</h1>
+                        <h1 className="text-xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>{order.orderNumber}</h1>
                         <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass[order.status] ?? "badge-draft"}`}>{order.status}</span>
                     </div>
                     <p className="text-sm text-[var(--text-muted)]">{formatDate(order.createdAt)}</p>
@@ -678,17 +710,52 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         </>
                     )}
 
-                    {order.invoiceId && order.customer?.phone && (
-                        <a href={buildWhatsAppInvoiceLink({
-                            customerPhone: order.customer.phone,
-                            customerName: order.customer.name ?? "Customer",
-                            invoiceNumber: order.orderNumber,
-                            invoiceAmount: order.netAmount,
-                            invoiceId: order.invoiceId,
-                        })} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--whatsapp)] text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 font-semibold transition">
-                            <Send size={14} /> Send WhatsApp
-                        </a>
+                    {canMarkPaid && (
+                        <button
+                            onClick={() => setShowMarkPaid(true)}
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--green-bright)]/15 border border-[var(--green-bright)]/30 text-[var(--green-bright)] hover:bg-[var(--green-bright)]/25 font-semibold transition shadow-sm"
+                        >
+                            <CreditCard size={14} /> Mark Paid
+                        </button>
+                    )}
+
+                    {isFullyPaid && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--green-bright)]/10 border border-[var(--green-bright)]/20 text-xs font-semibold text-[var(--green-bright)]">
+                            <CheckCircle size={14} /> Paid in Full
+                        </div>
+                    )}
+
+                    {order.status !== 'CANCELLED' && order.customer?.phone && (
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => sendWhatsApp.mutate(order.id)}
+                                disabled={sendWhatsApp.isPending}
+                                className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] bg-[#25D366]/15 border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/25 font-semibold transition disabled:opacity-50 shadow-sm cursor-pointer"
+                                title="Send official automated order confirmation, UPI/Razorpay payment link, and PDF invoice directly to customer's WhatsApp"
+                            >
+                                <Send size={14} className={sendWhatsApp.isPending ? "animate-spin" : ""} />
+                                {sendWhatsApp.isPending ? "Sending WhatsApp..." : "Send WhatsApp"}
+                            </button>
+                            <a
+                                href={buildWhatsAppInvoiceLink({
+                                    customerPhone: order.customer.phone,
+                                    customerName: order.customer.name ?? "Customer",
+                                    invoiceNumber: order.orderNumber,
+                                    invoiceAmount: balanceDue > 0 ? balanceDue : order.netAmount,
+                                    balanceAmount: balanceDue,
+                                    invoiceId: order.invoiceId ?? order.id,
+                                    upiId: order.organization?.settings?.upiId,
+                                    orgName: order.organization?.name,
+                                })}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-2.5 py-2 text-xs rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[#25D366] hover:border-[#25D366]/40 hover:bg-[#25D366]/5 transition"
+                                title="Open manually in WhatsApp Web"
+                            >
+                                Web
+                            </a>
+                        </div>
                     )}
                 </div>
             </div>
@@ -831,15 +898,43 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                 </tbody>
                             </table>
                         </div>
-                        <div className="p-4 border-t border-[var(--border)] space-y-1 text-sm text-right bg-[var(--bg-secondary)]/20">
-                            <p className="text-[var(--text-secondary)]">Subtotal: <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.totalAmount)}</span></p>
-                            <p className="text-[var(--text-secondary)]">Discount: <span style={{ fontFamily: "var(--font-mono)" }}>-{formatINR(order.discountAmount)}</span></p>
-                            <p className="text-[var(--text-secondary)]">GST: <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.taxAmount)}</span></p>
-                            <p className="font-bold text-base">Net Total: <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.netAmount)}</span></p>
-                            {order.balanceAmount !== undefined && (
-                                <p className="text-xs text-[var(--text-muted)] pt-1">
-                                    Invoice Balance: <strong className="font-mono text-[var(--gold)]">{formatINR(order.balanceAmount)}</strong>
-                                </p>
+                        <div className="p-4 border-t border-[var(--border)] space-y-1.5 text-sm bg-[var(--bg-secondary)]/20">
+                            <div className="flex justify-between items-center text-[var(--text-secondary)]">
+                                <span>Subtotal:</span>
+                                <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.totalAmount)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[var(--text-secondary)]">
+                                <span>Discount:</span>
+                                <span style={{ fontFamily: "var(--font-mono)" }}>-{formatINR(order.discountAmount)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[var(--text-secondary)]">
+                                <span>GST:</span>
+                                <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.taxAmount)}</span>
+                            </div>
+                            <div className="flex justify-between items-center font-bold text-base pt-1 border-t border-[var(--border)]/40">
+                                <span>Net Total:</span>
+                                <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(order.netAmount)}</span>
+                            </div>
+                            <div className="pt-2 border-t border-[var(--border)]/40 flex justify-between items-center text-xs">
+                                <span className="text-[var(--text-muted)]">Payment Received:</span>
+                                <span className="font-mono font-semibold text-[var(--green-bright)]">{formatINR(order.paidAmount ?? 0)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-[var(--text-muted)]">Balance Due:</span>
+                                <span className={`font-mono font-bold ${balanceDue > 0 ? "text-[var(--orange)]" : "text-[var(--green-bright)]"}`}>
+                                    {formatINR(balanceDue)}
+                                </span>
+                            </div>
+                            {canMarkPaid && (
+                                <div className="pt-2 flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMarkPaid(true)}
+                                        className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--green-bright)] hover:underline"
+                                    >
+                                        <CreditCard size={12} /> Record Payment / Mark Paid
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -887,6 +982,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             <EditDraftModal order={order} open={showEdit} onClose={() => setShowEdit(false)} />
             <DispatchModal order={order} open={showDispatch} onClose={() => setShowDispatch(false)} />
             <ReturnModal order={order} open={showReturn} onClose={() => setShowReturn(false)} />
+            <MarkPaidModal
+                open={showMarkPaid}
+                onClose={() => setShowMarkPaid(false)}
+                orders={[orderToPay]}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ["orders"] });
+                    queryClient.invalidateQueries({ queryKey: ["customers"] });
+                }}
+            />
         </div>
     );
 }

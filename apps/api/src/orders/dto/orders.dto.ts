@@ -1,9 +1,10 @@
-import { IsString, IsOptional, IsNumber, IsArray, IsEnum, ValidateNested, Min, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, IsEnum, ValidateNested, Min, IsDateString, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class OrderItemDto {
     @IsString() productId!: string;
+    @IsOptional() @IsString() variantId?: string;
     @IsNumber() @Min(1) quantity!: number;
     @IsString() unit!: string;
     @IsNumber() @Min(0) price!: number;
@@ -20,11 +21,14 @@ export class CreateOrderDto {
     @IsOptional() @IsString() commissionTo?: string;
     @IsOptional() @IsEnum(['FIXED', 'PERCENTAGE']) commissionType?: string;
     @IsOptional() @IsNumber() @Min(0) commissionValue?: number;
+    @IsOptional() @IsBoolean() overrideCreditLimit?: boolean;
+    @IsOptional() @IsString() overrideReason?: string;
 }
 
 export class ReturnItemDto {
     @IsString() orderItemId!: string;
-    @IsNumber() @Min(1) returnQty!: number;
+    @IsOptional() @IsNumber() @Min(1) returnQty?: number;
+    @IsOptional() @IsNumber() @Min(1) quantity?: number;
     @IsOptional() @IsString() reason?: string;
     @IsOptional() @IsEnum(['RESTOCKABLE', 'DAMAGED']) condition?: 'RESTOCKABLE' | 'DAMAGED';
 }
@@ -64,4 +68,8 @@ export class UpdateDraftOrderDto {
 
 export class MarkPaidDto {
     @IsOptional() @IsEnum(['CASH', 'UPI', 'CHEQUE', 'BANK_TRANSFER', 'CREDIT']) method?: 'CASH' | 'UPI' | 'CHEQUE' | 'BANK_TRANSFER' | 'CREDIT';
+    @IsOptional() @IsNumber() @Min(0.01) amount?: number;
+    @IsOptional() @IsString() referenceNumber?: string;
+    @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsString() date?: string;
 }

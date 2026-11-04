@@ -34,7 +34,8 @@ export default function AnalyticsPage() {
     }, [hasAdvancedAnalytics]);
 
     const { data: salesRes, isLoading: salesLoading } = useSalesAnalytics(dateRange.from, dateRange.to, hasAdvancedAnalytics ? groupBy.toLowerCase() : "day");
-    const salesData = salesRes?.data ?? [];
+    const rawSales = salesRes?.data?.data ?? salesRes?.data ?? salesRes ?? [];
+    const salesData = Array.isArray(rawSales) ? rawSales : Array.isArray(rawSales?.data) ? rawSales.data : [];
 
     // Fetch Inventory data for Valuation by Category
     const { data: inventoryRes } = useInventory({});
@@ -70,7 +71,7 @@ export default function AnalyticsPage() {
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Analytics & Reports</h1>
+                <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Analytics & Reports</h1>
                 <button onClick={() => exportToCSV("analytics-sales", salesData)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition"><Download size={14} /> Export</button>
             </div>
 

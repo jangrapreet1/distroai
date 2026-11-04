@@ -23,20 +23,21 @@ export class AnalyticsService {
         const [
             todayOrders, todayRevenue, monthOrders, monthRevenue,
             newCustomers, collections, topProducts, topCustomers, recentOrders,
-            inventory, recentLocationUpdates, totalOutstanding, totalCredit,
+            inventory, variantInventory, recentLocationUpdates, totalOutstanding, totalCredit,
             allOrdersAgg, confirmedOrdersAgg, dispatchedOrdersAgg, reconciledOrdersAgg,
             aiLatencyAgg, upiTotal, upiCompleted, customerRiskStats, highRiskCount
         ] = await Promise.all([
-            this.prisma.order.count({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }),
-            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: { not: 'CANCELLED' }, type: 'SALE' }, _sum: { netAmount: true } }),
-            this.prisma.order.count({ where: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }),
-            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' }, type: 'SALE' }, _sum: { netAmount: true } }),
+            this.prisma.order.count({ where: { orgId, createdAt: { gte: todayStart }, status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' } }),
+            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' }, _sum: { netAmount: true } }),
+            this.prisma.order.count({ where: { orgId, createdAt: { gte: monthStart }, status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' } }),
+            this.prisma.order.aggregate({ where: { orgId, createdAt: { gte: monthStart }, status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' }, _sum: { netAmount: true } }),
             this.prisma.customer.count({ where: { orgId, createdAt: { gte: monthStart } } }),
             this.prisma.payment.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: 'COMPLETED' }, _sum: { amount: true } }),
-            this.prisma.orderItem.groupBy({ by: ['productId'], where: { order: { orgId, createdAt: { gte: monthStart }, status: { not: 'CANCELLED' }, type: 'SALE' } }, _sum: { totalAmount: true }, orderBy: { _sum: { totalAmount: 'desc' } }, take: 5 }),
+            this.prisma.orderItem.groupBy({ by: ['productId'], where: { order: { orgId, createdAt: { gte: monthStart }, status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' } }, _sum: { totalAmount: true }, orderBy: { _sum: { totalAmount: 'desc' } }, take: 5 }),
             this.prisma.customer.findMany({ where: { orgId }, orderBy: { outstandingAmount: 'desc' }, take: 5, select: { id: true, name: true, outstandingAmount: true, paymentScore: true } }),
             this.prisma.order.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' }, take: 10, include: { customer: { select: { name: true } } } }),
-            this.prisma.inventory.findMany({ where: { orgId }, select: { quantity: true, product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
+            this.prisma.inventory.findMany({ where: { orgId }, select: { productId: true, quantity: true, product: { select: { hasVariants: true, minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
+            this.prisma.variantInventory.findMany({ where: { orgId }, select: { quantity: true, variant: { select: { productId: true, purchasePrice: true, product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } } } }),
             this.prisma.locationRequest.findMany({ where: { orgId, status: 'COMPLETED' }, orderBy: { updatedAt: 'desc' }, take: 5, include: { customer: { select: { name: true } } } }),
             this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { gt: 0 } }, _sum: { outstandingAmount: true } }),
             this.prisma.customer.aggregate({ where: { orgId, outstandingAmount: { lt: 0 } }, _sum: { outstandingAmount: true } }),
@@ -51,11 +52,43 @@ export class AnalyticsService {
             this.prisma.customer.count({ where: { orgId, OR: [{ paymentScore: { lt: 60 } }, { overdue30: { gt: 0 } }] } }),
         ]);
 
-        const lowStockCount = inventory.filter((i: any) => i.quantity <= i.product.minStockLevel).length;
-        const totalInventoryValue = inventory.reduce((s: number, i: any) => {
-            const factor = i.product.conversionFactor || 1;
-            return s + ((i.quantity / factor) * i.product.purchasePrice);
+        // Group stock by product so products with variations sum all variants (matching /inventory)
+        const productStockMap = new Map<string, { totalQty: number; minStockLevel: number }>();
+
+        for (const inv of inventory) {
+            if (inv.product.hasVariants) continue; // Skip zero-quantity placeholder rows for variant products
+            const min = inv.product.minStockLevel ?? 0;
+            if (min <= 0) continue;
+            const cur = productStockMap.get(inv.productId) || { totalQty: 0, minStockLevel: min };
+            cur.totalQty += inv.quantity;
+            productStockMap.set(inv.productId, cur);
+        }
+
+        for (const vi of variantInventory) {
+            const p = vi.variant.product;
+            const min = p.minStockLevel ?? 0;
+            if (min <= 0) continue;
+            const cur = productStockMap.get(vi.variant.productId) || { totalQty: 0, minStockLevel: min };
+            cur.totalQty += vi.quantity;
+            productStockMap.set(vi.variant.productId, cur);
+        }
+
+        const lowStockCount = Array.from(productStockMap.values()).filter(p => p.totalQty <= p.minStockLevel).length;
+
+        const baseInvVal = inventory
+            .filter((i: any) => !i.product.hasVariants)
+            .reduce((s: number, i: any) => {
+                const factor = i.product.conversionFactor || 1;
+                return s + ((i.quantity / factor) * (i.product.purchasePrice || 0));
+            }, 0);
+
+        const variantInvVal = variantInventory.reduce((s: number, vi: any) => {
+            const factor = vi.variant.product.conversionFactor || 1;
+            const price = vi.variant.purchasePrice ?? vi.variant.product.purchasePrice ?? 0;
+            return s + ((vi.quantity / factor) * price);
         }, 0);
+
+        const totalInventoryValue = baseInvVal + variantInvVal;
 
         // Enrich topProducts with product names
         const productIds = topProducts.map((p: any) => p.productId);
@@ -109,7 +142,14 @@ export class AnalyticsService {
     }
 
     async getSales(orgId: string, from: string, to: string, groupBy: string) {
-        const where = { orgId, createdAt: { gte: new Date(from), lte: new Date(to) }, status: { not: 'CANCELLED' as const }, type: 'SALE' as const };
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        const where = {
+            orgId,
+            createdAt: { gte: new Date(from), lte: toDate },
+            status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] as any },
+            type: 'SALE' as const,
+        };
         const orders = await this.prisma.order.findMany({ where, include: { items: { include: { product: { select: { name: true, category: true, brand: true } } } }, customer: true, salesman: true } });
 
         const grouped = new Map<string, { label: string; revenue: number; orders: number }>();
@@ -146,8 +186,24 @@ export class AnalyticsService {
             }
         }
 
+        // Fill in missing days for daily time-series so the trend chart shows a complete, unbroken series
+        if (groupBy === 'day') {
+            const start = new Date(from);
+            const end = new Date(to);
+            const cur = new Date(start);
+            while (cur <= end) {
+                const key = cur.toISOString().split('T')[0];
+                if (!grouped.has(key)) {
+                    grouped.set(key, { label: key, revenue: 0, orders: 0 });
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+        }
+
         let data = Array.from(grouped.values());
-        if (['customer', 'product', 'category', 'region'].includes(groupBy)) {
+        if (groupBy === 'day' || groupBy === 'week' || groupBy === 'month') {
+            data = data.sort((a, b) => a.label.localeCompare(b.label));
+        } else if (['customer', 'product', 'category', 'region'].includes(groupBy)) {
             data = data.sort((a, b) => b.revenue - a.revenue).slice(0, 10);
         }
 

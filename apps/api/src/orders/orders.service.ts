@@ -5,6 +5,7 @@ import {
   ConflictException,
   Logger,
 } from "@nestjs/common";
+import { Prisma } from "@distroai/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { RedisService } from "../common/services/redis.service";
 import {
@@ -12,9 +13,14 @@ import {
   ReturnOrderDto,
   DispatchOrderDto,
   ListOrdersQueryDto,
+  MarkPaidDto,
 } from "./dto/orders.dto";
 import { InvoicesService } from "../invoices/invoices.service";
 import { EventsService } from "../events/events.service";
+import { CustomerLedgerCalculationEngine } from "../customer-transactions/customer-transactions.calculation";
+import { NotificationsService } from "../notifications/notifications.service";
+import { WhatsAppService } from "../whatsapp/whatsapp.service";
+import { RazorpayService } from "../payments/razorpay.service";
 
 @Injectable()
 export class OrdersService {
@@ -25,6 +31,9 @@ export class OrdersService {
     private readonly redis: RedisService,
     private readonly invoices: InvoicesService,
     private readonly eventsService: EventsService,
+    private readonly notificationsService: NotificationsService,
+    private readonly wa: WhatsAppService,
+    private readonly razorpay: RazorpayService,
   ) { }
 
   private async invalidateAnalytics(orgId: string) {
@@ -154,6 +163,12 @@ export class OrdersService {
             code: "NOT_FOUND",
             message: `Product ${item.productId} not found`,
           });
+        if (product.isDraft) {
+          throw new BadRequestException({
+            code: "PRODUCT_IS_DRAFT",
+            message: `Product "${product.name}" is currently in draft and cannot be ordered. Please publish it first.`,
+          });
+        }
 
         const isSelfServe = dto.source === "PORTAL" || dto.source === "WEB";
 
@@ -162,34 +177,62 @@ export class OrdersService {
 
         if (isSelfServe) {
           // ── Real-time Inventory Block ──
-          const inv = await this.prisma.inventory.findFirst({
-            where: { productId: product.id, warehouseId },
-          });
-          const available = (inv?.quantity ?? 0) - (inv?.reservedQty ?? 0);
+          let available = 0;
+          let displayName = product.name;
+          let baseSellingPrice = product.sellingPrice;
+
+          if (item.variantId) {
+            const variant = await this.prisma.productVariant.findFirst({
+              where: { id: item.variantId, productId: product.id, orgId },
+            });
+            if (variant) {
+              displayName = `${product.name} (${variant.name})`;
+              if (variant.sellingPrice != null) {
+                baseSellingPrice = variant.sellingPrice;
+              }
+            }
+            const varInv = await this.prisma.variantInventory.findFirst({
+              where: { variantId: item.variantId, warehouseId },
+            });
+            available = (varInv?.quantity ?? 0) - (varInv?.reservedQty ?? 0);
+          } else {
+            const inv = await this.prisma.inventory.findFirst({
+              where: { productId: product.id, warehouseId },
+            });
+            available = (inv?.quantity ?? 0) - (inv?.reservedQty ?? 0);
+          }
+
           if (available < item.quantity) {
             throw new ConflictException({
               code: "CONFLICT",
-              message: `Insufficient stock. Only ${available} available for ${product.name}.`,
+              message: `Insufficient stock. Only ${available} available for ${displayName}.`,
               productId: product.id,
+              variantId: item.variantId,
               available,
             });
           }
 
           // ── Structural Pricing Logic ──
-          if (customer.type === "INDIVIDUAL") {
-            // B2C assumes final price is the sellingPrice (which is inclusive of GST)
-            // We reverse-calculate the tax-exclusive base price strictly from sellingPrice
-            actualPrice = r2(product.sellingPrice / (1 + product.gstRate / 100));
-            actualDiscount = 0;
-          } else {
-            actualPrice = product.sellingPrice; // B2B assumes sellingPrice is tax-exclusive
-            if (customer.tier === "GOLD") {
-              actualDiscount = r2(actualPrice * item.quantity * 0.05); // 5% bulk discount
-            } else if (customer.tier === "SILVER") {
-              actualDiscount = r2(actualPrice * item.quantity * 0.025); // 2.5% bulk discount
+          if (dto.source === "PORTAL") {
+            if (customer.type === "INDIVIDUAL") {
+              // B2C assumes final price is the sellingPrice (which is inclusive of GST)
+              // We reverse-calculate the tax-exclusive base price strictly from sellingPrice
+              actualPrice = r2(baseSellingPrice / (1 + product.gstRate / 100));
+              actualDiscount = 0;
             } else {
-              actualDiscount = 0; // BRONZE gets standard selling price
+              actualPrice = baseSellingPrice; // B2B assumes sellingPrice is tax-exclusive
+              if (customer.tier === "GOLD") {
+                actualDiscount = r2(actualPrice * item.quantity * 0.05); // 5% bulk discount
+              } else if (customer.tier === "SILVER") {
+                actualDiscount = r2(actualPrice * item.quantity * 0.025); // 2.5% bulk discount
+              } else {
+                actualDiscount = 0; // BRONZE gets standard selling price
+              }
             }
+          } else {
+            // WEB / manual distributor order: preserve user-specified price & discount (falling back to baseSellingPrice)
+            actualPrice = item.price !== undefined ? item.price : baseSellingPrice;
+            actualDiscount = item.discount ?? 0;
           }
         }
 
@@ -214,6 +257,46 @@ export class OrdersService {
     );
 
     const netAmount = r2(totalAmount - discountAmount + taxAmount);
+
+    // ─── Credit Limit & Overdue Safeguards ──────────────────────────────
+    if (!dto.overrideCreditLimit && customer.creditLimit > 0) {
+      const newTotal = r2(customer.outstandingAmount + netAmount);
+      if (newTotal > customer.creditLimit) {
+        throw new BadRequestException({
+          code: "CREDIT_LIMIT_EXCEEDED",
+          message: `Customer credit limit (₹${customer.creditLimit.toLocaleString("en-IN")}) exceeded. Current outstanding: ₹${customer.outstandingAmount.toLocaleString("en-IN")}, Order value: ₹${netAmount.toLocaleString("en-IN")}, New total would be ₹${newTotal.toLocaleString("en-IN")}.`,
+          details: {
+            creditLimit: customer.creditLimit,
+            outstandingAmount: customer.outstandingAmount,
+            orderAmount: netAmount,
+            newTotal,
+          },
+        });
+      }
+    }
+
+    if (!dto.overrideCreditLimit && (customer.creditDays > 0 || customer.gracePeriodDays > 0)) {
+      const graceDays = customer.gracePeriodDays || 7;
+      const cutoffDate = new Date(Date.now() - graceDays * 24 * 60 * 60 * 1000);
+      const overdueInvoice = await this.prisma.invoice.findFirst({
+        where: {
+          orgId,
+          customerId: customer.id,
+          status: { in: ["SENT", "PARTIAL", "OVERDUE"] },
+          balanceAmount: { gt: 0 },
+          dueDate: { lt: cutoffDate },
+        },
+        select: { invoiceNumber: true, dueDate: true, balanceAmount: true },
+      });
+      if (overdueInvoice) {
+        throw new BadRequestException({
+          code: "OVERDUE_PAYMENT_BLOCKED",
+          message: `Customer has overdue invoice ${overdueInvoice.invoiceNumber} (Balance: ₹${overdueInvoice.balanceAmount.toLocaleString("en-IN")}) past the ${graceDays}-day grace period. Payment required before new orders can be created.`,
+          details: overdueInvoice,
+        });
+      }
+    }
+
     const orderNumber = await this.generateOrderNumber(orgId);
 
     const order = await this.prisma.order.create({
@@ -236,6 +319,7 @@ export class OrdersService {
         items: {
           create: itemsWithTax.map((i: any) => ({
             productId: i.productId,
+            variantId: i.variantId || undefined,
             quantity: i.quantity,
             orderedQty: i.quantity,
             deliveredQty: 0,
@@ -257,6 +341,26 @@ export class OrdersService {
 
     await this.invalidateAnalytics(orgId);
     this.eventsService.emit(orgId, 'order:created', { id: order.id, orderNumber: order.orderNumber, netAmount: order.netAmount });
+
+    // Dispatch Web Push notification to distributor owner / admins
+    try {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: dto.customerId },
+        select: { name: true },
+      });
+      await this.notificationsService.notify(orgId, {
+        type: 'NEW_ORDER',
+        orgId,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        customerName: customer?.name,
+        netAmount: Number(order.netAmount),
+        source: order.source,
+      });
+    } catch (notifErr) {
+      this.logger.warn(`Failed to dispatch order notification: ${(notifErr as Error).message}`);
+    }
+
     return order;
   }
 
@@ -267,6 +371,7 @@ export class OrdersService {
         items: {
           include: {
             product: { select: { name: true, sku: true, unit: true } },
+            variant: { select: { id: true, name: true, sku: true, attributes: true } },
           },
         },
         statusHistory: { orderBy: { createdAt: "asc" } },
@@ -277,6 +382,15 @@ export class OrdersService {
             phone: true,
             outstandingAmount: true,
             paymentScore: true,
+          },
+        },
+        invoice: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+            status: true,
+            paidAmount: true,
+            balanceAmount: true,
           },
         },
       },
@@ -393,13 +507,24 @@ export class OrdersService {
 
       for (const item of order.items) {
         // Lock the inventory row to prevent concurrent modifications
-        const locked = await tx.$queryRaw<
-          Array<{ quantity: number; reservedQty: number }>
-        >`
-                    SELECT "quantity", "reservedQty" FROM "Inventory"
-                    WHERE "productId" = ${item.productId} AND "warehouseId" = ${order.warehouseId}
-                    FOR UPDATE
-                `;
+        let locked: Array<{ quantity: number; reservedQty: number }>;
+        if (item.variantId) {
+          locked = await tx.$queryRaw<
+            Array<{ quantity: number; reservedQty: number }>
+          >`
+            SELECT "quantity", "reservedQty" FROM "VariantInventory"
+            WHERE "variantId" = ${item.variantId} AND "warehouseId" = ${order.warehouseId}
+            FOR UPDATE
+          `;
+        } else {
+          locked = await tx.$queryRaw<
+            Array<{ quantity: number; reservedQty: number }>
+          >`
+            SELECT "quantity", "reservedQty" FROM "Inventory"
+            WHERE "productId" = ${item.productId} AND "warehouseId" = ${order.warehouseId}
+            FOR UPDATE
+          `;
+        }
         const inv = locked[0];
         const available = (inv?.quantity ?? 0) - (inv?.reservedQty ?? 0);
         if (available < item.quantity) {
@@ -421,10 +546,17 @@ export class OrdersService {
 
       await tx.order.update({ where: { id }, data: { status: "CONFIRMED" } });
       for (const item of order.items) {
-        await tx.inventory.updateMany({
-          where: { productId: item.productId, warehouseId: order.warehouseId },
-          data: { reservedQty: { increment: item.quantity } },
-        });
+        if (item.variantId) {
+          await tx.variantInventory.updateMany({
+            where: { variantId: item.variantId, warehouseId: order.warehouseId },
+            data: { reservedQty: { increment: item.quantity } },
+          });
+        } else {
+          await tx.inventory.updateMany({
+            where: { productId: item.productId, warehouseId: order.warehouseId },
+            data: { reservedQty: { increment: item.quantity } },
+          });
+        }
       }
       await tx.orderStatusHistory.create({
         data: {
@@ -455,32 +587,43 @@ export class OrdersService {
       };
 
       await this.invoices.create(orgId, invoiceDto as any);
-      // Stage 5 WhatsApp notification is hooked up within invoices.service.ts
+      // Auto-generate invoice
     }
+
+    // Auto-dispatch WhatsApp order confirmation & payment link to customer
+    this.sendWhatsAppConfirmation(orgId, id).catch((err) => {
+      this.logger.warn(`Background WhatsApp confirmation dispatch for order ${id}: ${(err as Error).message}`);
+    });
 
     await this.invalidateAnalytics(orgId);
     this.eventsService.emit(orgId, 'order:status_changed', { id, status: 'CONFIRMED' });
     return { success: true, status: "CONFIRMED" };
   }
 
-  async markPaid(orgId: string, id: string, userId: string, method: 'CASH' | 'UPI' | 'CHEQUE' | 'BANK_TRANSFER' | 'CREDIT' = 'CASH') {
+  async markPaid(orgId: string, id: string, userId: string, dto: MarkPaidDto | string = {}) {
     const r2 = (n: number) => Math.round(n * 100) / 100;
+    const resolvedDto: MarkPaidDto = typeof dto === 'string' ? { method: dto as any } : (dto || {});
+    const method = resolvedDto.method || 'CASH';
+    const paymentDate = resolvedDto.date ? new Date(resolvedDto.date) : new Date();
 
     const order = await this.prisma.order.findFirst({
       where: { id, orgId },
-      include: { customer: { select: { id: true } } },
+      include: { customer: { select: { id: true, name: true } }, invoice: true },
     });
     if (!order) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Order not found' });
 
     let invoiceId = order.invoiceId;
     if (!invoiceId) throw new BadRequestException({ code: 'NO_INVOICE', message: 'Order has no invoice. Please confirm it first.' });
 
-    const invoice = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
+    const invoice = order.invoice || await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
     if (!invoice) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Invoice not found' });
 
     const balanceAmount = r2(invoice.balanceAmount);
+    const actualPayment = resolvedDto.amount && resolvedDto.amount > 0
+      ? r2(Math.min(resolvedDto.amount, balanceAmount > 0 ? balanceAmount : order.netAmount))
+      : (balanceAmount > 0 ? balanceAmount : r2(order.netAmount));
 
-    if (balanceAmount > 0) {
+    if (actualPayment > 0) {
       await this.prisma.$transaction(async (tx: any) => {
         await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${order.customerId} FOR UPDATE`;
         const payment = await tx.payment.create({
@@ -488,20 +631,24 @@ export class OrdersService {
             orgId,
             customerId: order.customerId,
             invoiceId,
-            amount: balanceAmount,
+            amount: actualPayment,
             method,
+            referenceNumber: resolvedDto.referenceNumber || null,
             status: 'COMPLETED',
-            paidAt: new Date(),
-            notes: 'Auto-recorded via Mark Paid flow',
+            paidAt: paymentDate,
+            notes: resolvedDto.notes || `Payment for Order ${order.orderNumber} (${method})`,
           }
         });
+
+        const newPaid = r2(Number(invoice.paidAmount) + actualPayment);
+        const newBal = r2(Math.max(0, Number(invoice.balanceAmount) - actualPayment));
 
         await tx.invoice.update({
           where: { id: invoiceId },
           data: {
-            paidAmount: { increment: balanceAmount },
-            balanceAmount: 0,
-            status: 'PAID',
+            paidAmount: newPaid,
+            balanceAmount: newBal,
+            status: newBal <= 0 ? 'PAID' : 'PARTIAL',
           }
         });
 
@@ -509,14 +656,46 @@ export class OrdersService {
           data: {
             paymentId: payment.id,
             invoiceId,
-            amountAllocated: balanceAmount
+            amountAllocated: actualPayment
           }
         });
 
-        // Lock customer row to prevent concurrent race conditions (#7)
+        const newOrderPaid = r2(Number(order.paidAmount) + actualPayment);
+        const newOrderBal = r2(Math.max(0, Number(order.balanceAmount) - actualPayment));
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            paidAmount: newOrderPaid,
+            balanceAmount: newOrderBal,
+          }
+        });
+
+        // ── Create CustomerTransaction so payment shows in Customer Khata / Statement ──
+        await tx.customerTransaction.create({
+          data: {
+            orgId,
+            customerId: order.customerId,
+            date: paymentDate,
+            type: 'PAYMENT',
+            amount: new Prisma.Decimal(actualPayment),
+            paymentMethod: method as any,
+            reference: resolvedDto.referenceNumber || invoice.invoiceNumber,
+            description: resolvedDto.notes || `Payment for Order ${order.orderNumber} (${method})`,
+            notes: `Auto-recorded via Mark Paid for Order ${order.orderNumber} (Payment ID: ${payment.id})`,
+          }
+        });
+
+        // Authoritatively recompute Customer.outstandingAmount from CustomerTransaction
+        const allTx = await tx.customerTransaction.findMany({
+          where: { orgId, customerId: order.customerId },
+          select: { type: true, amount: true },
+        });
+        const summary = CustomerLedgerCalculationEngine.computeSummary(allTx);
+
         const customer = await tx.customer.update({
           where: { id: order.customerId },
-          data: { outstandingAmount: { decrement: balanceAmount } },
+          data: { outstandingAmount: summary.netBalance },
           select: { outstandingAmount: true }
         });
 
@@ -525,19 +704,11 @@ export class OrdersService {
             orgId,
             customerId: order.customerId,
             type: 'CREDIT',
-            amount: balanceAmount,
+            amount: actualPayment,
             balance: customer.outstandingAmount,
             referenceId: payment.id,
             referenceType: 'PAYMENT',
-            notes: `Payment recorded via Mark Paid flow`
-          }
-        });
-
-        await tx.order.update({
-          where: { id: order.id },
-          data: {
-            paidAmount: order.netAmount,
-            balanceAmount: 0,
+            notes: resolvedDto.notes || `Payment recorded for Order ${order.orderNumber}`
           }
         });
       });
@@ -546,7 +717,7 @@ export class OrdersService {
     // Invalidate cache AFTER transaction commits (#9)
     await Promise.all([
       this.redis.del(`analytics:dashboard:${orgId}`),
-      this.redis.del(`analytics:sales:${orgId}`)
+      this.redis.del(`analytics:sales:${orgId}`),
     ]);
 
     return { success: true };
@@ -647,13 +818,23 @@ export class OrdersService {
         });
 
         // Deduct inventory physical stock and reservedQty
-        await tx.inventory.updateMany({
-          where: { productId: item.productId, warehouseId: order.warehouseId },
-          data: {
-            quantity: { decrement: dispatchQty },
-            reservedQty: { decrement: dispatchQty },
-          },
-        });
+        if (item.variantId) {
+          await tx.variantInventory.updateMany({
+            where: { variantId: item.variantId, warehouseId: order.warehouseId },
+            data: {
+              quantity: { decrement: dispatchQty },
+              reservedQty: { decrement: dispatchQty },
+            },
+          });
+        } else {
+          await tx.inventory.updateMany({
+            where: { productId: item.productId, warehouseId: order.warehouseId },
+            data: {
+              quantity: { decrement: dispatchQty },
+              reservedQty: { decrement: dispatchQty },
+            },
+          });
+        }
 
         const inv = await tx.inventory.findFirst({
           where: { productId: item.productId, warehouseId: order.warehouseId },
@@ -735,13 +916,23 @@ export class OrdersService {
       // Release reserved inventory for confirmed/packed orders
       if (["CONFIRMED", "PACKED"].includes(order.status)) {
         for (const item of order.items) {
-          await tx.inventory.updateMany({
-            where: {
-              productId: item.productId,
-              warehouseId: order.warehouseId,
-            },
-            data: { reservedQty: { decrement: item.quantity } },
-          });
+          if (item.variantId) {
+            await tx.variantInventory.updateMany({
+              where: {
+                variantId: item.variantId,
+                warehouseId: order.warehouseId,
+              },
+              data: { reservedQty: { decrement: item.quantity } },
+            });
+          } else {
+            await tx.inventory.updateMany({
+              where: {
+                productId: item.productId,
+                warehouseId: order.warehouseId,
+              },
+              data: { reservedQty: { decrement: item.quantity } },
+            });
+          }
         }
       }
 
@@ -823,7 +1014,12 @@ export class OrdersService {
 
       // If items weren't provided, default to returning everything delivered
       const itemsToReturn = dto.items && dto.items.length > 0
-        ? dto.items
+        ? dto.items.map((i: any) => ({
+            orderItemId: i.orderItemId,
+            returnQty: Number(i.returnQty ?? i.quantity ?? 0),
+            reason: i.reason,
+            condition: (i.condition ?? 'RESTOCKABLE') as 'RESTOCKABLE' | 'DAMAGED',
+          }))
         : original.items.map((i: any) => ({
           orderItemId: i.id,
           returnQty: Math.max(0, (i.deliveredQty > 0 ? i.deliveredQty : i.quantity) - (i.returnedQty || 0)),
@@ -1074,6 +1270,19 @@ export class OrdersService {
                 notes: `Credit Note ${creditNoteNumber} against invoice ${invoice.invoiceNumber}`,
               },
             });
+
+            await tx.customerTransaction.create({
+              data: {
+                orgId,
+                customerId: original.customerId,
+                date: new Date(),
+                type: 'RETURN',
+                amount: new Prisma.Decimal(cnTotal),
+                reference: creditNoteNumber,
+                description: dto.reason || `Credit Note ${creditNoteNumber} for returned goods`,
+                notes: `Issued from Credit Note ${creditNoteNumber} against invoice ${invoice.invoiceNumber}`,
+              },
+            });
           }
         }
       }
@@ -1118,5 +1327,139 @@ export class OrdersService {
     ]);
     await this.invalidateAnalytics(orgId);
     return { success: true, status: to };
+  }
+
+  /**
+   * Dispatches an automated WhatsApp order confirmation with item summary,
+   * active Razorpay / UPI payment link, and PDF invoice link to the customer.
+   */
+  async sendWhatsAppConfirmation(orgId: string, id: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id, orgId },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            product: { select: { name: true, unit: true } },
+            variant: { select: { name: true } },
+          },
+        },
+        invoice: true,
+        organization: {
+          include: { settings: true },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException({ code: "NOT_FOUND", message: "Order not found" });
+    }
+
+    if (!order.customer || !order.customer.phone) {
+      throw new BadRequestException({ code: "NO_PHONE", message: "Customer has no phone number on record" });
+    }
+
+    const cleanPhone = order.customer.phone.replace(/[^0-9]/g, "");
+    const to = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+    const dueAmount = order.balanceAmount > 0
+      ? order.balanceAmount
+      : (order.invoice ? order.invoice.balanceAmount : order.netAmount);
+
+    let paymentLinkUrl: string | undefined;
+
+    // 1. Generate Razorpay payment link if balance is due
+    if (dueAmount > 0) {
+      try {
+        const link = await this.razorpay.createPaymentLink({
+          amount: Math.round(dueAmount * 100),
+          currency: "INR",
+          description: `Payment for Order #${order.orderNumber}`,
+          customerName: order.customer.name,
+          customerPhone: cleanPhone.slice(-10),
+          customerEmail: order.customer.email || undefined,
+          referenceId: `ord_${order.id}_${Date.now()}`,
+          notifyWhatsapp: false,
+        });
+        paymentLinkUrl = link.shortUrl;
+      } catch (rzpErr) {
+        this.logger.warn(`Razorpay payment link error: ${(rzpErr as Error).message}`);
+      }
+    }
+
+    // 2. Format 1-Tap UPI link if org has UPI ID configured
+    const upiId = order.organization?.settings?.upiId;
+    let upiBlock = "";
+    if (upiId && dueAmount > 0) {
+      const orgDisplayName = order.organization.name || "Distributor";
+      const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(orgDisplayName)}&am=${dueAmount.toFixed(2)}&tr=${encodeURIComponent(order.orderNumber)}&tn=Order+${encodeURIComponent(order.orderNumber)}&cu=INR`;
+      upiBlock = `\n💳 *Instant 1-Tap UPI:*\n• Payee UPI: \`${upiId}\`\n• Pay directly: ${upiUri}\n`;
+    }
+
+    // 3. Format items list
+    const itemsLines = order.items.slice(0, 5).map((it, idx) => {
+      const itemName = it.variant?.name ? `${it.product?.name} (${it.variant.name})` : (it.product?.name || "Item");
+      return `${idx + 1}. *${itemName}* × ${it.quantity} ${it.unit || "Pcs"} — ₹${it.totalAmount.toLocaleString("en-IN")}`;
+    }).join("\n");
+    const moreItems = order.items.length > 5 ? `\n_...and ${order.items.length - 5} more items_\n` : "\n";
+
+    // 4. Payment instructions
+    let paymentText = "";
+    if (dueAmount > 0) {
+      paymentText = `\n💰 *Amount Due: ₹${dueAmount.toLocaleString("en-IN")}*\n`;
+      if (paymentLinkUrl) {
+        paymentText += `👉 *Pay Online (UPI / GPay / PhonePe / Cards):*\n${paymentLinkUrl}\n`;
+      }
+      if (upiBlock) {
+        paymentText += upiBlock;
+      }
+    } else {
+      paymentText = `\n✅ *Payment Status: Paid in Full*\n`;
+    }
+
+    const orgName = order.organization?.name || "DistroAI";
+    const appUrl = process.env.APP_URL || "https://distroai.in";
+    const viewUrl = order.invoice?.pdfUrl || `${appUrl}/orders/${order.id}`;
+
+    const textMessage =
+      `📦 *Order Confirmed — ${orgName}*\n\n` +
+      `Dear *${order.customer.name}*,\n` +
+      `Thank you for your order! Here are your order details:\n\n` +
+      `📋 *Order Summary:*\n` +
+      `• Order No: *#${order.orderNumber}*\n` +
+      `• Date: ${new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}\n` +
+      `• Order Status: *${order.status}*\n` +
+      `• Total Amount: *₹${order.netAmount.toLocaleString("en-IN")}*\n\n` +
+      `🛍️ *Items:*\n` +
+      `${itemsLines}` +
+      `${moreItems}` +
+      `${paymentText}\n` +
+      `📄 *View / Download Invoice:*\n` +
+      `${viewUrl}\n\n` +
+      (order.organization.phone ? `📞 For questions, call: ${order.organization.phone}` : `Thank you for your business!`);
+
+    await this.wa.sendText(orgId, to, textMessage);
+
+    // Send document PDF attachment if available
+    if (order.invoice?.pdfUrl) {
+      try {
+        await this.wa.sendDocument(
+          orgId,
+          to,
+          order.invoice.pdfUrl,
+          `Invoice-${order.orderNumber}.pdf`,
+          `Tax Invoice for Order #${order.orderNumber}`,
+        );
+      } catch (docErr) {
+        this.logger.warn(`Failed to attach invoice PDF: ${(docErr as Error).message}`);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Order confirmation & payment link sent to WhatsApp (+${to})`,
+      to,
+      paymentLinkUrl,
+    };
   }
 }

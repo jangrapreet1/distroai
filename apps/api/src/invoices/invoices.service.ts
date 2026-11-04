@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
+import { Prisma } from '@distroai/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { IsString, IsOptional, IsNumber, IsArray, IsDateString, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -6,6 +7,8 @@ import { QueueService } from '../queue/queue.service';
 import { RazorpayService } from '../payments/razorpay.service';
 import { EInvoiceService } from './einvoice.service';
 import { RedisService } from '../common/services/redis.service';
+import { buildGstr1Summary, generateGstr1Json, generateGstr1Csv } from './gstr1-json';
+import { CustomerLedgerCalculationEngine } from '../customer-transactions/customer-transactions.calculation';
 
 class InvoiceItemDto {
     @IsString() productId!: string;
@@ -27,6 +30,15 @@ export class CreateInvoiceDto {
 
 export class SendInvoiceDto {
     @IsArray() channels!: string[];
+}
+
+export class GenerateEWayBillDto {
+    @IsString() vehicleNo!: string;
+    @IsOptional() @IsString() transporterName?: string;
+    @IsOptional() @IsString() transporterId?: string;
+    @IsOptional() @IsNumber() distanceKm?: number;
+    @IsOptional() @IsString() transportDocNo?: string;
+    @IsOptional() @IsString() transportMode?: string;
 }
 
 export class GstrQueryDto {
@@ -172,14 +184,45 @@ export class InvoicesService {
                 });
             }
 
-            // ── Update Customer Ledger ──
+            // ── Update Customer Ledger & Khata ──
             // Fetch current customer to get exact balance for ledger
             await tx.$queryRaw`SELECT 1 FROM "Customer" WHERE "id" = ${dto.customerId} FOR UPDATE`;
 
+            // Record CustomerTransaction so the invoice appears in Customer Khata / RTK statements
+            await tx.customerTransaction.create({
+                data: {
+                    orgId,
+                    customerId: dto.customerId,
+                    date: new Date(dto.invoiceDate),
+                    type: 'SALE',
+                    amount: new Prisma.Decimal(totalAmount),
+                    reference: invoiceNumber,
+                    description: dto.notes || `Invoice ${invoiceNumber}`,
+                    notes: `Issued from Invoice ${invoiceNumber}`,
+                    items: itemsData && itemsData.length > 0 ? {
+                        create: itemsData.map((item: any) => ({
+                            productId: item.productId || null,
+                            productName: item.description || 'Product',
+                            quantity: new Prisma.Decimal(item.quantity),
+                            unitPrice: new Prisma.Decimal(item.price),
+                            amount: new Prisma.Decimal(item.totalAmount),
+                            unit: item.unit || 'pcs',
+                        })),
+                    } : undefined,
+                },
+            });
+
+            // Authoritatively recompute customer balance from CustomerTransaction
+            const allTx = await tx.customerTransaction.findMany({
+                where: { orgId, customerId: dto.customerId },
+                select: { type: true, amount: true },
+            });
+            const summary = CustomerLedgerCalculationEngine.computeSummary(allTx);
+
             const customer = await tx.customer.update({
                 where: { id: dto.customerId },
-                data: { outstandingAmount: { increment: totalAmount } },
-                select: { outstandingAmount: true }
+                data: { outstandingAmount: summary.netBalance },
+                select: { outstandingAmount: true },
             });
 
             await tx.ledgerEntry.create({
@@ -264,8 +307,13 @@ export class InvoicesService {
         return result;
     }
 
-    async eWaybill(_orgId: string, _id: string) {
-        return { status: 'not_configured', message: 'E-waybill integration will be set up in Phase 4' };
+    async eWaybill(orgId: string, id: string, dto: GenerateEWayBillDto) {
+        const invoice = await this.prisma.invoice.findFirst({ where: { id, orgId } });
+        if (!invoice) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Invoice not found' });
+
+        const result = await this.einvoice.generateEWayBill(id, dto);
+        this.logger.log(`Generated E-Way Bill ${result.ewayBillNo} for invoice ${id}`);
+        return result;
     }
 
     async createPaymentLink(orgId: string, id: string) {
@@ -293,37 +341,68 @@ export class InvoicesService {
     }
 
     async getGstr1(orgId: string, from: string, to: string) {
+        const org = await this.prisma.organization.findUnique({
+            where: { id: orgId },
+            select: { name: true, gstNumber: true, state: true },
+        });
+        if (!org) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Organization not found' });
+
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        const mm = String(fromDate.getMonth() + 1).padStart(2, '0');
+        const yyyy = fromDate.getFullYear();
+        const fp = `${mm}${yyyy}`;
+
         const invoices = await this.prisma.invoice.findMany({
-            where: { orgId, invoiceDate: { gte: new Date(from), lte: new Date(to) }, status: { not: 'CANCELLED' } },
-            include: { customer: { select: { name: true, gstNumber: true } }, items: true },
+            where: {
+                orgId,
+                invoiceDate: { gte: fromDate, lte: toDate },
+            },
+            include: {
+                customer: { select: { name: true, gstNumber: true, state: true, fullAddress: true } },
+                items: { include: { product: { select: { name: true, sku: true, hsnCode: true } } } },
+            },
+            orderBy: { invoiceDate: 'asc' },
         });
 
-        const b2b: Record<string, unknown[]> = {};
-        const b2cTotals = { totalTaxableValue: 0, totalCgst: 0, totalSgst: 0, totalIgst: 0 };
-        let totalInvoices = 0, totalTaxableValue = 0, totalTax = 0;
+        return buildGstr1Summary(org, invoices as any, fp);
+    }
 
-        for (const inv of invoices) {
-            totalInvoices++;
-            totalTaxableValue += inv.taxableAmount;
-            totalTax += inv.cgstAmount + inv.sgstAmount + inv.igstAmount + inv.cessAmount;
+    async getGstr1Json(orgId: string, from: string, to: string) {
+        const org = await this.prisma.organization.findUnique({
+            where: { id: orgId },
+            select: { name: true, gstNumber: true, state: true },
+        });
+        if (!org) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Organization not found' });
 
-            if (inv.customer.gstNumber) {
-                const gst = inv.customer.gstNumber;
-                if (!b2b[gst]) b2b[gst] = [];
-                b2b[gst].push({ invoiceNumber: inv.invoiceNumber, date: inv.invoiceDate, value: inv.totalAmount });
-            } else {
-                b2cTotals.totalTaxableValue += inv.taxableAmount;
-                b2cTotals.totalCgst += inv.cgstAmount;
-                b2cTotals.totalSgst += inv.sgstAmount;
-                b2cTotals.totalIgst += inv.igstAmount;
-            }
-        }
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        const mm = String(fromDate.getMonth() + 1).padStart(2, '0');
+        const yyyy = fromDate.getFullYear();
+        const fp = `${mm}${yyyy}`;
 
-        return {
-            b2b: Object.entries(b2b).map(([customerGst, invoices]) => ({ customerGst, invoices })),
-            b2c: b2cTotals,
-            summary: { totalInvoices, totalTaxableValue, totalTax, totalCess: 0 },
-        };
+        const invoices = await this.prisma.invoice.findMany({
+            where: {
+                orgId,
+                invoiceDate: { gte: fromDate, lte: toDate },
+            },
+            include: {
+                customer: { select: { name: true, gstNumber: true, state: true, fullAddress: true } },
+                items: { include: { product: { select: { name: true, sku: true, hsnCode: true } } } },
+            },
+            orderBy: { invoiceDate: 'asc' },
+        });
+
+        const data = generateGstr1Json(org, invoices as any, fp);
+        const filename = `GSTR1_${org.gstNumber || 'URP'}_${fp}.json`;
+        return { filename, data };
+    }
+
+    async getGstr1Csv(orgId: string, from: string, to: string) {
+        const summary = await this.getGstr1(orgId, from, to);
+        const csv = generateGstr1Csv(summary);
+        const filename = `GSTR1_${summary.supplierGstin}_${summary.fp}.csv`;
+        return { filename, csv };
     }
 
     /**
@@ -347,8 +426,30 @@ export class InvoicesService {
         // Find invoices NOT linked to any order (orphans from duplicate creation)
         const allInvoices = await this.prisma.invoice.findMany({
             where: { orgId },
-            select: { id: true, invoiceNumber: true, customerId: true, balanceAmount: true, status: true },
+            select: { id: true, invoiceNumber: true, customerId: true, totalAmount: true, balanceAmount: true, status: true, invoiceDate: true, notes: true },
         });
+
+        // Step 1.5: Backfill CustomerTransaction for any active invoice missing from ledger
+        for (const inv of allInvoices) {
+            if (inv.status === 'CANCELLED') continue;
+            const existingTx = await this.prisma.customerTransaction.findFirst({
+                where: { orgId, reference: inv.invoiceNumber },
+            });
+            if (!existingTx) {
+                await this.prisma.customerTransaction.create({
+                    data: {
+                        orgId,
+                        customerId: inv.customerId,
+                        date: inv.invoiceDate ?? new Date(),
+                        type: 'SALE',
+                        amount: new Prisma.Decimal(inv.totalAmount),
+                        reference: inv.invoiceNumber,
+                        description: inv.notes || `Invoice ${inv.invoiceNumber}`,
+                        notes: `Auto-reconciled from invoice ${inv.invoiceNumber}`,
+                    },
+                });
+            }
+        }
 
         // Step 2: Recalculate each customer's outstanding from their ACTIVE invoice balances
         const customers = await this.prisma.customer.findMany({

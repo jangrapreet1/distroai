@@ -180,13 +180,16 @@ export class CronService {
             }
         }
 
-        // Batch update each customer
+        // Batch update each customer with unpaid invoices
         let updated = 0;
+        const processedCustomerIds: string[] = [];
         for (const [customerId, b] of customerBuckets) {
             const r2 = (n: number) => Math.round(n * 100) / 100;
+            const totalOutstanding = r2(b.current + b.overdue30 + b.overdue60 + b.overdue90);
             await this.prisma.customer.update({
                 where: { id: customerId },
                 data: {
+                    outstandingAmount: totalOutstanding,
                     currentBilled: r2(b.current),
                     overdue30: r2(b.overdue30),
                     overdue60: r2(b.overdue60),
@@ -196,8 +199,33 @@ export class CronService {
                     lastAgingCalculatedAt: now,
                 },
             });
+            processedCustomerIds.push(customerId);
             updated++;
         }
+
+        // Zero out customers who have no active unpaid invoices but still have nonzero balance
+        await this.prisma.customer.updateMany({
+            where: {
+                id: { notIn: processedCustomerIds },
+                OR: [
+                    { currentBilled: { gt: 0 } },
+                    { overdue30: { gt: 0 } },
+                    { overdue60: { gt: 0 } },
+                    { overdue90: { gt: 0 } },
+                    { outstandingAmount: { gt: 0 } },
+                ],
+            },
+            data: {
+                currentBilled: 0,
+                overdue30: 0,
+                overdue60: 0,
+                overdue90: 0,
+                outstandingAmount: 0,
+                avgDaysOverdue: 0,
+                oldestDueDate: null,
+                lastAgingCalculatedAt: now,
+            },
+        });
 
         this.logger.log(`AR aging recalculated for ${updated} customers from ${unpaidInvoices.length} unpaid invoices`);
     }

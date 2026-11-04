@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import apiClient from "@/lib/api-client";
+import { getApiBaseUrl } from "@/lib/api-url";
 import { useAuthStore } from "@/stores/auth.store";
 import { toast } from "react-hot-toast";
 import { greeting } from "@/lib/utils";
@@ -46,7 +47,7 @@ export default function DashboardPage() {
         if (!token) return;
         let eventSource: EventSource | null = null;
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+            const apiUrl = getApiBaseUrl();
             eventSource = new EventSource(`${apiUrl}/api/v1/events/stream?token=${token}`);
 
             eventSource.onmessage = (event) => {
@@ -86,7 +87,7 @@ export default function DashboardPage() {
     }, [daysBack]);
     const to = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-    const { data: salesData } = useQuery({
+    const { data: salesData, isLoading: isSalesLoading } = useQuery({
         queryKey: ["analytics", "sales", from, to, "day"],
         queryFn: () =>
             apiClient
@@ -132,12 +133,13 @@ export default function DashboardPage() {
     }[] = d?.recentOrders ?? [];
 
     const chartData = useMemo(() => {
-        const raw = salesData?.data ?? salesData?.data?.data ?? [];
-        if (Array.isArray(raw) && raw.length > 0) {
-            return raw.map((item: { label: string; revenue: number; orders: number }) => ({
+        const raw = salesData?.data?.data ?? salesData?.data ?? salesData ?? [];
+        const list = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+        if (list.length > 0) {
+            return list.map((item: { label: string; revenue: number; orders: number }) => ({
                 day: item.label.split("-").slice(1).join("/"),
-                revenue: item.revenue,
-                orders: item.orders,
+                revenue: Number(item.revenue) || 0,
+                orders: Number(item.orders) || 0,
             }));
         }
         return [];
@@ -214,19 +216,19 @@ export default function DashboardPage() {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
             {/* Live Infrastructure Telemetry Ticker */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-[var(--bg-secondary)]/70 border border-white/[0.06] text-xs">
-                <div className="flex items-center gap-4 flex-wrap">
-                    <div className="flex items-center gap-1.5 font-mono">
+            <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-[var(--bg-secondary)]/70 border border-white/[0.06] text-xs">
+                <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
+                    <div className="flex items-center gap-1.5 font-mono whitespace-nowrap shrink-0">
                         <span className="w-2 h-2 rounded-full bg-[var(--green-bright)] animate-pulse" />
                         <span className="text-[var(--text-muted)]">META CLOUD API:</span>
                         <span className="text-[var(--green-bright)] font-semibold">200 OK</span>
                     </div>
-                    <div className="flex items-center gap-1.5 font-mono">
+                    <div className="flex items-center gap-1.5 font-mono whitespace-nowrap shrink-0">
                         <span className="w-2 h-2 rounded-full bg-[#3B82F6]" />
                         <span className="text-[var(--text-muted)]">TALLY XML BRIDGE:</span>
                         <span className="text-[#3B82F6] font-semibold">CONNECTED</span>
                     </div>
-                    <div className="flex items-center gap-1.5 font-mono">
+                    <div className="flex items-center gap-1.5 font-mono whitespace-nowrap shrink-0">
                         <span className="w-2 h-2 rounded-full bg-[var(--gold)]" />
                         <span className="text-[var(--text-muted)]">NPCI UPI RECON:</span>
                         <span className="text-[var(--gold)] font-semibold">REAL-TIME</span>
@@ -235,10 +237,10 @@ export default function DashboardPage() {
 
                 <button
                     onClick={() => refetch()}
-                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition ml-auto"
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition ml-auto shrink-0"
                 >
                     <RefreshCw size={12} className={isLoading ? "animate-spin" : ""} />
-                    <span>{t("refresh")}</span>
+                    <span className="hidden sm:inline">{t("refresh")}</span>
                 </button>
             </div>
 
@@ -446,7 +448,7 @@ export default function DashboardPage() {
                         chartData={chartData}
                         chartRange={chartRange}
                         onRangeChange={setChartRange}
-                        isLoading={isLoading}
+                        isLoading={isLoading || isSalesLoading}
                         t={t}
                     />
                 </div>
