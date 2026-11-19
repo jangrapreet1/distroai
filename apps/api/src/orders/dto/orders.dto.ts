@@ -50,6 +50,7 @@ export class DispatchOrderDto {
 
 export class ListOrdersQueryDto {
     @IsOptional() @IsString() status?: string;
+    @IsOptional() @IsString() type?: string;
     @IsOptional() @IsString() search?: string;
     @IsOptional() @IsString() customerId?: string;
     @IsOptional() @IsString() salesmanId?: string;

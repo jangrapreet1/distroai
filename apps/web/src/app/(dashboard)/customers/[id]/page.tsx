@@ -32,7 +32,10 @@ import {
   BookOpen,
   Receipt,
   User,
+  Upload,
+  Edit,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatDate, buildWhatsAppInvoiceLink, formatINR } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import dynamic from "next/dynamic";
@@ -40,6 +43,8 @@ import type { CustomerTransactionType } from "@/types/customer-transactions";
 import { CustomerLedgerTable } from "./components/customer-ledger-table";
 import { CreateTransactionModal } from "./components/create-transaction-modal";
 import { StatementModal } from "./components/statement-modal";
+import { EditCustomerModal } from "@/components/modals/EditCustomerModal";
+import { UniversalImportModal } from "@/components/modals/UniversalImportModal";
 import { downloadCustomerStatementPdf, printCustomerStatement } from "@/lib/statement-actions";
 
 const CustomerMap = dynamic(() => import("@/components/ui/customer-map"), {
@@ -154,11 +159,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const summary = ledgerData?.summary;
 
   const [activeTab, setActiveTab] = useState<"ledger" | "orders" | "profile">("ledger");
+  const queryClient = useQueryClient();
 
   // Modal controls
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createModalType, setCreateModalType] = useState<CustomerTransactionType>("SALE");
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
 
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
   const locationRequest = useCreateLocationRequest(id);
@@ -242,7 +250,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           </Link>
           <span className="text-[var(--text-muted)]">/</span>
           <h1
-            className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-muted)]"
+            className="text-xl font-bold text-[var(--text-primary)]"
             style={{ fontFamily: "var(--font-playfair)" }}
           >
             {customer.name}
@@ -262,32 +270,42 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           </span>
         </div>
 
-        {customer.phone && (
-          <div className="flex items-center gap-2">
-            <a
-              href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 hover:border-[var(--whatsapp)]/50 transition"
-            >
-              <MessageCircle size={14} /> WhatsApp
-            </a>
-            <a
-              href={`tel:${customer.phone}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition"
-            >
-              <Phone size={14} /> Call
-            </a>
-            <button
-              onClick={handleRequestLocation}
-              disabled={isRequestingLocation}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--text-primary)] hover:border-[var(--gold)]/50 transition disabled:opacity-50"
-            >
-              <MapPin size={14} className={isRequestingLocation ? "text-[var(--text-muted)] animate-pulse" : "text-[var(--gold)]"} />
-              {isRequestingLocation ? "Generating..." : "Location"}
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsEditCustomerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--gold)]/15 border border-[var(--gold)]/30 text-[var(--gold)] hover:bg-[var(--gold)]/25 transition cursor-pointer shadow-sm"
+            title="Edit customer name, contact details, GSTIN, address, and credit terms"
+          >
+            <Edit size={14} /> Edit Customer
+          </button>
+          {(customer.phone || customer.altPhone || customer.whatsappNumber) && (
+            <>
+              <a
+                href={`https://wa.me/${(customer.whatsappNumber || customer.phone || customer.altPhone).replace(/[^0-9]/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/10 hover:border-[var(--whatsapp)]/50 transition"
+              >
+                <MessageCircle size={14} /> WhatsApp
+              </a>
+              <a
+                href={`tel:${customer.phone || customer.altPhone}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 transition"
+              >
+                <Phone size={14} /> Call
+              </a>
+              <button
+                onClick={handleRequestLocation}
+                disabled={isRequestingLocation}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-[var(--text-primary)]/5 border border-[var(--text-primary)]/10 text-[var(--text-primary)] hover:border-[var(--gold)]/50 transition disabled:opacity-50"
+              >
+                <MapPin size={14} className={isRequestingLocation ? "text-[var(--text-muted)] animate-pulse" : "text-[var(--gold)]"} />
+                {isRequestingLocation ? "Generating..." : "Location"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ======================================================== */}
@@ -312,9 +330,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 {statusBadge.label}
               </span>
             </div>
-            <div className={`font-mono text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight ${balanceColorClass}`}>
+            <div className={`font-mono text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight ${balanceColorClass}`}>
               Current Balance: {formatINR(Math.abs(currentBalance))}{" "}
-              <span className="text-lg sm:text-xl font-bold opacity-80">{statusBadge.suffix}</span>
+              <span className="text-base sm:text-xl font-bold opacity-80">{statusBadge.suffix}</span>
             </div>
             <p className="text-xs text-[var(--text-muted)] mt-1.5">
               {isDebit
@@ -326,27 +344,34 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           </div>
 
           {/* Statement Action Button Deck */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto pb-1 lg:pb-0 flex-nowrap shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--gold)]/40 bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 transition shadow-sm whitespace-nowrap"
+            >
+              <Upload size={15} /> Import Statement
+            </button>
             <button
               type="button"
               onClick={() => setIsStatementModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--border)] bg-white/5 text-[var(--text-primary)] hover:border-[var(--gold)]/50 hover:text-[var(--gold)] transition shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--border)] bg-white/5 text-[var(--text-primary)] hover:border-[var(--gold)]/50 hover:text-[var(--gold)] transition shadow-sm whitespace-nowrap"
             >
-              <FileSpreadsheet size={15} /> Generate Statement
+              <FileSpreadsheet size={15} /> Statement
             </button>
             <button
               type="button"
               onClick={() => printCustomerStatement({ customerId: customer.id })}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--border)] bg-white/5 text-[var(--text-primary)] hover:border-[var(--gold)]/50 hover:text-[var(--gold)] transition shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--border)] bg-white/5 text-[var(--text-primary)] hover:border-[var(--gold)]/50 hover:text-[var(--gold)] transition shadow-sm whitespace-nowrap"
             >
               <Printer size={15} /> Print
             </button>
             <button
               type="button"
               onClick={() => downloadCustomerStatementPdf({ customerId: customer.id, customerName: customer.name })}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-[var(--radius-md)] bg-[var(--gold)] text-black hover:bg-[var(--gold-light)] shadow-[0_0_15px_rgba(251,191,36,0.25)] hover:-translate-y-0.5 transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-[var(--radius-md)] bg-[var(--gold)] text-black hover:bg-[var(--gold-light)] shadow-[0_0_15px_rgba(251,191,36,0.25)] hover:-translate-y-0.5 transition whitespace-nowrap"
             >
-              <Download size={15} /> Download PDF
+              <Download size={15} /> PDF
             </button>
           </div>
         </div>
@@ -652,12 +677,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               />
               <div className="relative z-10 flex items-center justify-between mb-4">
                 <h1
-                  className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-muted)]"
+                  className="text-2xl font-bold text-[var(--text-primary)]"
                   style={{ fontFamily: "var(--font-playfair)" }}
                 >
                   {customer.name}
                 </h1>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditCustomerOpen(true)}
+                    className="p-1.5 text-xs rounded-md bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 border border-[var(--gold)]/30 transition cursor-pointer"
+                    title="Edit Customer Profile"
+                  >
+                    <Edit size={14} />
+                  </button>
                   <span
                     className="px-2 py-0.5 text-[10px] font-bold rounded-sm border"
                     style={{
@@ -675,27 +708,88 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               </div>
               <div className="relative z-10 space-y-3">
                 {customer.phone && (
+                  <div className="flex items-center justify-between text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Phone size={16} className="text-[var(--gold)]/70 shrink-0" />
+                      <div>
+                        <span className="font-mono">{customer.phone}</span>
+                        <span className="text-[10px] text-[var(--text-muted)] block">Primary Phone</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 rounded bg-[var(--whatsapp)]/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/20 transition"
+                        title="WhatsApp Primary Phone"
+                      >
+                        <MessageCircle size={14} />
+                      </a>
+                      <a
+                        href={`tel:${customer.phone}`}
+                        className="p-1 rounded bg-[var(--text-primary)]/10 text-[var(--text-primary)] hover:bg-[var(--text-primary)]/20 transition"
+                        title="Call Primary Phone"
+                      >
+                        <Phone size={14} />
+                      </a>
+                    </div>
+                  </div>
+                )}
+                {(customer.altPhone || customer.whatsappNumber) && (customer.altPhone !== customer.phone || customer.whatsappNumber !== customer.phone) && (
+                  <div className="flex items-center justify-between text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                    <div className="flex items-center gap-3">
+                      <MessageCircle size={16} className="text-[var(--whatsapp)]/70 shrink-0" />
+                      <div>
+                        <span className="font-mono">{customer.altPhone || customer.whatsappNumber}</span>
+                        <span className="text-[10px] text-[var(--text-muted)] block">Alt Phone / WhatsApp</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={`https://wa.me/${(customer.altPhone || customer.whatsappNumber).replace(/[^0-9]/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 rounded bg-[var(--whatsapp)]/10 text-[var(--whatsapp)] hover:bg-[var(--whatsapp)]/20 transition"
+                        title="WhatsApp Alternate Phone"
+                      >
+                        <MessageCircle size={14} />
+                      </a>
+                      <a
+                        href={`tel:${customer.altPhone || customer.whatsappNumber}`}
+                        className="p-1 rounded bg-[var(--text-primary)]/10 text-[var(--text-primary)] hover:bg-[var(--text-primary)]/20 transition"
+                        title="Call Alternate Phone"
+                      >
+                        <Phone size={14} />
+                      </a>
+                    </div>
+                  </div>
+                )}
+                {customer.contactPerson && customer.contactPerson !== customer.name && (
                   <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default">
-                    <Phone size={16} className="text-[var(--gold)]/70" />
-                    {customer.phone}
+                    <User size={16} className="text-[var(--gold)]/70 shrink-0" />
+                    <div>
+                      <span>{customer.contactPerson}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] block">Contact Person</span>
+                    </div>
                   </div>
                 )}
                 {customer.email && (
                   <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default">
-                    <Mail size={16} className="text-[var(--gold)]/70" />
+                    <Mail size={16} className="text-[var(--gold)]/70 shrink-0" />
                     {customer.email}
                   </div>
                 )}
                 {(customer.city || customer.state) && (
                   <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default">
-                    <MapPin size={16} className="text-[var(--gold)]/70" />
+                    <MapPin size={16} className="text-[var(--gold)]/70 shrink-0" />
                     {customer.city}
                     {customer.state ? `, ${customer.state}` : ""}
                   </div>
                 )}
                 {customer.gstNumber && (
                   <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-default">
-                    <ShieldCheck size={16} className="text-[var(--gold)]/70" />
+                    <ShieldCheck size={16} className="text-[var(--gold)]/70 shrink-0" />
                     GSTIN: {customer.gstNumber}
                   </div>
                 )}
@@ -904,6 +998,24 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       <StatementModal
         open={isStatementModalOpen}
         onClose={() => setIsStatementModalOpen(false)}
+        customerId={customer.id}
+        customerName={customer.name}
+      />
+
+      <EditCustomerModal
+        open={isEditCustomerOpen}
+        onClose={() => setIsEditCustomerOpen(false)}
+        customer={customer}
+      />
+
+      <UniversalImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["customer-ledger", id] });
+          queryClient.invalidateQueries({ queryKey: ["customer", id] });
+        }}
+        type="customer-transactions"
         customerId={customer.id}
         customerName={customer.name}
       />

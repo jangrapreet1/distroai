@@ -7,10 +7,14 @@ export const createGetInventoryTool = (orgId: string, prisma: PrismaService) => 
         name: "get_inventory",
         description: "Get current inventory levels, low stock alerts, or expiring batches.",
         schema: z.object({
-            filter: z.enum(['all', 'low_stock', 'expiring', 'out_of_stock']),
-            productId: z.string().optional(),
+            filter: z.enum(['all', 'low_stock', 'expiring', 'out_of_stock']).optional().default('all').describe("Filter by stock status: all, low_stock, expiring, out_of_stock"),
+            productId: z.string().optional().describe("Optional product UUID to filter by"),
         }),
-        func: (async ({ filter, productId }: any) => {
+        func: (async (args: any) => {
+            const rawFilter = (args?.filter || args?.type || args?.status || 'all').toLowerCase();
+            const filter = ['all', 'low_stock', 'expiring', 'out_of_stock'].includes(rawFilter) ? rawFilter : 'all';
+            const productId = args?.productId || args?.id;
+
             let whereClause: any = { orgId };
             if (productId) whereClause.productId = productId;
 
@@ -20,14 +24,18 @@ export const createGetInventoryTool = (orgId: string, prisma: PrismaService) => 
                 }
                 const inv = await prisma.inventory.findMany({
                     where: whereClause,
-                    include: { product: { select: { name: true, sku: true } } },
-                    take: 20,
+                    include: { product: { select: { name: true, sku: true, sellingPrice: true, purchasePrice: true, unit: true } } },
+                    take: 50,
                 });
                 return JSON.stringify(inv.map(i => ({
-                    productName: i.product.name,
-                    sku: i.product.sku,
+                    productName: i.product?.name || 'Unknown',
+                    sku: i.product?.sku || '',
                     quantity: i.quantity,
                     reservedQty: i.reservedQty,
+                    availableQty: i.quantity - i.reservedQty,
+                    sellingPrice: i.product?.sellingPrice || 0,
+                    purchasePrice: i.product?.purchasePrice || 0,
+                    unit: i.product?.unit || 'unit',
                 })));
             }
 
@@ -37,12 +45,15 @@ export const createGetInventoryTool = (orgId: string, prisma: PrismaService) => 
                     include: { product: true },
                 });
 
-                const lowStock = inv.filter(i => (i.quantity - i.reservedQty) <= i.product.minStockLevel);
-                return JSON.stringify(lowStock.slice(0, 20).map(i => ({
-                    productName: i.product.name,
-                    sku: i.product.sku,
+                const lowStock = inv.filter(i => i.product && (i.quantity - i.reservedQty) <= (i.product.minStockLevel || 0));
+                return JSON.stringify(lowStock.slice(0, 50).map(i => ({
+                    productName: i.product?.name || 'Unknown',
+                    sku: i.product?.sku || '',
                     availableQty: i.quantity - i.reservedQty,
-                    minStockLevel: i.product.minStockLevel,
+                    minStockLevel: i.product?.minStockLevel || 0,
+                    sellingPrice: i.product?.sellingPrice || 0,
+                    purchasePrice: i.product?.purchasePrice || 0,
+                    unit: i.product?.unit || 'unit',
                 })));
             }
 
@@ -56,19 +67,20 @@ export const createGetInventoryTool = (orgId: string, prisma: PrismaService) => 
                         quantity: { gt: 0 },
                         expiryDate: { lte: thirtyDaysFromNow }
                     },
-                    include: { product: { select: { name: true } } },
-                    take: 20,
+                    include: { product: { select: { name: true, sku: true } } },
+                    take: 50,
                 });
 
                 return JSON.stringify(batches.map(b => ({
-                    productName: b.product.name,
+                    productName: b.product?.name || 'Unknown',
+                    sku: b.product?.sku || '',
                     batchNumber: b.batchNumber,
                     quantity: b.quantity,
                     expiryDate: b.expiryDate,
                 })));
             }
 
-            return "Invalid filter provided.";
+            return JSON.stringify({ message: "No inventory items matched your criteria." });
         }) as any,
     });
 };

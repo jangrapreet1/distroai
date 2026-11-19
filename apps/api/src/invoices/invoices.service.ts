@@ -6,9 +6,11 @@ import { Type } from 'class-transformer';
 import { QueueService } from '../queue/queue.service';
 import { RazorpayService } from '../payments/razorpay.service';
 import { EInvoiceService } from './einvoice.service';
+import { InvoicePdfService } from './invoice-pdf.service';
 import { RedisService } from '../common/services/redis.service';
 import { buildGstr1Summary, generateGstr1Json, generateGstr1Csv } from './gstr1-json';
 import { CustomerLedgerCalculationEngine } from '../customer-transactions/customer-transactions.calculation';
+import { InvoiceCustomOptions, InvoiceCustomOptionsDto } from './dto/custom-invoice-options.dto';
 
 class InvoiceItemDto {
     @IsString() productId!: string;
@@ -26,6 +28,7 @@ export class CreateInvoiceDto {
     @IsArray() @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) items!: InvoiceItemDto[];
     @IsOptional() @IsString() notes?: string;
     @IsOptional() @IsString() orderId?: string;
+    @IsOptional() customOptions?: InvoiceCustomOptionsDto;
 }
 
 export class SendInvoiceDto {
@@ -56,6 +59,7 @@ export class InvoicesService {
         private readonly razorpay: RazorpayService,
         private readonly einvoice: EInvoiceService,
         private readonly redis: RedisService,
+        private readonly invoicePdfService: InvoicePdfService,
     ) { }
 
     /** Round to 2 decimal places — every INR value must pass through this */
@@ -98,7 +102,13 @@ export class InvoicesService {
         if (!customer) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Customer not found' });
 
         const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
-        const sameState = (org?.address ?? '') === (customer.state ?? '') || true; // Default same state for now
+        const buyerGst = (dto.customOptions?.buyerGstNumber || customer.gstNumber || '').trim().toUpperCase();
+        let sameState = true;
+        if (org?.gstNumber && org.gstNumber.length >= 2 && buyerGst && buyerGst.length >= 2) {
+            sameState = org.gstNumber.substring(0, 2) === buyerGst.substring(0, 2);
+        } else if (org?.state && customer?.state) {
+            sameState = org.state.trim().toLowerCase() === customer.state.trim().toLowerCase();
+        }
 
         let subtotal = 0, discountAmount = 0, taxableAmount = 0;
         let cgstAmount = 0, sgstAmount = 0, igstAmount = 0, cessAmount = 0;
@@ -129,7 +139,8 @@ export class InvoicesService {
             };
         }));
 
-        const totalAmount = this.r2(taxableAmount + cgstAmount + sgstAmount + igstAmount + cessAmount);
+        const roundOffAmount = typeof dto.customOptions?.roundOffAmount === 'number' ? this.r2(dto.customOptions.roundOffAmount) : 0;
+        const totalAmount = this.r2(taxableAmount + cgstAmount + sgstAmount + igstAmount + cessAmount + roundOffAmount);
         const invoiceNumber = await this.generateInvoiceNumber(orgId);
         const dueDate = dto.dueDate ? new Date(dto.dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -138,6 +149,7 @@ export class InvoicesService {
                 data: {
                     orgId, invoiceNumber, customerId: dto.customerId,
                     invoiceDate: new Date(dto.invoiceDate), dueDate, notes: dto.notes,
+                    customOptions: dto.customOptions ? (dto.customOptions as any) : undefined,
                     subtotal, discountAmount, taxableAmount, cgstAmount, sgstAmount, igstAmount, cessAmount,
                     totalAmount, balanceAmount: totalAmount,
                     items: { create: itemsData },
@@ -290,12 +302,38 @@ export class InvoicesService {
         return { queued: true, channels };
     }
 
-    async generatePdf(orgId: string, id: string) {
+    async generatePdf(orgId: string, id: string, options?: InvoiceCustomOptions, saveAsDefault?: boolean) {
         const invoice = await this.prisma.invoice.findFirst({ where: { id, orgId } });
         if (!invoice) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Invoice not found' });
 
-        const job = await this.queue.addToQueue('invoice', 'generate-pdf', { invoiceId: id });
+        if (saveAsDefault && options) {
+            await this.prisma.invoice.update({
+                where: { id },
+                data: { customOptions: options as any },
+            });
+        }
+
+        const job = await this.queue.addToQueue('invoice', 'generate-pdf', { invoiceId: id, options, saveAsDefault });
         return { jobId: job.id, status: 'queued' };
+    }
+
+    async streamPdf(orgId: string, id: string, options?: InvoiceCustomOptions): Promise<{ buffer: Buffer; filename: string }> {
+        const invoice = await this.prisma.invoice.findFirst({ where: { id, orgId } });
+        if (!invoice) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Invoice not found' });
+
+        const { buffer, invoiceNumber } = await this.invoicePdfService.generateInvoicePdfBuffer(id, options);
+        return { buffer, filename: `Invoice-${invoiceNumber}.pdf` };
+    }
+
+    async updateCustomOptions(orgId: string, id: string, options: InvoiceCustomOptions) {
+        const invoice = await this.prisma.invoice.findFirst({ where: { id, orgId } });
+        if (!invoice) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Invoice not found' });
+
+        return this.prisma.invoice.update({
+            where: { id },
+            data: { customOptions: options as any },
+            include: { customer: true, items: true },
+        });
     }
 
     async eInvoice(orgId: string, id: string) {

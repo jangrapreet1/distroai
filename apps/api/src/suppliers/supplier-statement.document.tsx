@@ -225,6 +225,17 @@ export const SupplierStatementPDFDocument: React.FC<{
 
   const { organization, supplier, statementDate, rows, summary } = statement;
 
+  const hasQuantities = rows.some((row) => row.quantity != null && Number(row.quantity) > 0);
+  const hasCosts = rows.some((row) => row.cost != null && Number(row.cost) > 0);
+  const showQtyAndCost = hasQuantities || hasCosts;
+
+  const colDate = showQtyAndCost ? currentStyles.colDate : { width: '12%', textAlign: 'center' };
+  const colItemName = showQtyAndCost ? currentStyles.colItemName : { width: '38%' };
+  const colWorth = showQtyAndCost ? currentStyles.colWorth : { width: '14%', textAlign: 'right' };
+  const colReturned = showQtyAndCost ? currentStyles.colReturned : { width: '12%', textAlign: 'right' };
+  const colPaid = showQtyAndCost ? currentStyles.colPaid : { width: '12%', textAlign: 'right' };
+  const colBalance = showQtyAndCost ? currentStyles.colBalance : { width: '12%', textAlign: 'right' };
+
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={currentStyles.page}>
@@ -243,17 +254,21 @@ export const SupplierStatementPDFDocument: React.FC<{
           </Text>
         </View>
 
-        {/* ─── 8-Column Table ─── */}
+        {/* ─── Statement Table ─── */}
         <View style={currentStyles.table}>
           <View style={currentStyles.tableHeader}>
-            <Text style={[currentStyles.thCell, currentStyles.colDate]}>DATE</Text>
-            <Text style={[currentStyles.thCell, currentStyles.colItemName]}>Items Received (name)</Text>
-            <Text style={[currentStyles.thCell, currentStyles.colQuantity]}>Quantity</Text>
-            <Text style={[currentStyles.thCell, currentStyles.colCost]}>Cost of 1</Text>
-            <Text style={[currentStyles.thCell, currentStyles.colWorth]}>Worth items recieved</Text>
-            <Text style={[currentStyles.thCell, currentStyles.colReturned]}>RETURNED</Text>
-            <Text style={[currentStyles.thCell, currentStyles.colPaid]}>Amount Paid</Text>
-            <Text style={[currentStyles.thCell, currentStyles.colBalance]}>Balance</Text>
+            <Text style={[currentStyles.thCell, colDate]}>DATE</Text>
+            <Text style={[currentStyles.thCell, colItemName]}>Items Received (name)</Text>
+            {showQtyAndCost && (
+              <>
+                <Text style={[currentStyles.thCell, currentStyles.colQuantity]}>Quantity</Text>
+                <Text style={[currentStyles.thCell, currentStyles.colCost]}>Cost of 1</Text>
+              </>
+            )}
+            <Text style={[currentStyles.thCell, colWorth]}>Worth items recieved</Text>
+            <Text style={[currentStyles.thCell, colReturned]}>RETURNED</Text>
+            <Text style={[currentStyles.thCell, colPaid]}>Amount Paid</Text>
+            <Text style={[currentStyles.thCell, colBalance]}>Balance</Text>
           </View>
 
           {rows.length === 0 ? (
@@ -269,24 +284,28 @@ export const SupplierStatementPDFDocument: React.FC<{
                 style={[currentStyles.tableRow, idx % 2 === 1 ? currentStyles.tableRowAlt : {}]}
                 wrap={false}
               >
-                <Text style={[currentStyles.tdCell, currentStyles.colDate]}>{row.date}</Text>
-                <Text style={[currentStyles.tdCell, currentStyles.colItemName]}>{row.itemName}</Text>
-                <Text style={[currentStyles.tdCell, currentStyles.colQuantity]}>
-                  {row.quantity != null ? String(row.quantity) : '—'}
-                </Text>
-                <Text style={[currentStyles.tdCell, currentStyles.colCost]}>
-                  {row.cost != null ? formatCurrency(row.cost) : '—'}
-                </Text>
-                <Text style={[currentStyles.tdCell, currentStyles.colWorth]}>
+                <Text style={[currentStyles.tdCell, colDate]}>{row.date}</Text>
+                <Text style={[currentStyles.tdCell, colItemName]}>{row.itemName}</Text>
+                {showQtyAndCost && (
+                  <>
+                    <Text style={[currentStyles.tdCell, currentStyles.colQuantity]}>
+                      {row.quantity != null && Number(row.quantity) > 0 ? String(row.quantity) : '—'}
+                    </Text>
+                    <Text style={[currentStyles.tdCell, currentStyles.colCost]}>
+                      {row.cost != null && Number(row.cost) > 0 ? formatCurrency(row.cost) : '—'}
+                    </Text>
+                  </>
+                )}
+                <Text style={[currentStyles.tdCell, colWorth]}>
                   {row.worth != null ? formatCurrency(row.worth) : '—'}
                 </Text>
-                <Text style={[currentStyles.tdCell, currentStyles.colReturned]}>
+                <Text style={[currentStyles.tdCell, colReturned]}>
                   {row.returned != null ? formatCurrency(row.returned) : '—'}
                 </Text>
-                <Text style={[currentStyles.tdCell, currentStyles.colPaid]}>
+                <Text style={[currentStyles.tdCell, colPaid]}>
                   {row.amountPaid != null ? formatCurrency(row.amountPaid) : '—'}
                 </Text>
-                <Text style={[currentStyles.tdCell, currentStyles.colBalance, { fontWeight: 'bold' }]}>
+                <Text style={[currentStyles.tdCell, colBalance, { fontWeight: 'bold' }]}>
                   {row.balance != null ? formatCurrency(row.balance) : '—'}
                 </Text>
               </View>

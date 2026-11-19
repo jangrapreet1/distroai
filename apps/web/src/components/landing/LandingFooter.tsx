@@ -13,16 +13,16 @@ export function LandingFooter() {
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
                 {/* Final Pre-Footer High-Converting CTA Banner */}
-                <div className="relative rounded-3xl border border-[var(--gold)]/30 bg-gradient-to-b from-[#121220] via-[#090912] to-[#040408] p-8 sm:p-14 text-center space-y-6 shadow-2xl shadow-amber-500/10 overflow-hidden">
+                <div className="relative rounded-3xl border border-blue-500/30 bg-gradient-to-b from-[#0f172a] via-[#090912] to-[#040408] p-8 sm:p-14 text-center space-y-6 shadow-2xl shadow-blue-500/10 overflow-hidden">
                     {/* Top Luminous Glow Bar */}
-                    <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[var(--gold)] to-transparent" />
+                    <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
 
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--gold)]/10 text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-[var(--gold)]/20">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase tracking-wider border border-blue-500/20">
                         <Sparkles size={12} />
-                        <span>[ONBOARDING // 14_DAY_TRIAL]</span>
+                        <span>Start 14-Day Free Trial</span>
                     </div>
 
-                    <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight max-w-3xl mx-auto leading-tight" style={{ fontFamily: "var(--font-playfair)" }}>
+                    <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight max-w-3xl mx-auto leading-tight">
                         Transform Your Distribution Business with AI Today
                     </h2>
 
@@ -34,7 +34,7 @@ export function LandingFooter() {
                         <motion.div whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.98 }}>
                             <Link
                                 href="/register"
-                                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-xl bg-gradient-to-r from-[var(--gold)] via-[var(--gold-light)] to-[#FFE8A3] text-[#07070E] font-bold text-sm shadow-xl shadow-amber-500/20 hover:opacity-95 transition"
+                                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-xl shadow-blue-500/25 transition"
                             >
                                 <span>Start 14-Day Free Trial</span>
                                 <ArrowRight size={17} />
@@ -44,7 +44,7 @@ export function LandingFooter() {
                             href="https://wa.me/919999999999?text=Hi%2C%20I%20would%20like%20a%20demo%20of%20DistroAI"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl border border-white/[0.08] bg-white/[0.02] text-[var(--text-primary)] font-semibold text-sm hover:border-[var(--border-accent)] transition"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl border border-white/[0.08] bg-white/[0.02] text-[var(--text-primary)] font-semibold text-sm hover:border-blue-500/40 transition"
                         >
                             <span>Chat with an Expert on WhatsApp</span>
                             <ExternalLink size={14} />
@@ -62,13 +62,13 @@ export function LandingFooter() {
                         </p>
                         <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400">
                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                            <span>STATUS // ALL_SYSTEMS_OPERATIONAL</span>
+                            <span>System Status: All Systems Operational</span>
                         </div>
                     </div>
 
                     {/* Product Links */}
                     <div className="space-y-3 text-xs">
-                        <h4 className="font-mono uppercase tracking-wider text-[var(--gold)] font-bold">Product</h4>
+                        <h4 className="font-semibold uppercase tracking-wider text-blue-400">Product</h4>
                         <ul className="space-y-2 text-[var(--text-secondary)]">
                             <li><a href="#features" className="hover:text-white transition">WhatsApp AI Ordering</a></li>
                             <li><a href="#tally-bridge" className="hover:text-white transition">Tally Prime XML Bridge</a></li>
@@ -80,7 +80,7 @@ export function LandingFooter() {
 
                     {/* Solutions Links */}
                     <div className="space-y-3 text-xs">
-                        <h4 className="font-mono uppercase tracking-wider text-[var(--gold)] font-bold">Verticals</h4>
+                        <h4 className="font-semibold uppercase tracking-wider text-blue-400">Verticals</h4>
                         <ul className="space-y-2 text-[var(--text-secondary)]">
                             <li><span className="hover:text-white transition cursor-default">FMCG & Packaged Foods</span></li>
                             <li><span className="hover:text-white transition cursor-default">Pharma & Healthcare</span></li>
@@ -92,7 +92,7 @@ export function LandingFooter() {
 
                     {/* Security & Legal */}
                     <div className="space-y-3 text-xs">
-                        <h4 className="font-mono uppercase tracking-wider text-[var(--gold)] font-bold">Security</h4>
+                        <h4 className="font-semibold uppercase tracking-wider text-blue-400">Security</h4>
                         <ul className="space-y-2 text-[var(--text-secondary)]">
                             <li><span className="hover:text-white transition cursor-default">Postgres Row-Level Security</span></li>
                             <li><span className="hover:text-white transition cursor-default">AES-256 Cloud Encryption</span></li>

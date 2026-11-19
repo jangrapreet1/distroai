@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import axios from "axios";
 import { useAuthStore } from "@/stores/auth.store";
+import { getApiBaseUrl } from "@/lib/api-url";
 
 /**
  * Proactive token refresh hook.
@@ -12,26 +13,30 @@ import { useAuthStore } from "@/stores/auth.store";
  * token ~2 minutes before it expires.
  *
  * Security model:
- *  - Access token: 15 min (short-lived, per security guidelines)
- *  - Refresh token: 30 days (long-lived, rotated on each use)
- *  - This hook renews at 13 min so the cookie never goes stale
+ *  - Access token: 7 days
+ *  - Refresh token: 30 days (long-lived, rotated on each use with 45s grace window)
+ *  - This hook renews periodically (every 12 hours) and on tab visibility restore
  */
 
-const REFRESH_INTERVAL_MS = 13 * 60 * 1000; // 13 minutes
+const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 export function useTokenRefresh() {
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     useEffect(() => {
+        let isRefreshingNow = false;
+
         const doRefresh = async () => {
+            if (isRefreshingNow) return;
             const { refreshToken, setTokens, logout, isAuthenticated } =
                 useAuthStore.getState();
 
             if (!isAuthenticated || !refreshToken) return;
 
+            isRefreshingNow = true;
             try {
                 const res = await axios.post(
-                    `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/auth/refresh`,
+                    `${getApiBaseUrl()}/api/v1/auth/refresh`,
                     { refreshToken }
                 );
                 const { accessToken: newAccess, refreshToken: newRefresh } =
@@ -41,25 +46,34 @@ export function useTokenRefresh() {
 
                 // Keep the middleware cookie alive
                 document.cookie = `accessToken=${newAccess};path=/;max-age=2592000;SameSite=Lax`;
-            } catch {
-                // Refresh failed — token is likely revoked or expired
-                logout();
-                document.cookie =
-                    "accessToken=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                if (typeof window !== "undefined") window.location.href = "/login";
+            } catch (err: any) {
+                // Only log out if the refresh token was explicitly rejected as invalid/expired (401/403)
+                // Do NOT log out on network disconnects, server reboots, or 429 limits
+                if (err?.response?.status === 401 || err?.response?.status === 403) {
+                    logout();
+                    document.cookie =
+                        "accessToken=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                    if (typeof window !== "undefined") window.location.href = "/login";
+                }
+            } finally {
+                isRefreshingNow = false;
             }
         };
 
-        // We no longer run doRefresh() immediately on mount. 
-        // With cookie max-age fixed to 30 days, the middleware no longer blocks us, 
-        // so we can safely rely on the axios 401 interceptor for tab-restore scenarios,
-        // preventing single-use refresh token race conditions across multiple tabs.
-
-        // Then run every 13 minutes
+        // Run on periodic interval (every 12 hours)
         intervalRef.current = setInterval(doRefresh, REFRESH_INTERVAL_MS);
+
+        // Run when user re-focuses tab after long inactivity
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                doRefresh();
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
     }, []);
 }

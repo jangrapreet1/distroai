@@ -11,11 +11,17 @@ export const createGetLedgerHistoryTool = (orgId: string, prisma: PrismaService)
         name: "get_ledger_history",
         description: `Fetch chronological financial ledger entries (Debits and Credits) for a customer. Use this to explain exactly why a customer owes a specific balance by stepping through past invoices and payments. Returns max 50 entries to conserve context.`,
         schema: z.object({
-            customerName: z.string().describe("Customer name or partial name"),
+            customerName: z.string().optional().describe("Customer name or partial name"),
             dateFrom: z.string().optional().describe("Optional start date in YYYY-MM-DD format"),
             dateTo: z.string().optional().describe("Optional end date in YYYY-MM-DD format"),
         }),
-        func: (async ({ customerName, dateFrom, dateTo }: any) => {
+        func: (async (args: any) => {
+            const customerName = args?.customerName || args?.name || args?.customer;
+            const dateFrom = args?.dateFrom;
+            const dateTo = args?.dateTo;
+            if (!customerName) {
+                return JSON.stringify({ error: "Customer name is required." });
+            }
             // Find customer strictly bounded to the requesting orgId
             const customer = await prisma.customer.findFirst({
                 where: { orgId, name: { contains: customerName, mode: 'insensitive' } },
@@ -76,9 +82,15 @@ export const createGetCustomerBalanceTool = (orgId: string, prisma: PrismaServic
         name: "get_customer_balance",
         description: `Get outstanding balance and payment summary for a customer.`,
         schema: z.object({
-            customerName: z.string().describe("Customer name or partial name to look up"),
+            customerName: z.string().optional().describe("Customer name or partial name to look up"),
         }),
-        func: (async ({ customerName }: { customerName: string }) => {
+        func: (async (args: any) => {
+            const customerName = args?.customerName || args?.name || args?.customer;
+            const dateFrom = args?.dateFrom;
+            const dateTo = args?.dateTo;
+            if (!customerName) {
+                return JSON.stringify({ error: "Customer name is required." });
+            }
             const customer = await prisma.customer.findFirst({
                 where: { orgId, name: { contains: customerName, mode: 'insensitive' } },
             });

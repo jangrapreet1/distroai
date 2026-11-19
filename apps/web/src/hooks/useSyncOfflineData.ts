@@ -34,8 +34,11 @@ export function useSyncOfflineData() {
                 localStorage.setItem('distroai_last_sync_timestamp', data.timestamp.toString());
             }
 
-        } catch (error) {
-            console.error('Failed to sync offline products:', error);
+        } catch (error: any) {
+            // Silently swallow or warn in dev so network transitions do not pollute browser console
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('Offline sync deferred:', error?.message || error);
+            }
         }
     }, []);
 

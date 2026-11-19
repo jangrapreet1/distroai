@@ -8,6 +8,7 @@ import type {
     CreateTransactionDto,
     UpdateTransactionDto,
     RTKStatementData,
+    CustomerLedgerLogsResponse,
 } from "@/types/customer-transactions";
 
 // ===== ORDERS =====
@@ -16,6 +17,15 @@ export function useOrders(filters: Record<string, string | number | undefined>) 
 }
 export function useOrder(id: string) {
     return useQuery({ queryKey: ["orders", id], queryFn: () => apiClient.get(`/api/v1/orders/${id}`).then((r) => r.data), enabled: !!id });
+}
+export function useSendOrderWhatsApp() {
+    return useMutation({
+        mutationFn: (id: string) => apiClient.post(`/api/v1/orders/${id}/send-whatsapp`).then((r) => r.data),
+        onSuccess: (data) => {
+            toast.success(data?.message || "Order confirmation & payment link sent via WhatsApp!");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
 }
 export function useCreateOrder() {
     const qc = useQueryClient();
@@ -145,6 +155,18 @@ export function useHardDeleteProduct() {
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
+export function usePublishProduct() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.post(`/api/v1/products/${id}/publish`).then((r) => r.data),
+        onSuccess: (_, id) => {
+            qc.invalidateQueries({ queryKey: ["products"] });
+            qc.invalidateQueries({ queryKey: ["products", id] });
+            toast.success("Product published successfully");
+        },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
 
 // ===== CUSTOMERS =====
 export function useCustomers(filters: Record<string, string | number | undefined>) {
@@ -161,6 +183,19 @@ export function useCreateCustomer() {
     return useMutation({
         mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/customers", data).then((r) => r.data),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ["customers"] }); toast.success("Customer created"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useUpdateCustomer() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+            apiClient.patch(`/api/v1/customers/${id}`, data).then((r) => r.data),
+        onSuccess: (_, v) => {
+            qc.invalidateQueries({ queryKey: ["customers"] });
+            qc.invalidateQueries({ queryKey: ["customers", v.id] });
+            toast.success("Customer updated successfully");
+        },
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
@@ -194,6 +229,7 @@ export function useCreateCustomerTransaction(customerId: string) {
             qc.invalidateQueries({ queryKey: ["customers"] });
             qc.invalidateQueries({ queryKey: ["payments", "outstanding"] });
             qc.invalidateQueries({ queryKey: ["analytics"] });
+            qc.invalidateQueries({ queryKey: ["customers", customerId, "ledger-logs"] });
             toast.success("Transaction created successfully");
         },
         onError: (e) => toast.error(getApiError(e).message),
@@ -211,6 +247,7 @@ export function useUpdateCustomerTransaction(customerId: string) {
             qc.invalidateQueries({ queryKey: ["customers"] });
             qc.invalidateQueries({ queryKey: ["payments", "outstanding"] });
             qc.invalidateQueries({ queryKey: ["analytics"] });
+            qc.invalidateQueries({ queryKey: ["customers", customerId, "ledger-logs"] });
             toast.success("Transaction updated successfully");
         },
         onError: (e) => toast.error(getApiError(e).message),
@@ -228,9 +265,25 @@ export function useDeleteCustomerTransaction(customerId: string) {
             qc.invalidateQueries({ queryKey: ["customers"] });
             qc.invalidateQueries({ queryKey: ["payments", "outstanding"] });
             qc.invalidateQueries({ queryKey: ["analytics"] });
+            qc.invalidateQueries({ queryKey: ["customers", customerId, "ledger-logs"] });
             toast.success("Transaction deleted successfully");
         },
         onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+
+export function useCustomerLedgerLogs(
+    customerId: string,
+    options?: { transactionId?: string; page?: number; limit?: number },
+) {
+    return useQuery<CustomerLedgerLogsResponse>({
+        queryKey: ["customers", customerId, "ledger-logs", options],
+        queryFn: () =>
+            apiClient
+                .get(`/api/v1/customers/${customerId}/ledger/logs`, { params: options })
+                .then((r) => r.data),
+        enabled: !!customerId,
+        staleTime: 10_000,
     });
 }
 
@@ -309,6 +362,19 @@ export function useCreateSupplier() {
     return useMutation({
         mutationFn: (data: Record<string, unknown>) => apiClient.post("/api/v1/suppliers", data).then((r) => r.data),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ["suppliers"] }); toast.success("Supplier created"); },
+        onError: (e) => toast.error(getApiError(e).message),
+    });
+}
+export function useUpdateSupplier() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+            apiClient.patch(`/api/v1/suppliers/${id}`, data).then((r) => r.data),
+        onSuccess: (_, v) => {
+            qc.invalidateQueries({ queryKey: ["suppliers"] });
+            qc.invalidateQueries({ queryKey: ["suppliers", v.id] });
+            toast.success("Supplier updated successfully");
+        },
         onError: (e) => toast.error(getApiError(e).message),
     });
 }
@@ -411,10 +477,13 @@ export function useUpdateOrgSettings() {
 // ===== STORAGE =====
 export function useUploadFile() {
     return useMutation({
-        mutationFn: (file: File) => {
+        mutationFn: async (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
-            return apiClient.post("/api/v1/storage/upload", formData).then((r) => r.data);
+            const res = await apiClient.post("/api/v1/storage/upload", formData);
+            const data = res.data;
+            const url = data?.url ?? data?.data?.url ?? (typeof data === "string" ? data : "");
+            return { url, ...data };
         },
         onError: (e) => toast.error(getApiError(e).message),
     });

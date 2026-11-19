@@ -5,15 +5,104 @@ import { PrismaService } from "../../prisma/prisma.service";
 export const createGetSuppliersTool = (orgId: string, prisma: PrismaService) => {
     return new DynamicStructuredTool({
         name: "get_suppliers",
-        description: "Get supplier information, purchase recommendations, and supplier performance.",
+        description: "Get supplier/vendor information, purchase orders, vendor ledger/financial history, payment dues, reorder recommendations, and supplier performance.",
         schema: z.object({
-            type: z.enum(['list', 'reorder_suggestions', 'performance']),
+            type: z.enum(['list', 'profile', 'financial_history', 'reorder_suggestions', 'performance']).describe("Query type: 'financial_history' for purchase orders and payables, 'profile' for supplier contact/details, 'list' for all suppliers, 'performance' for rankings, 'reorder_suggestions' for low stock reordering."),
+            supplierName: z.string().optional().describe("Name of the supplier to look up (e.g. 'Ronak', 'Puneet')"),
+            supplierId: z.string().optional().describe("Optional ID of the supplier if known"),
         }),
-        func: (async ({ type }: any) => {
+        func: (async ({ type, supplierName, supplierId }: any) => {
+            if (type === 'profile' || type === 'financial_history') {
+                let whereClause: any = { orgId };
+                if (supplierId) {
+                    whereClause.id = supplierId;
+                } else if (supplierName) {
+                    whereClause.OR = [
+                        { name: { contains: supplierName.trim(), mode: 'insensitive' } },
+                        { contactPerson: { contains: supplierName.trim(), mode: 'insensitive' } },
+                    ];
+                }
+
+                const supplier = await prisma.supplier.findFirst({
+                    where: whereClause,
+                    include: {
+                        purchaseOrders: {
+                            orderBy: { createdAt: 'desc' },
+                            take: 20,
+                            include: {
+                                items: {
+                                    include: { product: { select: { name: true, sku: true } } }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                if (!supplier) {
+                    const allSuppliers = await prisma.supplier.findMany({
+                        where: { orgId, isActive: true },
+                        select: { name: true, phone: true }
+                    });
+                    return JSON.stringify({
+                        error: `Supplier "${supplierName || supplierId}" not found in system.`,
+                        availableSuppliers: allSuppliers.map(s => s.name)
+                    });
+                }
+
+                const totalPurchased = supplier.purchaseOrders.reduce((sum, po) => sum + (po.totalAmount || 0), 0);
+                const totalPaid = supplier.purchaseOrders.reduce((sum, po) => sum + (po.paidAmount || 0), 0);
+                const totalDue = totalPurchased - totalPaid;
+
+                return JSON.stringify({
+                    supplierId: supplier.id,
+                    name: supplier.name,
+                    contactPerson: supplier.contactPerson,
+                    phone: supplier.phone,
+                    email: supplier.email,
+                    gstNumber: supplier.gstNumber,
+                    address: supplier.address,
+                    creditDays: supplier.creditDays,
+                    leadTimeDays: supplier.leadTimeDays,
+                    performanceScore: supplier.performanceScore,
+                    outstandingBalance: supplier.outstandingBalance,
+                    totalPurchasesAmount: totalPurchased,
+                    totalPaidAmount: totalPaid,
+                    calculatedDueAmount: totalDue,
+                    totalPurchaseOrders: supplier.purchaseOrders.length,
+                    recentPurchaseOrders: supplier.purchaseOrders.map(po => ({
+                        poNumber: po.poNumber,
+                        date: po.createdAt.toISOString().split('T')[0],
+                        status: po.status,
+                        paymentStatus: po.paymentStatus,
+                        totalAmount: po.totalAmount,
+                        paidAmount: po.paidAmount,
+                        dueAmount: (po.totalAmount || 0) - (po.paidAmount || 0),
+                        itemsCount: po.items.length,
+                        items: po.items.map(it => ({
+                            productName: it.product?.name || 'Item',
+                            sku: it.product?.sku || '',
+                            orderedQty: it.orderedQty,
+                            price: it.price,
+                            total: it.orderedQty * it.price,
+                        }))
+                    }))
+                });
+            }
+
             if (type === 'list') {
                 const suppliers = await prisma.supplier.findMany({
                     where: { orgId, isActive: true },
-                    select: { name: true, contactPerson: true, phone: true, creditDays: true, leadTimeDays: true }
+                    select: {
+                        id: true,
+                        name: true,
+                        contactPerson: true,
+                        phone: true,
+                        outstandingBalance: true,
+                        creditDays: true,
+                        leadTimeDays: true,
+                        performanceScore: true,
+                        _count: { select: { purchaseOrders: true } }
+                    }
                 });
                 return JSON.stringify(suppliers);
             }
@@ -21,24 +110,25 @@ export const createGetSuppliersTool = (orgId: string, prisma: PrismaService) => 
             if (type === 'performance') {
                 const suppliers = await prisma.supplier.findMany({
                     where: { orgId },
-                    select: { name: true, performanceScore: true, leadTimeDays: true }
+                    select: { name: true, performanceScore: true, leadTimeDays: true, outstandingBalance: true }
                 });
                 return JSON.stringify(suppliers.sort((a, b) => b.performanceScore - a.performanceScore));
             }
 
             if (type === 'reorder_suggestions') {
-                // Simplified suggestion logic based on minStockLevel
+                // Suggestion logic based on minStockLevel
                 const lowStock = await prisma.inventory.findMany({
                     where: { orgId },
                     include: { product: true },
                 });
 
                 const needed = lowStock
-                    .filter(i => (i.quantity - i.reservedQty) <= (i.product.minStockLevel || 0))
+                    .filter(i => i.product && (i.quantity - i.reservedQty) <= (i.product.minStockLevel || 0))
                     .map(i => ({
-                        productName: i.product.name,
+                        productName: i.product?.name || 'Unknown',
+                        sku: i.product?.sku || '',
                         currentStock: i.quantity - i.reservedQty,
-                        suggestedReorder: i.product.minStockLevel * 2,
+                        suggestedReorder: (i.product?.minStockLevel || 10) * 2,
                     }));
 
                 return JSON.stringify({

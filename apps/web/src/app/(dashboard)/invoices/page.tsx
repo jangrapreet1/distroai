@@ -2,22 +2,26 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, FileText, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Search, FileText, X, Truck, Sliders } from "lucide-react";
 import toast from "react-hot-toast";
 import { useInvoices, useDashboard, useBulkMarkInvoicesPaid } from "@/hooks/api-hooks";
 import { formatDate, formatINR } from "@/lib/utils";
+import { CreateCustomInvoiceModal } from "@/components/modals/CreateCustomInvoiceModal";
 
 
 const STATUS_TABS = ["All", "DRAFT", "SENT", "PARTIAL", "PAID", "OVERDUE"];
 const statusClass: Record<string, string> = { DRAFT: "badge-draft", SENT: "badge-sent", PARTIAL: "badge-partial", PAID: "badge-paid", OVERDUE: "badge-overdue", CANCELLED: "badge-cancelled" };
 
 export default function InvoicesPage() {
+    const router = useRouter();
     const [status, setStatus] = useState("All");
     const [page, setPage] = useState(1);
     const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const bulkPay = useBulkMarkInvoicesPaid();
     const filters = { ...(status !== "All" && { status }), page, limit: 20 };
-    const { data, isLoading } = useInvoices(filters);
+    const { data, isLoading, refetch } = useInvoices(filters);
     const invoices = data?.data?.data ?? data?.data ?? [];
     const meta = data?.data?.meta ?? data?.meta ?? { total: 0 };
     const currentInvoices = Array.isArray(invoices) ? invoices : [];
@@ -73,11 +77,22 @@ export default function InvoicesPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Invoices</h1>
-                <Link href="/orders/new" className="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] transition">
-                    <Plus size={16} /> New Order
-                </Link>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Invoices</h1>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Manage tax invoices, bills of supply, and customer billing</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-bold hover:bg-[var(--gold-light)] transition cursor-pointer shadow-sm"
+                    >
+                        <Plus size={16} /> Create Custom Invoice
+                    </button>
+                    <Link href="/orders/new" className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] text-sm font-medium hover:bg-[var(--bg-card)] transition">
+                        New Order
+                    </Link>
+                </div>
             </div>
 
             {/* Summary */}
@@ -91,14 +106,80 @@ export default function InvoicesPage() {
             </div>
 
             {/* Status tabs */}
-            <div className="flex flex-wrap gap-1 mb-4">
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar flex-nowrap pb-1 mb-4">
                 {STATUS_TABS.map((s) => (
-                    <button key={s} onClick={() => { setStatus(s); setPage(1); }} className={`px-3 py-1.5 text-xs rounded-full transition ${status === s ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>{s}</button>
+                    <button key={s} onClick={() => { setStatus(s); setPage(1); }} className={`px-3 py-1.5 text-xs rounded-full transition whitespace-nowrap shrink-0 ${status === s ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>{s}</button>
                 ))}
             </div>
 
-            {/* Table */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-x-auto">
+            {/* Mobile Invoice Cards (< md) */}
+            <div className="block md:hidden space-y-3 mb-6">
+                {isLoading ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] skeleton h-28" />
+                    ))
+                ) : (Array.isArray(invoices) ? invoices : []).length === 0 ? (
+                    <div className="p-8 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
+                        No invoices found.
+                    </div>
+                ) : (
+                    (Array.isArray(invoices) ? invoices : []).map((inv: Record<string, unknown>) => {
+                        const balance = (inv.balanceAmount as number) ?? 0;
+                        const total = (inv.totalAmount as number) ?? 0;
+                        return (
+                            <div key={inv.id as string} className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--gold)]/40 transition space-y-2.5">
+                                <div className="flex items-center justify-between text-xs">
+                                    <Link href={`/invoices/${inv.id}`} className="font-mono font-bold text-[var(--gold)] hover:underline">
+                                        {inv.invoiceNumber as string}
+                                    </Link>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusClass[inv.status as string] ?? "badge-draft"}`}>
+                                        {inv.status as string}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs">
+                                    <p className="font-semibold text-sm text-[var(--text-primary)]">
+                                        {(inv.customer as Record<string, string>)?.name ?? "Customer"}
+                                    </p>
+                                    {Boolean(inv.eWayBillNumber) && (
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/25">
+                                            <Truck size={10} /> EWB: {String(inv.eWayBillNumber)}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                                    <span>Date: {formatDate(inv.invoiceDate as string)}</span>
+                                    <span>Due: {formatDate(inv.dueDate as string)}</span>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]/60 text-xs">
+                                    <div>
+                                        <span className="text-[10px] text-[var(--text-muted)] block">Total / Balance</span>
+                                        <span className="font-mono font-bold text-xs text-[var(--text-primary)]">
+                                            {formatINR(total)}
+                                        </span>
+                                        {balance > 0 && (
+                                            <span className="font-mono text-xs font-semibold text-[var(--orange)] ml-1.5">
+                                                (Due: {formatINR(balance)})
+                                            </span>
+                                        )}
+                                    </div>
+                                    <Link
+                                        href={`/invoices/${inv.id}`}
+                                        className="px-2.5 py-1.5 rounded-lg bg-[var(--gold)]/15 border border-[var(--gold)]/30 text-[var(--gold)] text-xs font-semibold hover:bg-[var(--gold)]/25 transition"
+                                    >
+                                        View Invoice →
+                                    </Link>
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+
+            {/* Desktop Table (md+) */}
+            <div className="hidden md:block bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
@@ -123,6 +204,13 @@ export default function InvoicesPage() {
                                 <td className="p-4"><input type="checkbox" checked={selectedInvoices.includes(inv.id as string)} onChange={() => toggleSelection(inv.id as string)} className="w-4 h-4 rounded border-[var(--border)] bg-transparent accent-[var(--gold)] cursor-pointer" /></td>
                                 <td className="p-4 font-medium" style={{ fontFamily: "var(--font-mono)" }}>
                                     <Link href={`/invoices/${inv.id}`} className="text-[var(--gold)] hover:underline">{inv.invoiceNumber as string}</Link>
+                                    {Boolean(inv.eWayBillNumber) && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/25">
+                                                <Truck size={10} /> EWB: {String(inv.eWayBillNumber)}
+                                            </span>
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="p-4">{(inv.customer as Record<string, string>)?.name ?? "—"}</td>
                                 <td className="p-4 text-[var(--text-secondary)]">{formatDate(inv.invoiceDate as string)}</td>
@@ -156,6 +244,15 @@ export default function InvoicesPage() {
                     </div>
                 </div>
             )}
+
+            <CreateCustomInvoiceModal
+                open={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                onCreated={(newId) => {
+                    refetch();
+                    router.push(`/invoices/${newId}`);
+                }}
+            />
         </div>
     );
 }

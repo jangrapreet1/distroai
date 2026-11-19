@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, User } from "lucide-react";
 import { useOrg, useUpdateOrg, useWarehouses, useUploadFile } from "@/hooks/api-hooks";
+import { useAuthStore } from "@/stores/auth.store";
+import apiClient, { getApiError } from "@/lib/api-client";
 import toast from "react-hot-toast";
 import { parseGstin } from "@/lib/utils";
 import { SettingsLayout } from "@/components/ui/settings-layout";
@@ -150,4 +152,116 @@ function GeneralTab() {
     );
 }
 
-export default function OrgSettingsPage() { return <SettingsLayout title="Organization Settings" description="Manage your business profile, warehouses, and B2B portal storefront."><GeneralTab /></SettingsLayout>; }
+function UserProfileCard() {
+    const user = useAuthStore((s) => s.user);
+    const updateUser = useAuthStore((s) => s.updateUser);
+    const [firstName, setFirstName] = useState(user?.firstName ?? "");
+    const [lastName, setLastName] = useState(user?.lastName ?? "");
+    const [phone, setPhone] = useState(user?.phone ?? "");
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            setFirstName(user.firstName ?? "");
+            setLastName(user.lastName ?? "");
+            setPhone(user.phone ?? "");
+        }
+    }, [user]);
+
+    const handleSaveProfile = async () => {
+        if (!firstName.trim()) {
+            toast.error("Display name cannot be empty");
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const payload = {
+                firstName: firstName.trim(),
+                lastName: lastName.trim() || undefined,
+                phone: phone.trim() || undefined,
+            };
+            const endpoint = user?.id ? `/api/v1/users/${user.id}` : "/api/v1/users/me";
+            await apiClient.patch(endpoint, payload);
+            updateUser({
+                firstName: firstName.trim(),
+                lastName: lastName.trim() || undefined,
+                phone: phone.trim() || undefined,
+            });
+            toast.success("Display name updated successfully!", { icon: "👤" });
+        } catch (err: any) {
+            toast.error(getApiError(err).message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                <div>
+                    <h2 className="font-semibold text-base text-[var(--text-primary)] flex items-center gap-2">
+                        <User size={18} className="text-[var(--gold)]" />
+                        Your Display Name & Profile
+                    </h2>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Edit how your name appears on the sidebar, header, activity logs, and invoices.</p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider bg-[var(--gold)]/15 text-[var(--gold)] border border-[var(--gold)]/30">
+                    {user?.role ?? "OWNER"}
+                </span>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+                <InputField
+                    label="First Name / Display Name *"
+                    value={firstName}
+                    onChange={setFirstName}
+                    placeholder="e.g. Radha"
+                />
+                <InputField
+                    label="Last Name (Optional)"
+                    value={lastName}
+                    onChange={setLastName}
+                    placeholder="e.g. Kishan"
+                />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+                <label>
+                    <span className="block text-sm text-[var(--text-secondary)] mb-1">Email (Account ID)</span>
+                    <input
+                        type="email"
+                        readOnly
+                        value={user?.email ?? ""}
+                        className="w-full px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-secondary)]/50 border border-[var(--border)] text-[var(--text-muted)] text-sm cursor-not-allowed"
+                    />
+                </label>
+                <InputField
+                    label="Phone Number"
+                    value={phone}
+                    onChange={setPhone}
+                    placeholder="e.g. +91 98765 43210"
+                />
+            </div>
+
+            <button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={isSaving}
+                className="px-6 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] disabled:opacity-50 transition shadow-sm active:scale-95"
+            >
+                {isSaving ? "Saving..." : "Save Display Name"}
+            </button>
+        </div>
+    );
+}
+
+export default function OrgSettingsPage() {
+    return (
+        <SettingsLayout title="Organization & Profile" description="Manage your personal display name, business profile, and storefront branding.">
+            <div className="space-y-6">
+                <UserProfileCard />
+                <GeneralTab />
+            </div>
+        </SettingsLayout>
+    );
+}

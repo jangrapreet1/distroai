@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSuppliers, usePurchaseOrders } from "@/hooks/api-hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,11 +17,15 @@ import {
   Download,
   PlusCircle,
   CreditCard,
+  Upload,
+  Edit,
 } from "lucide-react";
 import { formatDate, formatINR } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { SupplierStatementModal } from "./components/supplier-statement-modal";
 import { RecordSupplierPaymentModal } from "./components/record-supplier-payment-modal";
+import { EditSupplierModal } from "@/components/modals/EditSupplierModal";
+import { UniversalImportModal } from "@/components/modals/UniversalImportModal";
 import {
   downloadSupplierStatementPdf,
   printSupplierStatement,
@@ -30,9 +35,12 @@ export default function SupplierDetailPage() {
   const params = useParams();
   const supplierId = params?.id as string;
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
 
   const [isStatementOpen, setIsStatementOpen] = useState(false);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isEditSupplierOpen, setIsEditSupplierOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -89,7 +97,7 @@ export default function SupplierDetailPage() {
           </Link>
           <div>
             <h1
-              className="text-2xl font-bold flex items-center gap-2"
+              className="text-2xl font-bold flex items-center gap-2 text-[var(--text-primary)]"
               style={{ fontFamily: "var(--font-playfair)" }}
             >
               <Building2 className="text-[var(--text-muted)] opacity-50" size={24} />
@@ -101,8 +109,23 @@ export default function SupplierDetailPage() {
           </div>
         </div>
 
-        {/* Action Button Deck: Statement, Payment, Print, Download */}
+        {/* Action Button Deck: Edit, Import, Payment, Statement, Print, Download */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsEditSupplierOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--gold)]/40 bg-[var(--gold)]/15 text-[var(--gold)] hover:bg-[var(--gold)]/25 transition shadow-sm cursor-pointer"
+            title="Edit Supplier Details"
+          >
+            <Edit size={14} /> Edit Supplier
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsImportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-[var(--radius-md)] border border-[var(--gold)]/40 bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 transition shadow-sm"
+          >
+            <Upload size={14} /> Import Statement / Purchases
+          </button>
           <button
             type="button"
             onClick={() => setIsRecordPaymentOpen(true)}
@@ -137,7 +160,7 @@ export default function SupplierDetailPage() {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 shadow-sm">
           <p className="text-xs text-[var(--text-muted)] font-medium">Total Orders</p>
           <p className="text-xl font-bold text-[var(--text-primary)] mt-1" style={{ fontFamily: "var(--font-mono)" }}>
@@ -156,6 +179,12 @@ export default function SupplierDetailPage() {
             {itemsPending}
           </p>
         </div>
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 shadow-sm">
+          <p className="text-xs text-[var(--text-muted)] font-medium">Outstanding Balance</p>
+          <p className="text-xl font-bold text-[var(--gold)] mt-1" style={{ fontFamily: "var(--font-mono)" }}>
+            {formatINR(supplier.outstandingBalance ?? 0)}
+          </p>
+        </div>
       </div>
 
       {/* Main Grid: Info + PO List */}
@@ -163,9 +192,16 @@ export default function SupplierDetailPage() {
         {/* Supplier Detail Card */}
         <div className="md:col-span-1 space-y-4">
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5 shadow-sm">
-            <h2 className="text-md font-semibold text-[var(--text-secondary)] mb-4 border-b border-[var(--border)] pb-2 flex items-center gap-2">
-              Contact Info
-            </h2>
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-2 mb-4">
+              <h2 className="text-md font-semibold text-[var(--text-secondary)]">Contact Info</h2>
+              <button
+                type="button"
+                onClick={() => setIsEditSupplierOpen(true)}
+                className="text-xs text-[var(--gold)] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              >
+                <Edit size={12} /> Edit Details
+              </button>
+            </div>
             <div className="space-y-3 text-sm">
               <div className="flex items-start gap-3">
                 <Phone size={14} className="text-[var(--text-muted)] mt-0.5" />
@@ -298,6 +334,34 @@ export default function SupplierDetailPage() {
         supplierId={supplier.id}
         supplierName={supplier.name}
         purchaseOrders={pos}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+          queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["supplier-statement", supplier.id] });
+          queryClient.invalidateQueries({ queryKey: ["expenses"] });
+        }}
+      />
+
+      {/* Universal Supplier Purchases / Statement Import Modal */}
+      <UniversalImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+          queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["supplier-statement", supplier.id] });
+          queryClient.invalidateQueries({ queryKey: ["inventory"] });
+        }}
+        type="supplier-transactions"
+        supplierId={supplier.id}
+        supplierName={supplier.name}
+      />
+
+      {/* Edit Supplier Modal */}
+      <EditSupplierModal
+        open={isEditSupplierOpen}
+        onClose={() => setIsEditSupplierOpen(false)}
+        supplier={supplier}
       />
     </div>
   );

@@ -7,11 +7,15 @@ export const createQuerySalesTool = (orgId: string, prisma: PrismaService) => {
         name: "query_sales",
         description: "Get sales data aggregated by dimension for the organization.",
         schema: z.object({
-            dimension: z.enum(['product', 'customer', 'salesman', 'category', 'day', 'week', 'month']),
+            dimension: z.enum(['product', 'customer', 'salesman', 'category', 'day', 'week', 'month']).optional().default('day').describe("Aggregation dimension: product, customer, salesman, category, day, week, month"),
             dateFrom: z.string().optional().describe("ISO date string (e.g., 2025-01-01)"),
             dateTo: z.string().optional().describe("ISO date string (e.g., 2025-12-31)"),
         }),
-        func: (async ({ dimension, dateFrom, dateTo }: any) => {
+        func: (async (args: any) => {
+            const rawDim = (args?.dimension || args?.type || args?.by || 'day').toLowerCase();
+            const dimension = ['product', 'customer', 'salesman', 'category', 'day', 'week', 'month'].includes(rawDim) ? rawDim : 'day';
+            const dateFrom = args?.dateFrom;
+            const dateTo = args?.dateTo;
             let whereClause: any = { orgId, status: { in: ['DELIVERED', 'DISPATCHED'] } };
 
             if (dateFrom || dateTo) {

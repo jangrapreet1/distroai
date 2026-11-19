@@ -12,6 +12,7 @@
  */
 
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, fireEvent } from "@testing-library/react";
 import CustomerDetailPage from "@/app/(dashboard)/customers/[id]/page";
 import { CustomerLedgerTable } from "@/app/(dashboard)/customers/[id]/components/customer-ledger-table";
@@ -27,6 +28,8 @@ import {
   useDeleteCustomerTransaction,
   useCreateLocationRequest,
   useProducts,
+  useWarehouses,
+  useCustomerLedgerLogs,
 } from "@/hooks/api-hooks";
 import { extractBlobErrorMessage } from "@/lib/statement-actions";
 import type { LedgerEntryWithBalance } from "@/types/customer-transactions";
@@ -48,6 +51,16 @@ describe("Challenger M3_3 Empirical Stress Harness", () => {
   const customerId = "cust-challenger-777";
   const customerName = "लक्ष्मी नारायण मार्बल्स & सन्स (Laxmi Narayan Marbles & Sons)";
 
+  const testQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const renderWithClient = (ui: React.ReactElement) => {
+    const res = render(<QueryClientProvider client={testQueryClient}>{ui}</QueryClientProvider>);
+    return {
+      ...res,
+      rerender: (newUi: React.ReactElement) =>
+        res.rerender(<QueryClientProvider client={testQueryClient}>{newUi}</QueryClientProvider>),
+    };
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     window.URL.createObjectURL = jest.fn().mockReturnValue("blob:http://localhost/challenger-mock-blob");
@@ -66,6 +79,17 @@ describe("Challenger M3_3 Empirical Stress Harness", () => {
     (useCreateLocationRequest as jest.Mock).mockReturnValue({
       mutate: jest.fn(),
       isPending: false,
+    });
+
+    (useWarehouses as jest.Mock)?.mockReturnValue?.({
+      data: [],
+      isLoading: false,
+    });
+
+    (useCustomerLedgerLogs as jest.Mock)?.mockReturnValue?.({
+      data: { logs: [], total: 0 },
+      isLoading: false,
+      refetch: jest.fn(),
     });
 
     (useProducts as jest.Mock).mockReturnValue({
@@ -148,7 +172,7 @@ describe("Challenger M3_3 Empirical Stress Harness", () => {
         isLoading: false,
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       // Verify Indian locale grouping: 99,99,99,999.99
       expect(screen.getByText(/Current Balance: ₹99,99,99,999.99/)).toBeInTheDocument();
@@ -189,7 +213,7 @@ describe("Challenger M3_3 Empirical Stress Harness", () => {
         isLoading: false,
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       expect(screen.getByText(/ADVANCE CREDIT \(जमा शेष\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Current Balance: ₹45,67,890.12/)).toBeInTheDocument();
@@ -201,7 +225,7 @@ describe("Challenger M3_3 Empirical Stress Harness", () => {
 
     it("1.3 Seamlessly transitions through full lifecycle: Debit -> Settled (Nil) -> Advance Credit", () => {
       // Step A: Positive Debit
-      const { rerender } = render(<CustomerDetailPage params={{ id: customerId }} />);
+      const { rerender } = renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       (useCustomer as jest.Mock).mockReturnValue({
         data: {

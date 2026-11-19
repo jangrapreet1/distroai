@@ -175,7 +175,7 @@ export default function TallyExportPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
                         Tally Prime & ERP 9 Export
                     </h1>
                     <p className="text-[var(--text-muted)] text-sm mt-1">
@@ -626,7 +626,7 @@ export default function TallyExportPage() {
             {/* Config Modal */}
             {showConfigModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 max-w-md w-full space-y-4 shadow-xl animate-in zoom-in-95">
+                    <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6 max-w-md w-full space-y-4 shadow-xl animate-in zoom-in-95">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Building2 size={18} className="text-[var(--gold)]" />

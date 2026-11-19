@@ -57,5 +57,6 @@ export class OrdersController {
     @Post(':id/deliver') deliver(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.deliver(u.orgId, id, u.sub); }
     @Post(':id/cancel') cancel(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.cancel(u.orgId, id, u.sub); }
     @Post(':id/return') returnOrder(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ReturnOrderDto) { return this.orders.returnOrder(u.orgId, id, dto, u.sub); }
-    @Post(':id/mark-paid') markPaid(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: MarkPaidDto) { return this.orders.markPaid(u.orgId, id, u.sub, dto.method); }
+    @Post(':id/mark-paid') markPaid(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: MarkPaidDto) { return this.orders.markPaid(u.orgId, id, u.sub, dto); }
+    @Post(':id/send-whatsapp') sendWhatsApp(@CurrentUser() u: JwtPayload, @Param('id') id: string) { return this.orders.sendWhatsAppConfirmation(u.orgId, id); }
 }

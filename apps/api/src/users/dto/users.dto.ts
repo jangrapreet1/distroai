@@ -1,6 +1,7 @@
 import { IsEmail, IsOptional, IsString, IsEnum, IsBoolean, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ToBoolean } from '../../common/decorators/to-boolean.decorator';
 
 export enum UserRole {
     OWNER = 'OWNER', ADMIN = 'ADMIN', MANAGER = 'MANAGER',
@@ -29,7 +30,11 @@ export class UpdateRoleDto {
 
 export class ListUsersQueryDto {
     @ApiPropertyOptional() @IsOptional() @IsEnum(UserRole) role?: UserRole;
-    @ApiPropertyOptional() @IsOptional() @IsBoolean() @Type(() => Boolean) isActive?: boolean;
+    @ApiPropertyOptional()
+    @IsOptional()
+    @ToBoolean()
+    @IsBoolean()
+    isActive?: boolean;
     @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(1) @Type(() => Number) page?: number = 1;
     @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(1) @Max(100) @Type(() => Number) limit?: number = 20;
 }

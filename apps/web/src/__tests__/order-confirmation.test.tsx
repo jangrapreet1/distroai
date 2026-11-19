@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import OrderDetailPage from '@/app/(dashboard)/orders/[id]/page';
-import { useOrder, useOrderAction, useProducts, useUpdateDraftOrder } from '@/hooks/api-hooks';
+import { useOrder, useOrderAction, useProducts, useUpdateDraftOrder, useSendOrderWhatsApp } from '@/hooks/api-hooks';
 import toast from 'react-hot-toast';
 
 // Mock the dependencies
@@ -22,7 +23,11 @@ jest.mock('react-hot-toast');
 
 describe('Order Confirmation behavior', () => {
     const mockMutate = jest.fn();
+    const mockSendWhatsApp = jest.fn();
     const orderId = 'order-123';
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderWithClient = (ui: React.ReactElement) =>
+        render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -33,6 +38,10 @@ describe('Order Confirmation behavior', () => {
         });
         (useUpdateDraftOrder as jest.Mock).mockReturnValue({
             mutate: jest.fn(),
+            isPending: false,
+        });
+        (useSendOrderWhatsApp as jest.Mock).mockReturnValue({
+            mutate: mockSendWhatsApp,
             isPending: false,
         });
 
@@ -64,12 +73,12 @@ describe('Order Confirmation behavior', () => {
     });
 
     it('shows the Confirm Order button for a DRAFT order', async () => {
-        render(<OrderDetailPage params={Promise.resolve({ id: orderId })} />);
+        renderWithClient(<OrderDetailPage params={Promise.resolve({ id: orderId })} />);
         expect(screen.getByRole('button', { name: /confirm order/i })).toBeInTheDocument();
     });
 
     it('triggers the confirm action when button is clicked', async () => {
-        render(<OrderDetailPage params={Promise.resolve({ id: orderId })} />);
+        renderWithClient(<OrderDetailPage params={Promise.resolve({ id: orderId })} />);
 
         const confirmBtn = screen.getByRole('button', { name: /confirm order/i });
         fireEvent.click(confirmBtn);
@@ -78,6 +87,36 @@ describe('Order Confirmation behavior', () => {
             id: orderId,
             action: 'confirm'
         });
+    });
+
+    it('renders Send WhatsApp button and calls sendWhatsApp mutation on click', async () => {
+        (useOrder as jest.Mock).mockReturnValue({
+            data: {
+                id: orderId,
+                orderNumber: 'ORD-00004',
+                status: 'CONFIRMED',
+                createdAt: new Date().toISOString(),
+                totalAmount: 1000,
+                discountAmount: 0,
+                taxAmount: 180,
+                netAmount: 1180,
+                balanceAmount: 1180,
+                customer: { name: 'Quick Stop', phone: '+919833445566' },
+                items: [
+                    { id: 'item-1', productId: 'prod-1', quantity: 5, price: 200, totalAmount: 1000, product: { name: 'Dettol Soap' } }
+                ],
+                statusHistory: [{ toStatus: 'CONFIRMED', createdAt: new Date().toISOString() }]
+            },
+            isLoading: false,
+        });
+
+        renderWithClient(<OrderDetailPage params={Promise.resolve({ id: orderId })} />);
+
+        const waButton = screen.getByRole('button', { name: /send whatsapp/i });
+        expect(waButton).toBeInTheDocument();
+
+        fireEvent.click(waButton);
+        expect(mockSendWhatsApp).toHaveBeenCalledWith(orderId);
     });
 
     it('displays the exact error message from the API when confirmation fails', async () => {

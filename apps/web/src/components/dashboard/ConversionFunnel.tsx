@@ -63,7 +63,7 @@ export function ConversionFunnel({
             count: totalOrders,
             totalAmount: formatINR(totalOrdersAmount),
             conversionPct: aiTranscribePct,
-            color: "#C9A84C", // Gold
+            color: "#6366F1", // Indigo
             icon: Cpu,
         },
         {
@@ -96,22 +96,22 @@ export function ConversionFunnel({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
                 <div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--gold)] bg-[var(--gold)]/10 px-2 py-0.5 rounded border border-[var(--gold)]/20">
-                            [PIPELINE // VELOCITY]
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+                            Fulfillment Pipeline
                         </span>
                         <h3 className="font-semibold text-[var(--text-primary)] text-sm">
-                            Distribution & Settlement Conversion Funnel
+                            Distribution & Settlement Velocity
                         </h3>
                     </div>
                     <p className="text-xs text-[var(--text-muted)] mt-1">
                         {hasPipelineData
                             ? "End-to-end retail order intake to Tally Prime automated settlement"
-                            : "No pipeline records detected yet for current tenant. Stage yields will compute dynamically as orders are processed."}
+                            : "Stage yields and turnaround times compute dynamically as orders are received and dispatched."}
                     </p>
                 </div>
                 <Link
                     href="/orders"
-                    className="text-xs text-[var(--gold)] hover:text-[var(--gold-light)] font-medium flex items-center gap-1 self-start sm:self-auto transition"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium flex items-center gap-1 self-start sm:self-auto transition"
                 >
                     View Pipeline <ArrowRight size={13} />
                 </Link>

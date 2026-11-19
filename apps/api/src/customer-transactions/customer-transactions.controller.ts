@@ -11,7 +11,11 @@ import {
   HttpCode,
   HttpStatus,
   Res,
+  UseInterceptors,
+  UploadedFile,
+  Optional,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -21,11 +25,13 @@ import {
   ApiQuery,
   ApiBody,
   ApiProduces,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { CustomerTransactionsService } from './customer-transactions.service';
+import { CustomerTransactionsImportService, KhataImportRow } from './customer-transactions-import.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { LedgerQueryDto } from './dto/ledger-query.dto';
@@ -35,7 +41,60 @@ import { LedgerQueryDto } from './dto/ledger-query.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('customers')
 export class CustomerTransactionsController {
-  constructor(private readonly service: CustomerTransactionsService) {}
+  constructor(
+    private readonly service: CustomerTransactionsService,
+    @Optional() private readonly importService?: CustomerTransactionsImportService,
+  ) {}
+
+  /**
+   * Import 1. Download Customer Khata Excel Template
+   * GET /api/v1/customers/:customerId/transactions/import/template
+   */
+  @Get(':customerId/transactions/import/template')
+  async getKhataTemplate(
+    @CurrentUser() user: JwtPayload,
+    @Param('customerId') customerId: string,
+    @Res() res: Response,
+  ) {
+    const customer = await this.service.findOneCustomer(user.orgId, customerId);
+    const buffer = this.importService
+      ? this.importService.generateKhataTemplate(customer?.name || 'Customer')
+      : Buffer.from([]);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="khata_template_${customerId}.xlsx"`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.end(buffer);
+  }
+
+  /**
+   * Import 2. Preview & Validate Customer Khata Spreadsheet
+   * POST /api/v1/customers/:customerId/transactions/import/preview
+   */
+  @Post(':customerId/transactions/import/preview')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  previewKhata(
+    @CurrentUser() user: JwtPayload,
+    @Param('customerId') customerId: string,
+    @UploadedFile() file: any,
+  ) {
+    if (!this.importService) throw new Error('Import service not available');
+    return this.importService.previewCustomerKhata(user.orgId, customerId, file.buffer);
+  }
+
+  /**
+   * Import 3. Execute Batch Khata Import
+   * POST /api/v1/customers/:customerId/transactions/import/execute
+   */
+  @Post(':customerId/transactions/import/execute')
+  executeKhata(
+    @CurrentUser() user: JwtPayload,
+    @Param('customerId') customerId: string,
+    @Body() body: { rows: KhataImportRow[] },
+  ) {
+    if (!this.importService) throw new Error('Import service not available');
+    return this.importService.executeCustomerKhataImport(user.orgId, customerId, body.rows, user.sub);
+  }
 
   /**
    * 1. Create Transaction with Items
@@ -86,6 +145,34 @@ export class CustomerTransactionsController {
     @Query() query: LedgerQueryDto,
   ) {
     return this.service.findAllLedger(user.orgId, customerId, query);
+  }
+
+  /**
+   * 2b. Get Customer Ledger Audit Trail / Change Logs
+   * GET /api/v1/customers/:customerId/ledger/logs
+   */
+  @Get(':customerId/ledger/logs')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get customer ledger change history and audit logs',
+    description: 'Retrieves human-readable change history (edits, deletions, creations, imports) for the customer khata.',
+  })
+  @ApiParam({ name: 'customerId', description: 'Customer UUID', type: String })
+  @ApiQuery({ name: 'transactionId', required: false, type: String, description: 'Optional: Filter by transaction ID' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit per page (default 50)' })
+  async getLedgerLogs(
+    @CurrentUser() user: JwtPayload,
+    @Param('customerId') customerId: string,
+    @Query('transactionId') transactionId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.getLedgerAuditLogs(user.orgId, customerId, {
+      transactionId,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+    });
   }
 
   /**

@@ -118,7 +118,7 @@ export default function AIPage() {
 
         try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 60000);
+            let timeout = setTimeout(() => controller.abort(), 180000); // 3 minutes total timeout for multi-round tool calling
 
             const res = await fetch(`${API_BASE}/ai/query/stream`, {
                 method: "POST",
@@ -135,17 +135,27 @@ export default function AIPage() {
             const reader = res.body!.getReader();
             const decoder = new TextDecoder();
             let fullResponse = "";
+            let streamBuffer = "";
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                const chunk = decoder.decode(value);
-                const lines = chunk.split("\n").filter((l) => l.startsWith("data:"));
-                for (const line of lines) {
+
+                // Reset timeout whenever active chunks are streaming
+                clearTimeout(timeout);
+                timeout = setTimeout(() => controller.abort(), 90000);
+                streamBuffer += decoder.decode(value, { stream: true });
+                const lines = streamBuffer.split("\n");
+                streamBuffer = lines.pop() ?? "";
+
+                for (const rawLine of lines) {
+                    const line = rawLine.trim();
+                    if (!line || !line.startsWith("data:")) continue;
                     try {
-                        const data = JSON.parse(line.replace(/^data:\s?/, "").trim());
+                        const jsonStr = line.replace(/^data:\s*/, "").trim();
+                        if (!jsonStr) continue;
+                        const data = JSON.parse(jsonStr);
                         if (data.error === 'AI_QUOTA_EXCEEDED') {
-                            // Show quota error as a failed message with the server's message
                             setSessions(prev => prev.map(s => {
                                 if (s.id !== currentSessionId) return s;
                                 const newMsgs = [...s.messages];
@@ -167,6 +177,22 @@ export default function AIPage() {
                         if (data.done) break;
                     } catch { }
                 }
+            }
+
+            if (streamBuffer.trim().startsWith("data:")) {
+                try {
+                    const data = JSON.parse(streamBuffer.trim().replace(/^data:\s*/, ""));
+                    if (data.token) {
+                        fullResponse += data.token;
+                        const parsed = parseAIResponse(fullResponse);
+                        setSessions(prev => prev.map(s => {
+                            if (s.id !== currentSessionId) return s;
+                            const newMsgs = [...s.messages];
+                            newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: parsed.cleanText, charts: parsed.charts, tables: parsed.tables, askInputs: parsed.askInputs };
+                            return { ...s, messages: newMsgs };
+                        }));
+                    }
+                } catch { }
             }
 
             clearTimeout(timeout);
@@ -262,7 +288,7 @@ export default function AIPage() {
     }, [isRecording, accessToken, activeSessionId]);
 
     return (
-        <div className="flex h-[calc(100vh-3.5rem-3rem)] gap-0 -m-4 lg:-m-6 relative overflow-hidden">
+        <div className="flex h-[calc(100dvh-3.5rem)] gap-0 -m-3 sm:-m-4 lg:-m-6 relative overflow-hidden">
             {showScanner && <OfflineScanner onClose={() => setShowScanner(false)} />}
 
             <ChatSidebar
@@ -279,8 +305,8 @@ export default function AIPage() {
                 {/* Mobile History Toggle Header */}
                 <div className="lg:hidden flex items-center justify-between p-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
                     <div className="flex items-center gap-2">
-                        <Sparkles size={18} className="text-[var(--purple)]" />
-                        <span className="font-semibold text-sm">AI Chat</span>
+                        <Sparkles size={18} className="text-blue-500" />
+                        <span className="font-semibold text-sm">AI Assistant</span>
                     </div>
                     <button onClick={() => setShowHistoryMenu(true)} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
                         <MessageSquare size={18} />
@@ -290,24 +316,24 @@ export default function AIPage() {
                 {isLoadingHistory ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8">
                         <div className="flex gap-1 mt-1 mb-4">
-                            <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "0ms" }} />
-                            <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "150ms" }} />
-                            <span className="w-2 h-2 rounded-full bg-[var(--purple)] animate-bounce" style={{ animationDelay: "300ms" }} />
+                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
                         </div>
                         <p className="text-sm text-[var(--text-muted)] animate-pulse">Loading conversation history...</p>
                     </div>
                 ) : messages.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center p-8">
                         <div className="text-center max-w-md">
-                            <div className="w-16 h-16 rounded-2xl bg-[var(--purple)]/15 flex items-center justify-center mx-auto mb-6">
-                                <Sparkles size={28} className="text-[var(--purple)]" />
+                            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto mb-6">
+                                <Sparkles size={28} />
                             </div>
-                            <h2 className="text-xl font-bold mb-2" style={{ fontFamily: "var(--font-playfair)" }}>Ask me anything about your business</h2>
+                            <h2 className="text-xl font-bold mb-2">Ask me anything about your business</h2>
                             <p className="text-sm text-[var(--text-secondary)] mb-8">I can analyze sales, predict stockouts, score customers, and generate reports.</p>
                             <div className="grid grid-cols-2 gap-3">
                                 {EXAMPLE_PROMPTS.map((p, i) => (
-                                    <button key={i} onClick={() => sendMessage(p.text)} className="flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-left text-sm text-[var(--text-secondary)] hover:border-[var(--purple)]/30 transition shadow-sm">
-                                        <p.icon size={16} className="text-[var(--purple)] mt-0.5 shrink-0" />
+                                    <button key={i} onClick={() => sendMessage(p.text)} className="flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-left text-sm text-[var(--text-secondary)] hover:border-blue-500/30 transition shadow-sm">
+                                        <p.icon size={16} className="text-blue-500 mt-0.5 shrink-0" />
                                         {p.text}
                                     </button>
                                 ))}

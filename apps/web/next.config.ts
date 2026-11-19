@@ -5,7 +5,16 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   compress: true,
   experimental: {
-    optimizePackageImports: ["lucide-react", "date-fns", "recharts", "@tanstack/react-query"],
+    optimizePackageImports: ["lucide-react", "date-fns", "recharts", "@tanstack/react-query", "@tanstack/react-table", "motion"],
+  },
+  async redirects() {
+    return [
+      {
+        source: "/settings",
+        destination: "/settings/preferences",
+        permanent: false,
+      },
+    ];
   },
   async rewrites() {
     return [

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { usePurchaseOrder, useReceivePurchaseOrder } from "@/hooks/api-hooks";
-import { ArrowLeft, CheckCircle2, ChevronDown, Package, Plus, Truck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, Package, Plus, Truck, Send, Printer } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatINR, getPendingQty } from "@/lib/utils";
 import { toast } from "react-hot-toast";
@@ -71,17 +71,78 @@ export default function PurchaseOrderDetailPage() {
 
     const allReceived = (po.items ?? []).every((i: any) => getPendingQty(i) <= 0);
 
+    const supplierPhone = po.supplier?.phone;
+    const itemsSummary = (po.items ?? [])
+        .map((it: any, idx: number) => `${idx + 1}. ${it.product?.name || "Item"} — ${it.quantity} ${it.unit || "pcs"} @ ₹${Number(it.price).toLocaleString("en-IN")}`)
+        .join("\n");
+
+    const poMessage = encodeURIComponent(
+`*PURCHASE ORDER: ${po.poNumber}*
+Supplier: ${po.supplier?.name || "Supplier"}
+Date: ${formatDate(po.createdAt)}
+${po.expectedDate ? `Expected Delivery: ${formatDate(po.expectedDate)}\n` : ""}*Ordered Items:*
+${itemsSummary}
+
+*Total Estimated Value:* ₹${Number(po.totalAmount).toLocaleString("en-IN")}
+${po.notes ? `\nNotes: ${po.notes}` : ""}
+
+Please confirm receipt and dispatch schedule.`
+    );
+
+    const waUrl = supplierPhone
+        ? `https://wa.me/91${supplierPhone.replace(/\D/g, "")}?text=${poMessage}`
+        : `https://wa.me/?text=${poMessage}`;
+
     return (
         <div className="max-w-5xl mx-auto pb-12">
-            <div className="flex items-center gap-3 mb-6">
-                <Link href="/purchase-orders" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
-                    <ArrowLeft size={20} />
-                </Link>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>PO {po.poNumber}</h1>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusClass[po.status] ?? "badge-draft"}`}>
-                        {po.status}
-                    </span>
+                    <Link href="/purchase-orders" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
+                        <ArrowLeft size={20} />
+                    </Link>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>PO {po.poNumber}</h1>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusClass[po.status] ?? "badge-draft"}`}>
+                            {po.status}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto">
+                    <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] bg-[#25D366]/15 border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/25 transition"
+                        title="Share Purchase Order details with supplier on WhatsApp"
+                    >
+                        <Send size={13} />
+                        <span className="hidden sm:inline">WhatsApp Supplier</span>
+                        <span className="sm:hidden inline">WA</span>
+                    </a>
+                    <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition cursor-pointer"
+                        title="Print Purchase Order"
+                    >
+                        <Printer size={13} />
+                        <span className="hidden sm:inline">Print</span>
+                    </button>
+                    {!allReceived && po.status !== "CANCELLED" && (
+                        <button
+                            type="button"
+                            onClick={handleReceiveToggle}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] transition flex items-center gap-1.5 cursor-pointer ${
+                                receiving
+                                    ? "bg-[var(--border)] text-[var(--text-primary)]"
+                                    : "bg-[var(--gold)] text-[var(--bg-primary)] hover:opacity-90"
+                            }`}
+                        >
+                            <Package size={13} />
+                            {receiving ? "Cancel" : "Receive Stock"}
+                        </button>
+                    )}
                 </div>
             </div>
 

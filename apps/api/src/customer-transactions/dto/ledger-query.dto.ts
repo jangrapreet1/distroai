@@ -6,10 +6,11 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { CustomerTransactionType } from '../customer-transactions.calculation';
 import { IsIsoDateOnly } from './validators/is-iso-date-only.decorator';
+import { ToBoolean } from '../../common/decorators/to-boolean.decorator';
 
 export class LedgerQueryDto {
   @ApiPropertyOptional({ description: 'Filter start date (YYYY-MM-DD)', example: '2026-08-01' })
@@ -45,8 +46,8 @@ export class LedgerQueryDto {
 
   @ApiPropertyOptional({ description: 'Include synthetic opening balance row in ledger output', example: false })
   @IsOptional()
+  @ToBoolean()
   @IsBoolean()
-  @Transform(({ value }) => value === 'true' || value === true || value === '1' || value === 1)
   includeOpeningBalanceRow?: boolean;
 
   @ApiPropertyOptional({ description: 'Statement document date (YYYY-MM-DD)', example: '2026-08-31' })

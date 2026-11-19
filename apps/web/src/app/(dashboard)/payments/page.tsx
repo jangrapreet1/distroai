@@ -72,7 +72,7 @@ function RecordPaymentModal({ open, onClose, prefillCustomerId, prefillCustomerN
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Record Payment</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
@@ -226,7 +226,7 @@ export default function PaymentsPage() {
         <div>
             {/* Header — stacks on mobile */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Payments &amp; Collections</h1>
+                <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Payments &amp; Collections</h1>
                 <div className="flex items-center gap-2">
                     <button onClick={() => setTab("outstanding")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${tab === "outstanding" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>Outstanding</button>
                     <button onClick={() => setTab("history")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${tab === "history" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>History</button>

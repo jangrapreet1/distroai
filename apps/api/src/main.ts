@@ -43,7 +43,8 @@ async function bootstrap() {
     app.use(helmet());
 
     // CORS
-    const corsOrigins = config.get<string>('CORS_ORIGINS', 'http://localhost:3001');
+    const defaultCors = 'https://distroai.in,https://www.distroai.in,https://api.distroai.in,http://localhost:3000,http://localhost:3001';
+    const corsOrigins = config.get<string>('CORS_ORIGINS', defaultCors);
     app.enableCors({
         origin: corsOrigins.split(',').map((o) => o.trim()),
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -108,8 +109,8 @@ async function bootstrap() {
         console.log(`Swagger docs at http://localhost:${port}/api/docs`);
     }
 
-    await app.listen(port);
-    console.log(`DistroAI API running on http://localhost:${port}`);
+    await app.listen(port, '0.0.0.0');
+    console.log(`DistroAI API running on http://0.0.0.0:${port}`);
 }
 
 bootstrap();

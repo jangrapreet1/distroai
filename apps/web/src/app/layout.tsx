@@ -1,18 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display, Outfit, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "./providers";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import "./globals.css";
 
-const playfair = Playfair_Display({
+const sansFont = Inter({
   subsets: ["latin"],
-  variable: "--font-playfair",
-  display: "swap",
-});
-const baseFont = Outfit({
-  subsets: ["latin"],
-  variable: "--font-dm-sans", // Keeping variable name the same for Tailwind compatibility
+  variable: "--font-sans",
   display: "swap",
 });
 const jetbrainsMono = JetBrains_Mono({
@@ -26,12 +21,25 @@ export const metadata: Metadata = {
   description:
     "AI-native SaaS platform for Indian distributors and traders. Manage orders, inventory, invoices, and collections intelligently.",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "DistroAI",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#07070E",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
   width: "device-width",
   initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -42,14 +50,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${baseFont.variable} ${jetbrainsMono.variable}`}
-      style={{ backgroundColor: "#07070E", color: "#EDEDEF" }}
+      className={`${sansFont.variable} ${jetbrainsMono.variable}`}
+      style={{ backgroundColor: "var(--bg-primary)", color: "var(--text-primary)" }}
     >
       <body
         className="antialiased"
         style={{
-          backgroundColor: "#07070E",
-          color: "#EDEDEF",
+          backgroundColor: "var(--bg-primary)",
+          color: "var(--text-primary)",
           margin: 0,
           minHeight: "100vh",
         }}
@@ -77,29 +85,48 @@ export default function RootLayout({
             }}
           />
         </Providers>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                if ('caches' in window) {
-                  caches.keys().then(function(keys) {
-                    keys.forEach(function(k) {
-                      if (k !== 'distroai-v3') caches.delete(k);
-                    });
+        {process.env.NODE_ENV === "production" ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                try {
+                  if ('caches' in window) {
+                    caches.keys().then(function(keys) {
+                      keys.forEach(function(k) {
+                        if (k !== 'distroai-v5') caches.delete(k);
+                      });
+                    }).catch(function() {});
+                  }
+                } catch (e) {}
+
+                if ('serviceWorker' in navigator) {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                      reg.update();
+                    }).catch(function() {});
+                  });
+                }
+              `,
+            }}
+          />
+        ) : (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for (var r of registrations) { r.unregister(); }
                   }).catch(function() {});
                 }
-              } catch (e) {}
-
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
-                    reg.update();
+                if ('caches' in window) {
+                  caches.keys().then(function(keys) {
+                    keys.forEach(function(k) { caches.delete(k); });
                   }).catch(function() {});
-                });
-              }
-            `,
-          }}
-        />
+                }
+              `,
+            }}
+          />
+        )}
       </body>
     </html>
   );

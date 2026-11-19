@@ -31,19 +31,32 @@ export class ProductsService {
         const cached = await this.redis.getJson<unknown>(cacheKey);
         if (cached) return cached;
 
-        const where = {
-            orgId,
-            ...(isActive !== undefined && { isActive }),
-            ...(isDraft !== undefined && { isDraft }),
-            ...(category && { category }),
-            ...(brand && { brand }),
-            ...(search && {
+        const andConditions: any[] = [
+            {
+                OR: [
+                    { category: null },
+                    { category: { not: 'INTERNAL_LEDGER' } },
+                ],
+            },
+        ];
+
+        if (search) {
+            andConditions.push({
                 OR: [
                     { name: { contains: search, mode: 'insensitive' as const } },
                     { sku: { contains: search, mode: 'insensitive' as const } },
                     { barcode: { contains: search, mode: 'insensitive' as const } },
                 ],
-            }),
+            });
+        }
+
+        const where: any = {
+            orgId,
+            AND: andConditions,
+            ...(isActive !== undefined && { isActive }),
+            ...(isDraft !== undefined && { isDraft }),
+            ...(category && { category }),
+            ...(brand && { brand }),
         };
 
         const [products, total] = await Promise.all([
@@ -140,15 +153,34 @@ export class ProductsService {
             }));
         }
 
+        let effectiveSellingPrice = sellingPrice;
+        let effectiveMrp = mrp;
+        let effectivePurchasePrice = purchasePrice;
+
+        if (hasVariants && processedVariants && processedVariants.length > 0) {
+            const primary = processedVariants.find((v: any) => v.isActive !== false) || processedVariants[0];
+            if (primary) {
+                if (primary.sellingPrice !== undefined && (!effectiveSellingPrice || effectiveSellingPrice === 0)) {
+                    effectiveSellingPrice = Number(primary.sellingPrice);
+                }
+                if (primary.mrp !== undefined && (!effectiveMrp || effectiveMrp === 0)) {
+                    effectiveMrp = Number(primary.mrp);
+                }
+                if (primary.purchasePrice !== undefined && (!effectivePurchasePrice || effectivePurchasePrice === 0)) {
+                    effectivePurchasePrice = Number(primary.purchasePrice);
+                }
+            }
+        }
+
         const product = await this.prisma.product.create({
             data: {
                 orgId,
                 ...productData,
                 sku,
                 unit,
-                sellingPrice,
-                mrp,
-                purchasePrice,
+                sellingPrice: effectiveSellingPrice,
+                mrp: effectiveMrp,
+                purchasePrice: effectivePurchasePrice,
                 gstRate,
                 isDraft,
                 hasVariants,
@@ -300,6 +332,43 @@ export class ProductsService {
         if (!product) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Product not found' });
 
         const { variants, ...updateData } = dto;
+
+        // If product has variants, ensure base inventory is zeroed out and base prices sync with primary variant
+        if (dto.hasVariants || (product.hasVariants && Array.isArray(variants) && variants.length > 0)) {
+            await this.prisma.inventory.updateMany({
+                where: { productId: id },
+                data: { quantity: 0, reservedQty: 0 },
+            });
+
+            if (Array.isArray(variants) && variants.length > 0) {
+                const primaryVariant = variants.find(v => v.isActive !== false) || variants[0];
+                if (primaryVariant.sellingPrice !== undefined) {
+                    updateData.sellingPrice = Number(primaryVariant.sellingPrice);
+                }
+                if (primaryVariant.mrp !== undefined) {
+                    updateData.mrp = Number(primaryVariant.mrp);
+                }
+                if (primaryVariant.purchasePrice !== undefined) {
+                    updateData.purchasePrice = Number(primaryVariant.purchasePrice);
+                }
+            } else if (product.hasVariants) {
+                const existingPrimary = await this.prisma.productVariant.findFirst({
+                    where: { productId: id, isActive: true },
+                    orderBy: { createdAt: 'asc' },
+                });
+                if (existingPrimary) {
+                    if (existingPrimary.sellingPrice != null && (!updateData.sellingPrice || updateData.sellingPrice === 0)) {
+                        updateData.sellingPrice = Number(existingPrimary.sellingPrice);
+                    }
+                    if (existingPrimary.mrp != null && (!updateData.mrp || updateData.mrp === 0)) {
+                        updateData.mrp = Number(existingPrimary.mrp);
+                    }
+                    if (existingPrimary.purchasePrice != null && (!updateData.purchasePrice || updateData.purchasePrice === 0)) {
+                        updateData.purchasePrice = Number(existingPrimary.purchasePrice);
+                    }
+                }
+            }
+        }
 
         // Upsert variants if provided
         if (Array.isArray(variants)) {

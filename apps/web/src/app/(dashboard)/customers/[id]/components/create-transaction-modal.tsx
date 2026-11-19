@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { X, Plus, Trash2, Calendar, Receipt, CreditCard, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { X, Plus, Trash2, Calendar, Receipt, CreditCard, RefreshCw, SlidersHorizontal, Warehouse } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatINR } from "@/lib/utils";
-import { useCreateCustomerTransaction, useProducts } from "@/hooks/api-hooks";
+import { useCreateCustomerTransaction, useProducts, useWarehouses } from "@/hooks/api-hooks";
 import type { CustomerTransactionType, PaymentMethod, CreateTransactionItemDto, CreateTransactionDto } from "@/types/customer-transactions";
 
 interface CreateTransactionModalProps {
@@ -20,20 +20,157 @@ interface CreateTransactionModalProps {
   isPending?: boolean;
 }
 
-interface FormItem {
+export interface FormItem {
   id: string;
   productId?: string;
+  variantId?: string;
   productName: string;
   quantity: number | "";
   unitPrice: number | "";
   unit: string;
 }
 
-interface CatalogProduct {
-  id: string;
+export interface CatalogOption {
+  key: string;
+  productId: string;
+  variantId?: string;
   name: string;
-  sellingPrice?: number;
-  unit?: string;
+  displayName: string;
+  unit: string;
+  sellingPrice: number;
+}
+
+export function LineItemsTable({
+  items,
+  catalogOptions,
+  onProductSelect,
+  onItemChange,
+  onRemoveItem,
+  amountColor = "var(--green-bright)",
+}: {
+  items: FormItem[];
+  catalogOptions: CatalogOption[];
+  onProductSelect: (index: number, key: string) => void;
+  onItemChange: (index: number, field: keyof FormItem, value: string | number) => void;
+  onRemoveItem: (index: number) => void;
+  amountColor?: string;
+}) {
+  return (
+    <div className="overflow-x-auto border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)]/40 shadow-inner">
+      <table className="w-full text-left border-collapse table-fixed min-w-[620px]">
+        <thead>
+          <tr className="border-b border-[var(--border)] bg-[var(--bg-secondary)] text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-semibold">
+            <th className="py-2.5 px-3 w-[40%]">Item Name / Description (Hindi/Eng)</th>
+            <th className="py-2.5 px-2 w-[14%] text-center">Quantity</th>
+            <th className="py-2.5 px-2 w-[12%] text-center">Unit</th>
+            <th className="py-2.5 px-2 w-[16%] text-right">Rate (₹)</th>
+            <th className="py-2.5 px-3 w-[18%] text-right">Amount (₹)</th>
+            <th className="py-2.5 px-1 w-9 text-center"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--border)]">
+          {items.map((item, idx) => {
+            const itemAmount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+            const selectedKey = item.variantId
+              ? `${item.productId}:${item.variantId}`
+              : item.productId
+              ? catalogOptions.find(
+                  (c) =>
+                    c.productId === item.productId &&
+                    (c.name === item.productName || c.displayName === item.productName)
+                )?.key || item.productId
+              : item.productName
+              ? "__CUSTOM__"
+              : "";
+
+            return (
+              <tr key={item.id} className="hover:bg-white/[0.02] transition">
+                <td className="py-2 px-3 align-top space-y-1.5">
+                  <select
+                    value={selectedKey}
+                    onChange={(e) => onProductSelect(idx, e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition cursor-pointer truncate"
+                  >
+                    <option value="">-- Choose from Inventory ({catalogOptions.length}) --</option>
+                    {catalogOptions.map((opt) => (
+                      <option key={opt.key} value={opt.key}>
+                        {opt.displayName} — ₹{opt.sellingPrice} / {opt.unit}
+                      </option>
+                    ))}
+                    <option value="__CUSTOM__">✍️ Custom Item / Manual Entry</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    placeholder="Item Name (e.g. अलमारी के लिए पत्थर)"
+                    value={item.productName}
+                    onChange={(e) => onItemChange(idx, "productName", e.target.value)}
+                    className="w-full px-2.5 py-1 text-xs rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition"
+                  />
+                </td>
+
+                <td className="py-2 px-2 align-top">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    placeholder="Qty"
+                    value={item.quantity === "" ? "" : item.quantity}
+                    onChange={(e) =>
+                      onItemChange(idx, "quantity", e.target.value === "" ? "" : parseFloat(e.target.value))
+                    }
+                    className="w-full text-center px-2 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
+                  />
+                </td>
+
+                <td className="py-2 px-2 align-top">
+                  <input
+                    type="text"
+                    placeholder="Unit"
+                    value={item.unit}
+                    onChange={(e) => onItemChange(idx, "unit", e.target.value)}
+                    className="w-full text-center px-2 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
+                  />
+                </td>
+
+                <td className="py-2 px-2 align-top">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="Rate"
+                    value={item.unitPrice === "" ? "" : item.unitPrice}
+                    onChange={(e) =>
+                      onItemChange(idx, "unitPrice", e.target.value === "" ? "" : parseFloat(e.target.value))
+                    }
+                    className="w-full text-right px-2.5 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition font-mono"
+                  />
+                </td>
+
+                <td
+                  className="py-2 px-3 align-top text-right font-mono text-sm font-semibold pt-3.5"
+                  style={{ color: amountColor }}
+                >
+                  {formatINR(itemAmount)}
+                </td>
+
+                <td className="py-2 px-1 align-top text-center pt-2.5">
+                  <button
+                    type="button"
+                    onClick={() => onRemoveItem(idx)}
+                    className="w-8 h-8 inline-flex items-center justify-center text-[var(--text-muted)] hover:text-red-400 transition"
+                    aria-label="Remove item"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function CreateTransactionModalContent({
@@ -51,14 +188,61 @@ function CreateTransactionModalContent({
   const createTx = useCreateCustomerTransaction(customerId);
   const isSubmitting = externalIsPending ?? createTx.isPending;
 
-  const { data: prodData } = useProducts({ limit: 100, isActive: true });
-  const catalogProducts: CatalogProduct[] =
-    (prodData as { data?: { data?: CatalogProduct[] } | CatalogProduct[] })?.data &&
-    Array.isArray((prodData as { data?: { data?: CatalogProduct[] } }).data?.data)
-      ? (prodData as { data: { data: CatalogProduct[] } }).data.data
-      : Array.isArray((prodData as { data?: CatalogProduct[] })?.data)
-      ? (prodData as { data: CatalogProduct[] }).data
-      : [];
+  const { data: prodData } = useProducts({ limit: 100, isActive: true, isDraft: false });
+  const { data: warehouseData } = useWarehouses();
+
+  const warehouses = useMemo(() => {
+    const w = warehouseData as any;
+    if (Array.isArray(w?.data)) return w.data;
+    if (Array.isArray(w)) return w;
+    return [];
+  }, [warehouseData]);
+
+  const [warehouseId, setWarehouseId] = useState<string>("");
+
+  useEffect(() => {
+    if (warehouses.length > 0 && !warehouseId) {
+      const def = warehouses.find((w: any) => w.isDefault) || warehouses[0];
+      if (def) setWarehouseId(def.id);
+    }
+  }, [warehouses, warehouseId]);
+
+  const rawProducts = useMemo(() => {
+    const p = prodData as any;
+    if (Array.isArray(p?.data?.data)) return p.data.data;
+    if (Array.isArray(p?.data)) return p.data;
+    if (Array.isArray(p)) return p;
+    return [];
+  }, [prodData]);
+
+  const catalogOptions = useMemo<CatalogOption[]>(() => {
+    const list: CatalogOption[] = [];
+    for (const prod of rawProducts) {
+      if (prod.hasVariants && Array.isArray(prod.variants) && prod.variants.length > 0) {
+        for (const v of prod.variants) {
+          list.push({
+            key: `${prod.id}:${v.id}`,
+            productId: prod.id,
+            variantId: v.id,
+            name: `${prod.name} (${v.name})`,
+            displayName: `${prod.name} — ${v.name}`,
+            unit: prod.unit || "PCS",
+            sellingPrice: typeof v.sellingPrice === "number" ? v.sellingPrice : (prod.sellingPrice || 0),
+          });
+        }
+      } else {
+        list.push({
+          key: prod.id,
+          productId: prod.id,
+          name: prod.name,
+          displayName: prod.name,
+          unit: prod.unit || "PCS",
+          sellingPrice: prod.sellingPrice || 0,
+        });
+      }
+    }
+    return list;
+  }, [rawProducts]);
 
   const [type, setType] = useState<CustomerTransactionType>(startingType);
 
@@ -113,23 +297,39 @@ function CreateTransactionModalContent({
     );
   };
 
-  const handleProductSelect = (index: number, productName: string) => {
-    const product = catalogProducts.find(
-      (p: CatalogProduct) => p.name && p.name.toLowerCase() === productName.toLowerCase()
-    );
+  const handleProductSelect = (index: number, optionKey: string) => {
+    if (!optionKey) {
+      setItems((prev) =>
+        prev.map((item, i) =>
+          i === index ? { ...item, productId: undefined, variantId: undefined, productName: "" } : item
+        )
+      );
+      return;
+    }
+
+    if (optionKey === "__CUSTOM__") {
+      setItems((prev) =>
+        prev.map((item, i) =>
+          i === index ? { ...item, productId: undefined, variantId: undefined } : item
+        )
+      );
+      return;
+    }
+
+    const opt = catalogOptions.find((o) => o.key === optionKey);
+    if (!opt) return;
+
     setItems((prev) =>
       prev.map((item, i) => {
         if (i !== index) return item;
-        if (product) {
-          return {
-            ...item,
-            productId: product.id,
-            productName: product.name,
-            unit: product.unit || "PCS",
-            unitPrice: product.sellingPrice || 0,
-          };
-        }
-        return { ...item, productName };
+        return {
+          ...item,
+          productId: opt.productId,
+          variantId: opt.variantId,
+          productName: opt.name,
+          unit: opt.unit || "PCS",
+          unitPrice: opt.sellingPrice || 0,
+        };
       })
     );
   };
@@ -148,6 +348,7 @@ function CreateTransactionModalContent({
           const u = Number(it.unitPrice) || 0;
           return {
             productId: it.productId,
+            variantId: it.variantId,
             productName: it.productName.trim(),
             quantity: q,
             unitPrice: u,
@@ -173,6 +374,7 @@ function CreateTransactionModalContent({
             const u = Number(it.unitPrice) || 0;
             return {
               productId: it.productId,
+              variantId: it.variantId,
               productName: it.productName.trim(),
               quantity: q,
               unitPrice: u,
@@ -216,6 +418,7 @@ function CreateTransactionModalContent({
       reference: reference.trim() || undefined,
       notes: notes.trim() || undefined,
       items: payloadItems,
+      warehouseId: (type === "SALE" || type === "RETURN") ? (warehouseId || undefined) : undefined,
     };
 
     if (onSubmit) {
@@ -251,7 +454,7 @@ function CreateTransactionModalContent({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-3xl bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-4xl bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -375,6 +578,40 @@ function CreateTransactionModalContent({
           {/* ============================================================ */}
           {type === "SALE" && (
             <div className="space-y-4">
+              {/* Quick Sale Auto-Sync & Warehouse Selector Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-[var(--gold)]/10 border border-[var(--gold)]/25">
+                <div>
+                  <div className="text-xs font-semibold text-[var(--gold)] flex items-center gap-1.5">
+                    <span>⚡ Quick Sale</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--gold)]/20 uppercase tracking-wide font-bold">
+                      Auto-Deducts Stock & Issues Invoice
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                    Deducts warehouse inventory, records delivered order & official invoice, and posts to ledger.
+                  </p>
+                </div>
+
+                {warehouses.length > 0 && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-[var(--text-secondary)] whitespace-nowrap flex items-center gap-1 font-medium">
+                      <Warehouse size={13} className="text-[var(--gold)]" /> Warehouse:
+                    </span>
+                    <select
+                      value={warehouseId}
+                      onChange={(e) => setWarehouseId(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none cursor-pointer"
+                    >
+                      {warehouses.map((w: any) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name} {w.isDefault ? "(Default)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
                   Line Items (सामान का विवरण)
@@ -388,86 +625,14 @@ function CreateTransactionModalContent({
                 </button>
               </div>
 
-              {/* Datalist for Product Master Autocomplete */}
-              {catalogProducts.length > 0 && (
-                <datalist id="catalog-products-list">
-                  {catalogProducts.map((p: CatalogProduct) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name} — ₹{p.sellingPrice} / {p.unit}
-                    </option>
-                  ))}
-                </datalist>
-              )}
-
-              <div className="space-y-2">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold px-1">
-                  <div>Item Name / Description (Hindi/Eng)</div>
-                  <div>Quantity</div>
-                  <div>Unit</div>
-                  <div>Rate (₹)</div>
-                  <div className="text-right">Amount (₹)</div>
-                  <div className="w-8"></div>
-                </div>
-
-                {items.map((item, idx) => (
-                  <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 items-center">
-                    <input
-                      type="text"
-                      list="catalog-products-list"
-                      placeholder="Item Name (e.g. अलमारी के लिए पत्थर)"
-                      value={item.productName}
-                      onChange={(e) => handleProductSelect(idx, e.target.value)}
-                      className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                    />
-
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="any"
-                      placeholder="Qty"
-                      value={item.quantity === "" ? "" : item.quantity}
-                      onChange={(e) =>
-                        handleItemChange(idx, "quantity", e.target.value === "" ? "" : parseFloat(e.target.value))
-                      }
-                      className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                    />
-
-                    <input
-                      type="text"
-                      placeholder="Unit"
-                      value={item.unit}
-                      onChange={(e) => handleItemChange(idx, "unit", e.target.value)}
-                      className="px-2 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                    />
-
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="Rate"
-                      value={item.unitPrice === "" ? "" : item.unitPrice}
-                      onChange={(e) =>
-                        handleItemChange(idx, "unitPrice", e.target.value === "" ? "" : parseFloat(e.target.value))
-                      }
-                      className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                    />
-
-                    <div className="text-right font-mono text-sm font-semibold text-[var(--text-primary)] px-2">
-                      {formatINR((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={items.length === 1 && !item.productName}
-                      onClick={() => handleRemoveItem(idx)}
-                      className="w-8 h-8 flex items-center justify-center text-[var(--text-muted)] hover:text-red-400 transition disabled:opacity-30"
-                      aria-label="Remove item"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <LineItemsTable
+                items={items}
+                catalogOptions={catalogOptions}
+                onProductSelect={handleProductSelect}
+                onItemChange={handleItemChange}
+                onRemoveItem={handleRemoveItem}
+                amountColor="var(--green-bright)"
+              />
 
               {/* Total Summary Bar */}
               <div className="flex justify-between items-center p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border)]">
@@ -525,66 +690,14 @@ function CreateTransactionModalContent({
                 </label>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold px-1">
-                    <div>Item Name / Hindi Particulars</div>
-                    <div>Qty</div>
-                    <div>Unit</div>
-                    <div>Rate (₹)</div>
-                    <div className="text-right">Amount (₹)</div>
-                    <div className="w-8"></div>
-                  </div>
-
-                  {items.map((item, idx) => (
-                    <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 items-center">
-                      <input
-                        type="text"
-                        placeholder="Item Name (e.g. टूटा हुआ पत्थर)"
-                        value={item.productName}
-                        onChange={(e) => handleItemChange(idx, "productName", e.target.value)}
-                        className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="any"
-                        placeholder="Qty"
-                        value={item.quantity === "" ? "" : item.quantity}
-                        onChange={(e) =>
-                          handleItemChange(idx, "quantity", e.target.value === "" ? "" : parseFloat(e.target.value))
-                        }
-                        className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Unit"
-                        value={item.unit}
-                        onChange={(e) => handleItemChange(idx, "unit", e.target.value)}
-                        className="px-2 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder="Rate"
-                        value={item.unitPrice === "" ? "" : item.unitPrice}
-                        onChange={(e) =>
-                          handleItemChange(idx, "unitPrice", e.target.value === "" ? "" : parseFloat(e.target.value))
-                        }
-                        className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <div className="text-right font-mono text-sm font-semibold text-[var(--orange)] px-2">
-                        {formatINR((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        className="w-8 h-8 flex items-center justify-center text-[var(--text-muted)] hover:text-red-400"
-                        aria-label="Remove item"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
+                  <LineItemsTable
+                    items={items}
+                    catalogOptions={catalogOptions}
+                    onProductSelect={handleProductSelect}
+                    onItemChange={handleItemChange}
+                    onRemoveItem={handleRemoveItem}
+                    amountColor="var(--orange)"
+                  />
                   <button
                     type="button"
                     onClick={handleAddItem}

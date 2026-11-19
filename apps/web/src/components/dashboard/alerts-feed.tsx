@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Clock } from "lucide-react";
 
 interface Alert {
@@ -13,6 +13,8 @@ interface Alert {
 }
 
 export function AlertsFeed({ alerts, t }: { alerts: Alert[]; t: (key: string) => string }) {
+    const router = useRouter();
+
     return (
         <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5">
             <div className="flex items-center justify-between mb-4">
@@ -23,7 +25,23 @@ export function AlertsFeed({ alerts, t }: { alerts: Alert[]; t: (key: string) =>
                 {alerts.length === 0 ? (
                     <p className="text-sm text-[var(--text-muted)] py-6 text-center">No active alerts requiring attention</p>
                 ) : alerts.map((alert, i) => (
-                    <Link key={i} href={alert.href ?? "#"} className="block group">
+                    <div
+                        key={i}
+                        role={alert.href && alert.href !== "#" ? "button" : undefined}
+                        tabIndex={alert.href && alert.href !== "#" ? 0 : undefined}
+                        onClick={() => {
+                            if (alert.href && alert.href !== "#") {
+                                router.push(alert.href);
+                            }
+                        }}
+                        onKeyDown={(e) => {
+                            if ((e.key === "Enter" || e.key === " ") && alert.href && alert.href !== "#") {
+                                e.preventDefault();
+                                router.push(alert.href);
+                            }
+                        }}
+                        className={`block group text-left ${alert.href && alert.href !== "#" ? "cursor-pointer" : ""}`}
+                    >
                         <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-secondary)]/50 border border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
                             <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: alert.color }} />
                             <div className="flex-1 min-w-0">
@@ -33,12 +51,26 @@ export function AlertsFeed({ alerts, t }: { alerts: Alert[]; t: (key: string) =>
                                     <div className="flex items-center gap-3">
                                         {alert.secondaryAction && (
                                             alert.secondaryAction.href ? (
-                                                <Link href={alert.secondaryAction.href} className="flex items-center gap-1 px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--gold)]/30 transition shadow-sm z-10 relative">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        router.push(alert.secondaryAction!.href!);
+                                                    }}
+                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--gold)]/30 transition shadow-sm z-10 relative"
+                                                >
                                                     {alert.secondaryAction.icon && <alert.secondaryAction.icon size={10} />}
                                                     {alert.secondaryAction.label}
-                                                </Link>
+                                                </button>
                                             ) : (
-                                                <button onClick={(e) => { e.preventDefault(); alert.secondaryAction?.onClick?.(e); }} className="flex items-center gap-1 px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--gold)]/30 transition shadow-sm z-10 relative">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        alert.secondaryAction?.onClick?.(e);
+                                                    }}
+                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--gold)]/30 transition shadow-sm z-10 relative"
+                                                >
                                                     {alert.secondaryAction.icon && <alert.secondaryAction.icon size={10} />}
                                                     {alert.secondaryAction.label}
                                                 </button>
@@ -49,7 +81,7 @@ export function AlertsFeed({ alerts, t }: { alerts: Alert[]; t: (key: string) =>
                                 </div>
                             </div>
                         </div>
-                    </Link>
+                    </div>
                 ))}
             </div>
         </div>

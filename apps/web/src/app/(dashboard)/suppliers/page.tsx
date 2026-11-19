@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, Search, X, Truck, Clock, Star, MapPin, FileSpreadsheet } from "lucide-react";
 import { useSuppliers, useCreateSupplier } from "@/hooks/api-hooks";
 import { SupplierStatementModal } from "./[id]/components/supplier-statement-modal";
+import { EditSupplierModal } from "@/components/modals/EditSupplierModal";
 
 /* ─── Add Supplier Modal ─── */
 function AddSupplierModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -33,7 +34,7 @@ function AddSupplierModal({ open, onClose }: { open: boolean; onClose: () => voi
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Add Supplier</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
@@ -70,6 +71,7 @@ function AddSupplierModal({ open, onClose }: { open: boolean; onClose: () => voi
 /* ─── Main Page ─── */
 export default function SuppliersPage() {
     const [showAdd, setShowAdd] = useState(false);
+    const [editingSupplier, setEditingSupplier] = useState<any>(null);
     const [statementSupplier, setStatementSupplier] = useState<{ id: string; name: string } | null>(null);
     const [search, setSearch] = useState("");
     const { data, isLoading } = useSuppliers();
@@ -105,7 +107,7 @@ export default function SuppliersPage() {
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Suppliers</h1>
+                <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Suppliers</h1>
                 <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] transition"><Plus size={16} /> Add Supplier</button>
             </div>
 
@@ -174,8 +176,16 @@ export default function SuppliersPage() {
                                         <div className="flex items-center justify-end gap-3">
                                             <button
                                                 type="button"
+                                                onClick={() => setEditingSupplier(s)}
+                                                className="text-xs text-[var(--gold)] hover:underline font-medium cursor-pointer"
+                                                title="Edit Supplier Details"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                type="button"
                                                 onClick={() => setStatementSupplier({ id: s.id as string, name: s.name as string })}
-                                                className="text-xs text-[var(--gold)] hover:underline flex items-center gap-1 font-medium"
+                                                className="text-xs text-[var(--text-secondary)] hover:text-[var(--gold)] flex items-center gap-1 font-medium cursor-pointer"
                                                 title="View Account Summary Statement"
                                             >
                                                 <FileSpreadsheet size={13} /> Statement
@@ -189,6 +199,13 @@ export default function SuppliersPage() {
                 </table>
             </div>
             <AddSupplierModal open={showAdd} onClose={() => setShowAdd(false)} />
+            {editingSupplier && (
+                <EditSupplierModal
+                    open={Boolean(editingSupplier)}
+                    onClose={() => setEditingSupplier(null)}
+                    supplier={editingSupplier}
+                />
+            )}
             {statementSupplier && (
                 <SupplierStatementModal
                     open={Boolean(statementSupplier)}

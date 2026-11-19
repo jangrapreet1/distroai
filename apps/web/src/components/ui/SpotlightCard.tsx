@@ -12,7 +12,7 @@ interface SpotlightCardProps extends HTMLMotionProps<"div"> {
 export function SpotlightCard({
     children,
     className = "",
-    spotlightColor = "rgba(201, 168, 76, 0.12)",
+    spotlightColor = "rgba(59, 130, 246, 0.1)",
     ...props
 }: SpotlightCardProps) {
     const cardRef = useRef<HTMLDivElement>(null);

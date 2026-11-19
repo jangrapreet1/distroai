@@ -1,6 +1,7 @@
 import { IsString, IsNumber, IsOptional, IsBoolean, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ToBoolean } from '../../common/decorators/to-boolean.decorator';
 
 export class AdjustInventoryDto {
     @IsString() productId!: string;
@@ -28,7 +29,11 @@ export class ListTransactionsQueryDto {
 
 export class InventoryQueryDto {
     @ApiPropertyOptional() @IsOptional() @IsString() warehouseId?: string;
-    @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) lowStockOnly?: boolean;
+    @ApiPropertyOptional()
+    @IsOptional()
+    @ToBoolean()
+    @IsBoolean()
+    lowStockOnly?: boolean;
 }
 
 export class CreateWarehouseDto {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { indianAmountToWords } from './amount-to-words';
+import { InvoiceCustomOptions } from './dto/custom-invoice-options.dto';
 
 /* ─── Color palette ─── */
 const GOLD = '#C9A84C';
@@ -23,6 +24,7 @@ const s = StyleSheet.create({
     orgDetail: { fontSize: 8.5, color: MUTED, marginTop: 1.5 },
     headerRight: { textAlign: 'right', alignItems: 'flex-end' },
     invoiceTitle: { fontSize: 20, fontWeight: 'bold', color: DARK, letterSpacing: 1 },
+    invoiceSubtitle: { fontSize: 8, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
     statusBadge: { fontSize: 8, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginTop: 4, alignSelf: 'flex-end' },
     metaLabel: { fontSize: 8, color: MUTED, marginTop: 2 },
     metaValue: { fontWeight: 'bold' },
@@ -79,6 +81,11 @@ const s = StyleSheet.create({
     sigLabel: { fontSize: 8, color: MUTED },
     sigName: { fontSize: 9, fontWeight: 'bold', marginBottom: 2 },
 
+    /* Notes Box */
+    notesBox: { backgroundColor: '#fbfaf8', border: `0.5pt solid ${BORDER}`, borderRadius: 4, padding: 8, marginBottom: 12 },
+    notesTag: { fontSize: 7, fontWeight: 'bold', color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+    notesText: { fontSize: 8, color: '#444', lineHeight: 1.4 },
+
     /* Terms */
     termsSection: { marginTop: 8, paddingTop: 8, borderTop: `0.5pt solid ${BORDER}` },
     termsTitle: { fontSize: 7, fontWeight: 'bold', color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
@@ -104,63 +111,102 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
     CANCELLED: { bg: '#eee', text: '#888' },
 };
 
-const InvoicePDF = ({ invoice }: { invoice: any }) => {
+interface InvoicePDFProps {
+    invoice: any;
+    options?: InvoiceCustomOptions;
+}
+
+const InvoicePDF = ({ invoice, options }: InvoicePDFProps) => {
     const org = invoice.organization ?? {};
     const customer = invoice.customer ?? {};
     const settings = org.settings ?? {};
     const items: any[] = invoice.items ?? [];
 
+    // Merge runtime options with saved invoice options
+    const rawOptions: InvoiceCustomOptions = {
+        ...(typeof invoice.customOptions === 'object' && invoice.customOptions ? invoice.customOptions : {}),
+        ...(options ?? {}),
+    };
+
+    const showGst = rawOptions.showGstNumber !== false;
+    const showPan = rawOptions.showPanNumber !== false;
+    const showHsn = rawOptions.showHsnCode !== false;
+    const showDisc = rawOptions.showDiscountCol !== false;
+    const showTax = rawOptions.showTaxBreakup !== false;
+    const showUnit = rawOptions.showUnit !== false;
+    const showPlaceOfSupply = rawOptions.showPlaceOfSupply !== false;
+    const showShipTo = rawOptions.showShipTo !== false;
+    const showBank = rawOptions.showBankDetails !== false;
+    const showUpi = rawOptions.showUpiQr !== false;
+    const showAmountWords = rawOptions.showAmountInWords !== false;
+    const showTerms = rawOptions.showTerms !== false;
+    const showSignatory = rawOptions.showSignatory !== false;
+
+    const title = rawOptions.title || (showGst ? 'TAX INVOICE' : 'BILL OF SUPPLY');
+    const subtitle = rawOptions.subtitle;
+    const customTerms = rawOptions.customTerms;
+    const customNotes = rawOptions.customNotes || invoice.notes;
+    const accentColor = rawOptions.accentColor || GOLD;
+
     const isInterState = Number(invoice.igstAmount ?? 0) > 0 || (Number(invoice.cgstAmount ?? 0) === 0 && (org.state || '').trim().toLowerCase() !== (customer.state || '').trim().toLowerCase());
     const amountInWords = indianAmountToWords(Number(invoice.totalAmount ?? 0));
 
-    const totalTax = Number(invoice.cgstAmount ?? 0) + Number(invoice.sgstAmount ?? 0) + Number(invoice.igstAmount ?? 0) + Number(invoice.cessAmount ?? 0);
-
     const statusColor = STATUS_COLORS[invoice.status] ?? STATUS_COLORS.DRAFT;
 
-    const hasPaymentDetails = settings.bankName || settings.bankAccountNumber || settings.upiId || invoice.upiQrDataUri;
+    const hasBankDetails = showBank && (settings.bankName || settings.bankAccountNumber);
+    const hasUpiDetails = showUpi && (settings.upiId || invoice.upiQrDataUri);
+    const hasPaymentDetails = hasBankDetails || hasUpiDetails;
 
     return (
         <Document>
             <Page size="A4" style={s.page}>
                 {/* ─── Header ─── */}
-                <View style={s.header}>
+                <View style={[s.header, { borderBottomColor: accentColor }]}>
                     <View style={s.headerLeft}>
                         {org.logoUrl && <Image src={org.logoUrl} style={s.logo} />}
                         <View>
                             <Text style={s.brandName}>{org.name || 'Company'}</Text>
                             <Text style={s.orgDetail}>{[org.address, org.city, org.state, org.pincode].filter(Boolean).join(', ')}</Text>
-                            {org.gstNumber && <Text style={s.orgDetail}>GSTIN: <Text style={{ fontWeight: 'bold' }}>{org.gstNumber}</Text></Text>}
-                            {org.panNumber && <Text style={s.orgDetail}>PAN: {org.panNumber}</Text>}
+                            {showGst && org.gstNumber && <Text style={s.orgDetail}>GSTIN: <Text style={{ fontWeight: 'bold' }}>{org.gstNumber}</Text></Text>}
+                            {showPan && org.panNumber && <Text style={s.orgDetail}>PAN: {org.panNumber}</Text>}
                             {org.phone && <Text style={s.orgDetail}>Phone: {org.phone}</Text>}
                             {org.email && <Text style={s.orgDetail}>Email: {org.email}</Text>}
                         </View>
                     </View>
                     <View style={s.headerRight}>
-                        <Text style={s.invoiceTitle}>TAX INVOICE</Text>
+                        <Text style={s.invoiceTitle}>{title}</Text>
+                        {subtitle && <Text style={s.invoiceSubtitle}>{subtitle}</Text>}
                         <View style={[s.statusBadge, { backgroundColor: statusColor.bg }]}>
                             <Text style={{ color: statusColor.text, fontSize: 8, fontWeight: 'bold' }}>{invoice.status}</Text>
                         </View>
                         <Text style={s.metaLabel}>Invoice #: <Text style={s.metaValue}>{invoice.invoiceNumber}</Text></Text>
+                        {invoice.eWayBillNumber && (
+                            <Text style={s.metaLabel}>e-Way Bill #: <Text style={s.metaValue}>{invoice.eWayBillNumber}</Text></Text>
+                        )}
                         <Text style={s.metaLabel}>Date: {new Date(invoice.invoiceDate).toLocaleDateString('en-IN')}</Text>
                         <Text style={s.metaLabel}>Due: {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-IN') : 'N/A'}</Text>
-                        <Text style={s.metaLabel}>Place of Supply: {invoice.placeOfSupply || customer.state || org.state || ''}</Text>
+                        {showPlaceOfSupply && (
+                            <Text style={s.metaLabel}>Place of Supply: {invoice.placeOfSupply || customer.state || org.state || ''}</Text>
+                        )}
                     </View>
                 </View>
 
                 {/* ─── Bill To / Ship To ─── */}
                 <View style={s.partyRow}>
-                    <View style={s.partyBox}>
-                        <Text style={s.partyTag}>Bill To</Text>
+                    <View style={[s.partyBox, { borderLeftColor: accentColor, borderLeftWidth: 2 }]}>
+                        <Text style={[s.partyTag, { color: accentColor }]}>Bill To</Text>
                         <Text style={s.partyName}>{customer.name || 'Customer'}</Text>
                         <Text style={s.partyText}>{[customer.address, customer.city, customer.state].filter(Boolean).join(', ')}</Text>
-                        {customer.gstNumber && <Text style={s.partyText}>GSTIN: {customer.gstNumber}</Text>}
+                        {showGst && (rawOptions.buyerGstNumber || customer.gstNumber) && <Text style={s.partyText}>GSTIN: {rawOptions.buyerGstNumber || customer.gstNumber}</Text>}
                         {customer.phone && <Text style={s.partyText}>Phone: {customer.phone}</Text>}
                     </View>
-                    <View style={s.partyBox}>
-                        <Text style={s.partyTag}>Ship To</Text>
-                        <Text style={s.partyName}>{customer.name || 'Customer'}</Text>
-                        <Text style={s.partyText}>{[customer.address, customer.city, customer.state].filter(Boolean).join(', ')}</Text>
-                    </View>
+                    {showShipTo && (
+                        <View style={s.partyBox}>
+                            <Text style={[s.partyTag, { color: accentColor }]}>Ship To</Text>
+                            <Text style={s.partyName}>{customer.name || 'Customer'}</Text>
+                            <Text style={s.partyText}>{[customer.address, customer.city, customer.state].filter(Boolean).join(', ')}</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* ─── Items Table ─── */}
@@ -169,24 +215,26 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                     <View style={s.thRow}>
                         <Text style={[s.thCell, s.colIdx]}>#</Text>
                         <Text style={[s.thCell, s.colDesc]}>Description</Text>
-                        <Text style={[s.thCell, s.colHsn]}>HSN</Text>
+                        {showHsn && <Text style={[s.thCell, s.colHsn]}>HSN</Text>}
                         <Text style={[s.thCell, s.colQty]}>Qty</Text>
-                        <Text style={[s.thCell, s.colUnit]}>Unit</Text>
+                        {showUnit && <Text style={[s.thCell, s.colUnit]}>Unit</Text>}
                         <Text style={[s.thCell, s.colRate]}>Rate</Text>
-                        <Text style={[s.thCell, s.colDisc]}>Disc.</Text>
+                        {showDisc && <Text style={[s.thCell, s.colDisc]}>Disc.</Text>}
                         <Text style={[s.thCell, s.colTaxable]}>Taxable</Text>
-                        {isInterState ? (
-                            <>
-                                <Text style={[s.thCell, s.colIgstPct]}>IGST%</Text>
-                                <Text style={[s.thCell, s.colIgstAmt]}>IGST</Text>
-                            </>
-                        ) : (
-                            <>
-                                <Text style={[s.thCell, s.colTaxPct]}>CGST%</Text>
-                                <Text style={[s.thCell, s.colTaxAmt]}>CGST</Text>
-                                <Text style={[s.thCell, s.colTaxPct]}>SGST%</Text>
-                                <Text style={[s.thCell, s.colTaxAmt]}>SGST</Text>
-                            </>
+                        {showTax && (
+                            isInterState ? (
+                                <>
+                                    <Text style={[s.thCell, s.colIgstPct]}>IGST%</Text>
+                                    <Text style={[s.thCell, s.colIgstAmt]}>IGST</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={[s.thCell, s.colTaxPct]}>CGST%</Text>
+                                    <Text style={[s.thCell, s.colTaxAmt]}>CGST</Text>
+                                    <Text style={[s.thCell, s.colTaxPct]}>SGST%</Text>
+                                    <Text style={[s.thCell, s.colTaxAmt]}>SGST</Text>
+                                </>
+                            )
                         )}
                         <Text style={[s.thCell, s.colTotal]}>Total</Text>
                     </View>
@@ -198,24 +246,26 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                             <View key={idx} style={[s.tdRow, idx % 2 === 1 ? s.tdRowAlt : {}]} wrap={false}>
                                 <Text style={[s.tdCell, s.colIdx]}>{idx + 1}</Text>
                                 <Text style={[s.tdCell, s.colDesc]}>{item.product?.name || item.description || 'Item'}</Text>
-                                <Text style={[s.tdCell, s.colHsn]}>{item.hsnCode || item.product?.hsnCode || ''}</Text>
+                                {showHsn && <Text style={[s.tdCell, s.colHsn]}>{item.hsnCode || item.product?.hsnCode || ''}</Text>}
                                 <Text style={[s.tdCell, s.colQty]}>{item.quantity}</Text>
-                                <Text style={[s.tdCell, s.colUnit]}>{item.unit}</Text>
+                                {showUnit && <Text style={[s.tdCell, s.colUnit]}>{item.unit}</Text>}
                                 <Text style={[s.tdCell, s.colRate]}>{fmt(Number(item.price ?? 0))}</Text>
-                                <Text style={[s.tdCell, s.colDisc]}>{fmt(Number(item.discount ?? 0))}</Text>
+                                {showDisc && <Text style={[s.tdCell, s.colDisc]}>{fmt(Number(item.discount ?? 0))}</Text>}
                                 <Text style={[s.tdCell, s.colTaxable]}>{fmt(Number(item.taxableAmt ?? 0))}</Text>
-                                {isInterState ? (
-                                    <>
-                                        <Text style={[s.tdCell, s.colIgstPct]}>{gstRate}%</Text>
-                                        <Text style={[s.tdCell, s.colIgstAmt]}>{fmt(Number(item.igstAmount ?? 0))}</Text>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Text style={[s.tdCell, s.colTaxPct]}>{gstRate / 2}%</Text>
-                                        <Text style={[s.tdCell, s.colTaxAmt]}>{fmt(Number(item.cgstAmount ?? 0))}</Text>
-                                        <Text style={[s.tdCell, s.colTaxPct]}>{gstRate / 2}%</Text>
-                                        <Text style={[s.tdCell, s.colTaxAmt]}>{fmt(Number(item.sgstAmount ?? 0))}</Text>
-                                    </>
+                                {showTax && (
+                                    isInterState ? (
+                                        <>
+                                            <Text style={[s.tdCell, s.colIgstPct]}>{gstRate}%</Text>
+                                            <Text style={[s.tdCell, s.colIgstAmt]}>{fmt(Number(item.igstAmount ?? 0))}</Text>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Text style={[s.tdCell, s.colTaxPct]}>{gstRate / 2}%</Text>
+                                            <Text style={[s.tdCell, s.colTaxAmt]}>{fmt(Number(item.cgstAmount ?? 0))}</Text>
+                                            <Text style={[s.tdCell, s.colTaxPct]}>{gstRate / 2}%</Text>
+                                            <Text style={[s.tdCell, s.colTaxAmt]}>{fmt(Number(item.sgstAmount ?? 0))}</Text>
+                                        </>
+                                    )
                                 )}
                                 <Text style={[s.tdCell, s.colTotal]}>{fmt(Number(item.totalAmount ?? 0))}</Text>
                             </View>
@@ -227,27 +277,36 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                 <View style={s.totalsSection}>
                     <View style={s.totalsBox}>
                         <View style={s.totalsRow}><Text>Subtotal</Text><Text>{fmt(Number(invoice.subtotal ?? 0))}</Text></View>
-                        {Number(invoice.discountAmount ?? 0) > 0 && (
+                        {showDisc && Number(invoice.discountAmount ?? 0) > 0 && (
                             <View style={s.totalsRow}><Text>Discount</Text><Text>- {fmt(Number(invoice.discountAmount))}</Text></View>
                         )}
                         <View style={s.totalsRow}><Text style={{ color: MUTED }}>Taxable Amount</Text><Text>{fmt(Number(invoice.taxableAmount ?? 0))}</Text></View>
-                        {isInterState ? (
-                            <View style={s.totalsRow}><Text style={{ color: MUTED }}>IGST</Text><Text>{fmt(Number(invoice.igstAmount ?? 0))}</Text></View>
-                        ) : (
-                            <>
-                                <View style={s.totalsRow}><Text style={{ color: MUTED }}>CGST</Text><Text>{fmt(Number(invoice.cgstAmount ?? 0))}</Text></View>
-                                <View style={s.totalsRow}><Text style={{ color: MUTED }}>SGST</Text><Text>{fmt(Number(invoice.sgstAmount ?? 0))}</Text></View>
-                            </>
+                        {showTax && (
+                            isInterState ? (
+                                <View style={s.totalsRow}><Text style={{ color: MUTED }}>IGST</Text><Text>{fmt(Number(invoice.igstAmount ?? 0))}</Text></View>
+                            ) : (
+                                <>
+                                    <View style={s.totalsRow}><Text style={{ color: MUTED }}>CGST</Text><Text>{fmt(Number(invoice.cgstAmount ?? 0))}</Text></View>
+                                    <View style={s.totalsRow}><Text style={{ color: MUTED }}>SGST</Text><Text>{fmt(Number(invoice.sgstAmount ?? 0))}</Text></View>
+                                </>
+                            )
                         )}
-                        {Number(invoice.cessAmount ?? 0) > 0 && (
+                        {showTax && Number(invoice.cessAmount ?? 0) > 0 && (
                             <View style={s.totalsRow}><Text style={{ color: MUTED }}>Cess</Text><Text>{fmt(Number(invoice.cessAmount))}</Text></View>
                         )}
 
-                        <View style={s.grandTotalRow}>
+                        {rawOptions.roundOffAmount !== undefined && rawOptions.roundOffAmount !== 0 && (
+                            <View style={s.totalsRow}>
+                                <Text style={{ color: MUTED }}>Round Off / Adjustment</Text>
+                                <Text>{rawOptions.roundOffAmount > 0 ? `+${fmt(rawOptions.roundOffAmount)}` : fmt(rawOptions.roundOffAmount)}</Text>
+                            </View>
+                        )}
+
+                        <View style={[s.grandTotalRow, { borderTopColor: accentColor }]}>
                             <Text>Grand Total</Text>
                             <Text>₹{fmt(Number(invoice.totalAmount ?? 0))}</Text>
                         </View>
-                        <Text style={s.amountWords}>{amountInWords}</Text>
+                        {showAmountWords && <Text style={s.amountWords}>{amountInWords}</Text>}
 
                         {Number(invoice.paidAmount ?? 0) > 0 && (
                             <>
@@ -261,7 +320,7 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                 {/* ─── Bank & Dynamic UPI QR ─── */}
                 {hasPaymentDetails && (
                     <View style={s.bankRow}>
-                        {(settings.bankName || settings.bankAccountNumber) && (
+                        {hasBankDetails && (
                             <View style={s.bankBox}>
                                 <Text style={s.bankTag}>Bank Details</Text>
                                 {settings.bankName && <Text style={s.bankText}><Text style={s.bankBold}>{settings.bankName}</Text></Text>}
@@ -270,7 +329,7 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                                 {settings.bankBranch && <Text style={s.bankText}>Branch: {settings.bankBranch}</Text>}
                             </View>
                         )}
-                        {(settings.upiId || invoice.upiQrDataUri) && (
+                        {hasUpiDetails && (
                             <View style={s.upiBox}>
                                 <Text style={s.bankTag}>Scan & Pay via UPI</Text>
                                 {invoice.upiQrDataUri && (
@@ -283,8 +342,16 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                     </View>
                 )}
 
+                {/* ─── Notes / Remarks ─── */}
+                {customNotes && (
+                    <View style={s.notesBox}>
+                        <Text style={s.notesTag}>Notes / Remarks</Text>
+                        <Text style={s.notesText}>{customNotes}</Text>
+                    </View>
+                )}
+
                 {/* ─── E-Invoice ─── */}
-                {invoice.eInvoiceIrn && (
+                {invoice.eInvoiceIrn && showGst && (
                     <View style={s.eInvoiceSection}>
                         {invoice.qrCodeDataUri && <Image src={invoice.qrCodeDataUri} style={s.qrImage} />}
                         <Text style={s.eInvoiceText}>IRN: {invoice.eInvoiceIrn}</Text>
@@ -295,20 +362,34 @@ const InvoicePDF = ({ invoice }: { invoice: any }) => {
                 )}
 
                 {/* ─── Authorized Signatory ─── */}
-                <View style={s.sigBox}>
-                    <Text style={s.sigName}>For {org.name || 'Company'}</Text>
-                    <View style={s.sigLine} />
-                    <Text style={s.sigLabel}>Authorized Signatory</Text>
-                </View>
+                {showSignatory && (
+                    <View style={s.sigBox}>
+                        <Text style={s.sigName}>For {org.name || 'Company'}</Text>
+                        <View style={s.sigLine} />
+                        <Text style={s.sigLabel}>Authorized Signatory</Text>
+                    </View>
+                )}
 
                 {/* ─── Terms & Conditions ─── */}
-                <View style={s.termsSection}>
-                    <Text style={s.termsTitle}>Terms & Conditions</Text>
-                    <Text style={s.termsText}>1. Payment is due by the date mentioned above.</Text>
-                    <Text style={s.termsText}>2. Goods once sold will not be taken back or exchanged.</Text>
-                    <Text style={s.termsText}>3. Subject to local jurisdiction only.</Text>
-                    <Text style={s.termsText}>4. E. & O.E. (Errors and Omissions Excepted)</Text>
-                </View>
+                {showTerms && (
+                    <View style={s.termsSection}>
+                        <Text style={s.termsTitle}>Terms & Conditions</Text>
+                        {customTerms ? (
+                            customTerms.split('\n').map((termLine: string, tIdx: number) => {
+                                const clean = termLine.trim();
+                                if (!clean) return null;
+                                return <Text key={tIdx} style={s.termsText}>{clean}</Text>;
+                            })
+                        ) : (
+                            <>
+                                <Text style={s.termsText}>1. Payment is due by the date mentioned above.</Text>
+                                <Text style={s.termsText}>2. Goods once sold will not be taken back or exchanged.</Text>
+                                <Text style={s.termsText}>3. Subject to local jurisdiction only.</Text>
+                                <Text style={s.termsText}>4. E. & O.E. (Errors and Omissions Excepted)</Text>
+                            </>
+                        )}
+                    </View>
+                )}
 
                 {/* ─── Footer ─── */}
                 <Text style={s.footer}>This is a computer-generated invoice. • Powered by DistroAI</Text>

@@ -24,6 +24,16 @@ rzp-key.csv
 rzp-key.csv*
 *.csv
 *.pdf
+backups/
+*.sql
+
+# Test results & screenshots
+test-results/
+playwright-report/
+screenshots/
+apps/web/screenshots/
+apps/web/test-results/
+apps/web/playwright-report/
 
 # Scratch test files at root
 create-*.ts

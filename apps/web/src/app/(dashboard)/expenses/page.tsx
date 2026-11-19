@@ -67,7 +67,7 @@ export default function ExpensesPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Expenses</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Expenses</h1>
                     <p className="text-[var(--text-muted)] text-sm mt-1">
                         Track operational and purchase order expenses. Scan receipts with AI.
                     </p>
@@ -288,7 +288,7 @@ function AIScanModal({ onClose }: { onClose: () => void }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>AI Receipt Scanner</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
@@ -322,8 +322,8 @@ function AIScanModal({ onClose }: { onClose: () => void }) {
 function AddExpenseModal({ onClose, initialData, prefillPOId }: { onClose: () => void, initialData: any, prefillPOId?: string }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-card)] z-10">
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-primary)] z-10">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>
                         {initialData ? <><Sparkles className="inline w-4 h-4 mr-1 text-[var(--gold)]" /> AI Scanned Expense</> : "Add Expense"}
                     </h2>

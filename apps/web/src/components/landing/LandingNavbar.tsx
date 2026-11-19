@@ -39,8 +39,8 @@ export function LandingNavbar() {
             transition={{ duration: 0.5, ease: "easeOut" }}
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
                 scrolled
-                    ? "bg-[#06060A]/80 backdrop-blur-xl border-b border-white/[0.08] py-3.5 shadow-2xl shadow-black/40"
-                    : "bg-transparent py-6"
+                    ? "bg-[var(--bg-primary)]/95 backdrop-blur-xl border-b border-[var(--border)] py-3 shadow-xl shadow-black/20"
+                    : "bg-[var(--bg-primary)]/95 sm:bg-transparent backdrop-blur-xl sm:backdrop-blur-none border-b border-[var(--border)] sm:border-transparent py-3 sm:py-6"
             }`}
         >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -56,14 +56,14 @@ export function LandingNavbar() {
                 </Link>
 
                 {/* Desktop Navigation Links */}
-                <nav className="hidden md:flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-1.5 backdrop-blur-md">
+                <nav className="hidden lg:flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/[0.08] bg-slate-50/80 dark:bg-white/[0.03] px-3.5 py-1.5 backdrop-blur-md">
                     {navLinks.map((link) => (
                         <motion.a
                             key={link.label}
                             href={link.href}
                             whileHover={{ scale: 1.04 }}
                             transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                            className="px-3.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--gold)] transition-colors duration-150 rounded-full hover:bg-white/[0.03]"
+                            className="px-3 py-1 text-xs font-medium text-slate-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 rounded-full hover:bg-slate-100 dark:hover:bg-white/[0.05]"
                         >
                             {link.label}
                         </motion.a>
@@ -71,13 +71,13 @@ export function LandingNavbar() {
                 </nav>
 
                 {/* Right Actions */}
-                <div className="hidden md:flex items-center gap-3">
+                <div className="hidden md:flex items-center gap-2.5">
                     <motion.button
                         onClick={toggleTheme}
                         whileHover={{ scale: 1.08 }}
                         whileTap={{ scale: 0.94 }}
                         aria-label="Toggle Theme"
-                        className="p-2 rounded-xl border border-white/[0.08] bg-white/[0.02] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-accent)] transition"
+                        className="p-2 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition shadow-2xs"
                     >
                         {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
                     </motion.button>
@@ -86,7 +86,7 @@ export function LandingNavbar() {
                         <motion.div whileHover={{ scale: 1.02, y: -1 }} whileTap={{ scale: 0.98 }}>
                             <Link
                                 href="/dashboard"
-                                className="inline-flex items-center gap-2 py-2 px-4 rounded-xl bg-[var(--gold)] text-[#07070E] font-semibold text-xs hover:bg-[var(--gold-light)] shadow-lg shadow-amber-500/15 transition"
+                                className="inline-flex items-center gap-2 py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 shadow-sm transition"
                             >
                                 <LayoutDashboard size={15} />
                                 <span>Go to Dashboard</span>
@@ -96,16 +96,16 @@ export function LandingNavbar() {
                         <>
                             <Link
                                 href="/login"
-                                className="text-xs font-semibold text-[var(--text-primary)] hover:text-[var(--gold)] px-3 py-2 transition"
+                                className="text-xs font-semibold text-slate-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 transition"
                             >
                                 Sign In
                             </Link>
                             <motion.div whileHover={{ scale: 1.02, y: -1 }} whileTap={{ scale: 0.98 }}>
                                 <Link
                                     href="/register"
-                                    className="inline-flex items-center gap-1.5 py-2 px-4 rounded-xl bg-gradient-to-r from-[var(--gold)] via-[var(--gold-light)] to-[#FFE8A3] text-[#07070E] font-bold text-xs shadow-lg shadow-amber-500/20 hover:opacity-95 transition"
+                                    className="inline-flex items-center gap-1.5 py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700 transition"
                                 >
-                                    <span>Start 14-Day Free Trial</span>
+                                    <span>Start Free Trial</span>
                                     <ArrowRight size={14} />
                                 </Link>
                             </motion.div>

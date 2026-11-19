@@ -12,6 +12,7 @@
  */
 
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import CustomerDetailPage from "@/app/(dashboard)/customers/[id]/page";
 import { CustomerLedgerTable } from "@/app/(dashboard)/customers/[id]/components/customer-ledger-table";
@@ -28,6 +29,8 @@ import {
   useDeleteCustomerTransaction,
   useCreateLocationRequest,
   useProducts,
+  useWarehouses,
+  useCustomerLedgerLogs,
 } from "@/hooks/api-hooks";
 import { buildStatementPdfFilename } from "@/lib/statement-actions";
 import toast from "react-hot-toast";
@@ -50,6 +53,9 @@ describe("Customer Ledger UI Adversarial Stress & Parity Suite (Milestone M3)", 
   const customerId = "cust-adv-999";
   const customerName = "राधेश्याम ट्रेडिंग & संस (Radheshyam Trading & Sons)";
 
+  const testQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const renderWithClient = (ui: React.ReactElement) => render(<QueryClientProvider client={testQueryClient}>{ui}</QueryClientProvider>);
+
   beforeEach(() => {
     jest.clearAllMocks();
     window.URL.createObjectURL = jest.fn().mockReturnValue("blob:http://localhost/mock-blob-uuid");
@@ -68,6 +74,17 @@ describe("Customer Ledger UI Adversarial Stress & Parity Suite (Milestone M3)", 
     (useCreateLocationRequest as jest.Mock).mockReturnValue({
       mutate: jest.fn(),
       isPending: false,
+    });
+
+    (useWarehouses as jest.Mock)?.mockReturnValue?.({
+      data: [],
+      isLoading: false,
+    });
+
+    (useCustomerLedgerLogs as jest.Mock)?.mockReturnValue?.({
+      data: { logs: [], total: 0 },
+      isLoading: false,
+      refetch: jest.fn(),
     });
 
     (useProducts as jest.Mock).mockReturnValue({
@@ -149,7 +166,7 @@ describe("Customer Ledger UI Adversarial Stress & Parity Suite (Milestone M3)", 
         isLoading: false,
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       expect(screen.getByText(/SETTLED \(हिसाब चुकता\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Current Balance: ₹0/)).toBeInTheDocument();
@@ -191,7 +208,7 @@ describe("Customer Ledger UI Adversarial Stress & Parity Suite (Milestone M3)", 
         },
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       expect(screen.getByText(/ADVANCE CREDIT \(जमा शेष\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Current Balance: ₹98,765.43/)).toBeInTheDocument();
@@ -232,7 +249,7 @@ describe("Customer Ledger UI Adversarial Stress & Parity Suite (Milestone M3)", 
         },
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       // Formatted in Indian numbering system: 1,00,00,00,000.5
       expect(screen.getByText(/Current Balance: ₹1,00,00,00,000.5/)).toBeInTheDocument();

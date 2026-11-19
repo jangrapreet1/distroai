@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
     LayoutDashboard, ShoppingCart, FileText, Package, Users, Truck,
     CreditCard, ClipboardList, Receipt, BarChart3, Sparkles, Megaphone,
-    Settings, Menu, X, Search, Command, Sun, Moon, Undo2, PieChart, Clock, Coins, FileSpreadsheet,
+    Settings, Menu, X, Search, Command, Sun, Moon, Undo2, PieChart, Clock, Coins, FileSpreadsheet, ShieldCheck,
+    SlidersHorizontal, Building2, LogOut,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth.store";
@@ -19,6 +20,7 @@ import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { SearchModal } from "@/components/dashboard/search-modal";
 import { UpgradeModal } from "@/components/modals/upgrade-modal";
 import { useTheme } from "@/contexts/ThemeProvider";
+import { MobileBottomNav } from "@/components/dashboard/mobile-bottom-nav";
 
 const NAV_GROUPS: NavGroup[] = [
     {
@@ -46,17 +48,20 @@ const NAV_GROUPS: NavGroup[] = [
         title: "intelligence_title",
         roles: ['OWNER', 'ADMIN', 'MANAGER'],
         items: [
+            { label: "ai_assistant", href: "/ai", icon: Sparkles },
             { label: "analytics", href: "/analytics", icon: BarChart3 },
+            { label: "ads", href: "/ads", icon: Megaphone, roles: ['OWNER', 'ADMIN', 'MANAGER'] },
         ],
     },
     {
-        title: "Reports",
+        title: "reports_title",
         roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'],
         items: [
             { label: "P&L", href: "/reports", icon: PieChart },
             { label: "Aging", href: "/reports/aging", icon: Clock },
             { label: "Commissions", href: "/reports/commissions", icon: Coins, roles: ['OWNER', 'ADMIN'] },
             { label: "Tally Export", href: "/reports/tally", icon: FileSpreadsheet, roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
+            { label: "GST (GSTR-1)", href: "/reports/gst", icon: ShieldCheck, roles: ['OWNER', 'ADMIN', 'ACCOUNTANT'] },
         ],
     },
     {
@@ -76,6 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const accessToken = useAuthStore((s) => s.accessToken);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
     const { theme, toggleTheme } = useTheme();
     const [hydrated, setHydrated] = useState(false);
 
@@ -97,14 +103,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     useEffect(() => {
         if (!hydrated) return;
         const token = useAuthStore.getState().accessToken;
-        if (token && !document.cookie.includes('accessToken=')) {
+        if (token && typeof document !== "undefined" && !document.cookie.includes('accessToken=')) {
             document.cookie = `accessToken=${token};path=/;max-age=2592000;SameSite=Lax`;
         }
     }, [hydrated]);
 
     // Auth gate: if store is hydrated and user is not authenticated, redirect to login
     useEffect(() => {
-        if (hydrated && !isAuthenticated) {
+        if (!hydrated) return;
+        const state = useAuthStore.getState();
+        const hasToken = !!state.accessToken || (typeof document !== "undefined" && document.cookie.includes('accessToken='));
+        if (!isAuthenticated && !hasToken) {
             router.replace(`/login${pathname !== '/' ? `?redirect=${encodeURIComponent(pathname)}` : ''}`);
         }
     }, [hydrated, isAuthenticated, router, pathname]);
@@ -211,11 +220,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {/* Main content */}
                 <div className="flex-1 flex flex-col min-w-0">
                     {/* Topbar */}
-                    <header className="h-14 border-b border-[var(--border)] flex items-center justify-between px-4 lg:px-6 bg-[var(--bg-secondary)]/50 backdrop-blur-lg sticky top-0 z-30">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-[var(--text-secondary)]">
+                    <header className="h-14 border-b border-[var(--border)] flex items-center justify-between px-3 sm:px-4 lg:px-6 bg-[var(--bg-secondary)]/80 backdrop-blur-lg sticky top-0 z-30">
+                        <div className="flex items-center gap-2.5">
+                            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-[var(--text-secondary)] p-1.5 rounded-lg hover:bg-[var(--bg-card)] transition">
                                 <Menu size={20} />
                             </button>
+                            <div className="lg:hidden flex items-center">
+                                <span className="font-bold text-sm sm:text-base text-[var(--text-primary)] capitalize truncate max-w-[160px]">
+                                    {pathname === "/dashboard" || pathname === "/"
+                                        ? "Dashboard"
+                                        : pathname.split("/").filter(Boolean)[0]?.replace(/-/g, " ")}
+                                </span>
+                            </div>
                             <nav className="hidden sm:flex items-center gap-1 text-sm text-[var(--text-muted)]">
                                 <Link href="/dashboard" className="hover:text-[var(--text-secondary)] transition">Home</Link>
                                 {pathname !== "/dashboard" && pathname !== "/" && (
@@ -235,7 +251,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <kbd className="text-[10px] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded border border-[var(--border)]">⌘K</kbd>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setSearchOpen(true)}
+                                className="md:hidden w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition"
+                                title="Search"
+                            >
+                                <Search size={16} />
+                            </button>
                             <button
                                 onClick={toggleTheme}
                                 className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition"
@@ -244,17 +268,78 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
                             </button>
                             <NotificationBell notifications={notifications} />
-                            <div className="w-8 h-8 rounded-full bg-[var(--gold)]/15 flex items-center justify-center text-xs font-semibold text-[var(--gold)]">
-                                {user?.firstName?.[0] ?? "U"}
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                                    className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 active:scale-95 transition"
+                                    title="Account & Preferences"
+                                    aria-label="User Account Menu"
+                                >
+                                    {(user?.firstName?.[0] || "U").toUpperCase()}
+                                </button>
+
+                                {userMenuOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                                        <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#18181b] border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl py-1.5 z-50 animate-in fade-in slide-in-from-top-2">
+                                            <div className="px-3.5 py-2 border-b border-[var(--border)]">
+                                                <p className="text-xs font-bold text-[var(--text-primary)] truncate">
+                                                    {user?.firstName} {user?.lastName}
+                                                </p>
+                                                <p className="text-[10px] text-[var(--text-muted)] truncate">{user?.email}</p>
+                                                <span className="inline-block mt-1 text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                                    {user?.role ?? "MEMBER"}
+                                                </span>
+                                            </div>
+
+                                            <div className="py-1">
+                                                <Link
+                                                    href="/settings/preferences"
+                                                    onClick={() => setUserMenuOpen(false)}
+                                                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-blue-600 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
+                                                >
+                                                    <SlidersHorizontal size={14} className="text-blue-500" />
+                                                    <span>Preferences & Defaults</span>
+                                                </Link>
+                                                <Link
+                                                    href="/settings/org"
+                                                    onClick={() => setUserMenuOpen(false)}
+                                                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition-colors"
+                                                >
+                                                    <Building2 size={14} className="text-[var(--text-muted)]" />
+                                                    <span>Organization Profile</span>
+                                                </Link>
+                                            </div>
+
+                                            <div className="border-t border-[var(--border)] pt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setUserMenuOpen(false);
+                                                        logout();
+                                                    }}
+                                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors text-left"
+                                                >
+                                                    <LogOut size={14} />
+                                                    <span>Log out</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </header>
 
                     {/* Page content */}
-                    <main className="flex-1 p-4 lg:p-6">
+                    <main className="flex-1 p-3 pb-36 sm:p-4 sm:pb-36 lg:p-6 lg:pb-8 pb-safe">
                         {children}
                     </main>
                 </div>
+
+                {/* Mobile Bottom Navigation */}
+                <MobileBottomNav />
 
                 {/* ⌘K Search Modal */}
                 <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} navGroups={NAV_GROUPS} />

@@ -3,6 +3,7 @@ node_modules
 .github
 *.md
 .env*
+**/.env*
 .turbo
 dist
 .next

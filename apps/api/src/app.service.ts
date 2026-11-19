@@ -30,10 +30,8 @@ export class AppService {
             redisStatus = 'disconnected';
         }
 
-        // Cache queue metrics for 60s so healthcheck probes don't flood Redis
-        const now = Date.now();
-        let queues = this.lastQueueMetrics;
-        if (includeQueues || (now - this.lastQueueMetricsTime > 60000)) {
+        let queues: Record<string, any> | undefined = undefined;
+        if (includeQueues) {
             const queueMetrics: Record<string, any> = {};
             for (const [name, q] of this.queueService.getAllQueues()) {
                 try {
@@ -43,8 +41,6 @@ export class AppService {
                     queueMetrics[name] = 'unreachable';
                 }
             }
-            this.lastQueueMetrics = queueMetrics;
-            this.lastQueueMetricsTime = now;
             queues = queueMetrics;
         }
 

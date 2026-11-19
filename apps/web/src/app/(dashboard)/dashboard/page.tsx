@@ -13,13 +13,14 @@ import {
     Activity,
     Server,
     QrCode,
+    Sparkles,
+    Megaphone,
 } from "lucide-react";
 import Link from "next/link";
 import apiClient from "@/lib/api-client";
 import { getApiBaseUrl } from "@/lib/api-url";
 import { useAuthStore } from "@/stores/auth.store";
 import { toast } from "react-hot-toast";
-import { greeting } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { KPICard, formatINR } from "@/components/dashboard/kpi-card";
@@ -215,95 +216,34 @@ export default function DashboardPage() {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
-            {/* Live Infrastructure Telemetry Ticker */}
-            <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-[var(--bg-secondary)]/70 border border-white/[0.06] text-xs">
-                <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
-                    <div className="flex items-center gap-1.5 font-mono whitespace-nowrap shrink-0">
-                        <span className="w-2 h-2 rounded-full bg-[var(--green-bright)] animate-pulse" />
-                        <span className="text-[var(--text-muted)]">META CLOUD API:</span>
-                        <span className="text-[var(--green-bright)] font-semibold">200 OK</span>
+            {/* Live Operational Status Bar */}
+            <div className="flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/[0.06] text-xs">
+                <div className="flex items-center gap-3 sm:gap-5 overflow-x-auto no-scrollbar flex-nowrap py-0.5">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-slate-500 dark:text-zinc-400">WhatsApp Inbound:</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Active</span>
                     </div>
-                    <div className="flex items-center gap-1.5 font-mono whitespace-nowrap shrink-0">
-                        <span className="w-2 h-2 rounded-full bg-[#3B82F6]" />
-                        <span className="text-[var(--text-muted)]">TALLY XML BRIDGE:</span>
-                        <span className="text-[#3B82F6] font-semibold">CONNECTED</span>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span className="text-slate-500 dark:text-zinc-400">Tally XML Sync:</span>
+                        <span className="text-blue-600 dark:text-blue-400 font-semibold">Connected</span>
                     </div>
-                    <div className="flex items-center gap-1.5 font-mono whitespace-nowrap shrink-0">
-                        <span className="w-2 h-2 rounded-full bg-[var(--gold)]" />
-                        <span className="text-[var(--text-muted)]">NPCI UPI RECON:</span>
-                        <span className="text-[var(--gold)] font-semibold">REAL-TIME</span>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                        <span className="text-slate-500 dark:text-zinc-400">UPI Reconciliation:</span>
+                        <span className="text-indigo-600 dark:text-indigo-400 font-semibold">Real-Time</span>
                     </div>
                 </div>
 
                 <button
                     onClick={() => refetch()}
-                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition ml-auto shrink-0"
+                    className="text-xs text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 flex items-center gap-1.5 transition ml-auto shrink-0 p-1 font-medium"
+                    title={t("refresh")}
                 >
                     <RefreshCw size={12} className={isLoading ? "animate-spin" : ""} />
                     <span className="hidden sm:inline">{t("refresh")}</span>
                 </button>
-            </div>
-
-            {/* AI Briefing Card */}
-            <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-accent)] bg-gradient-to-r from-[var(--bg-secondary)] via-[var(--bg-card)] to-[var(--bg-secondary)] p-6">
-                <div
-                    className="absolute inset-0 opacity-[0.03] mix-blend-overlay"
-                    style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                    }}
-                />
-                <div
-                    className="absolute inset-0 bg-gradient-to-r from-[var(--gold)]/5 via-transparent to-[var(--purple)]/5 animate-pulse"
-                    style={{ animationDuration: "4s" }}
-                />
-                <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2
-                            suppressHydrationWarning
-                            className="text-lg font-semibold text-[var(--text-primary)]"
-                            style={{ fontFamily: "var(--font-playfair)" }}
-                        >
-                            {greeting()}, {user?.firstName ?? "there"}. {t("heres_your_day")}
-                        </h2>
-                        <span className="text-[11px] font-mono text-[var(--gold)] bg-[var(--gold)]/10 px-2 py-0.5 rounded border border-[var(--gold)]/20">
-                            [AI_COPILOT // LIVE]
-                        </span>
-                    </div>
-                    <div className="grid sm:grid-cols-3 gap-4">
-                        {[
-                            {
-                                icon: "📦",
-                                text: `${todayOrders} ${t("orders_today_worth")} ${formatINR(todayRevenue)}`,
-                                action: t("view_orders"),
-                                href: "/orders",
-                            },
-                            {
-                                icon: "💰",
-                                text: `${formatINR(outstanding)} ${t("outstanding_collections")}`,
-                                action: t("view_plan"),
-                                href: "/customers",
-                            },
-                            {
-                                icon: "📊",
-                                text: `${formatINR(monthRevenue)} ${t("revenue_this_month")} ${monthOrders} ${t("from_orders")}`,
-                                action: t("see_report"),
-                                href: "/analytics",
-                            },
-                        ].map((item, i) => (
-                            <Link key={i} href={item.href}>
-                                <div className="flex items-start gap-3 bg-[var(--bg-card)] rounded-lg p-3 border border-[var(--border)] hover:border-[var(--gold)]/40 transition group">
-                                    <span className="text-lg">{item.icon}</span>
-                                    <div className="flex-1">
-                                        <p className="text-sm text-[var(--text-primary)] mb-2">{item.text}</p>
-                                        <span className="text-xs text-[var(--gold)] group-hover:text-[var(--gold-light)] font-medium flex items-center gap-1 transition">
-                                            {item.action} <ArrowRight size={12} />
-                                        </span>
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
             </div>
 
             {/* KPI Cards */}
@@ -314,7 +254,7 @@ export default function DashboardPage() {
                     change={revenueChange}
                     changeLabel={t("vs_monthly_avg")}
                     icon={IndianRupee}
-                    accentColor="var(--green-bright)"
+                    accentColor="#10B981"
                     sparkData={sparkRevenue}
                 />
                 <KPICard
@@ -323,12 +263,12 @@ export default function DashboardPage() {
                     change={ordersChange}
                     changeLabel={t("today")}
                     icon={ShoppingCart}
-                    accentColor="var(--gold)"
+                    accentColor="#3B82F6"
                     sparkData={sparkOrders}
                     actionNode={
                         <Link
                             href="/orders/new"
-                            className="text-xs font-semibold text-[var(--gold)] hover:text-[var(--gold-light)] flex items-center gap-1"
+                            className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                         >
                             <Plus size={14} /> New
                         </Link>
@@ -340,18 +280,18 @@ export default function DashboardPage() {
                     change={0}
                     changeLabel={
                         credit > 0 ? (
-                            <span className="text-[var(--green)]">+ {formatINR(credit)} credit</span>
+                            <span className="text-emerald-500">+ {formatINR(credit)} credit</span>
                         ) : (
                             t("total_due")
                         )
                     }
                     icon={AlertTriangle}
-                    accentColor="var(--red)"
+                    accentColor="#EF4444"
                     sparkData={sparkOutstanding}
                     actionNode={
                         <Link
                             href="/customers"
-                            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 uppercase tracking-wider font-mono font-medium"
+                            className="text-xs text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 flex items-center gap-1 uppercase tracking-wider font-semibold"
                         >
                             <ArrowRight size={13} /> View
                         </Link>
@@ -359,16 +299,16 @@ export default function DashboardPage() {
                 >
                     <div className="flex flex-wrap items-center justify-between text-xs w-full gap-y-2">
                         <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-[#3B82F6]" />
-                            <span className="text-[var(--text-secondary)]">Current:</span>
-                            <span className="font-mono font-semibold text-[var(--text-primary)]">
+                            <div className="w-2 h-2 rounded-full bg-blue-500" />
+                            <span className="text-slate-500 dark:text-zinc-400">Current:</span>
+                            <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">
                                 {formatINR(outstanding)}
                             </span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-[var(--orange)]" />
-                            <span className="text-[var(--text-secondary)]">Overdue:</span>
-                            <span className="font-mono font-semibold text-[var(--text-primary)]">₹0.00</span>
+                            <div className="w-2 h-2 rounded-full bg-amber-500" />
+                            <span className="text-slate-500 dark:text-zinc-400">Overdue:</span>
+                            <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">₹0.00</span>
                         </div>
                     </div>
                 </KPICard>
@@ -379,7 +319,7 @@ export default function DashboardPage() {
                         change={0}
                         changeLabel={t("products_below_min")}
                         icon={Package}
-                        accentColor="var(--orange)"
+                        accentColor="#F59E0B"
                         sparkData={sparkLowStock}
                     />
                 </Link>
@@ -387,21 +327,29 @@ export default function DashboardPage() {
 
             {/* Low Stock Alert Box */}
             {(lowStockData?.count ?? 0) > 0 && (
-                <div className="bg-gradient-to-r from-red-500/5 via-[var(--bg-card)] to-orange-500/5 border border-red-500/15 rounded-[var(--radius-lg)] p-5 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 fill-mode-both">
-                    <div className="flex items-center justify-between mb-3">
+                <div className="bg-red-500/[0.03] dark:bg-red-500/[0.06] border border-red-500/20 rounded-xl p-4 sm:p-5 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 fill-mode-both">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                         <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                            <h3 className="font-semibold text-sm">Low Stock Alert</h3>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold font-mono">
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                            <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Low Stock Alert</h3>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold font-mono border border-red-500/20">
                                 {lowStockData.count} items
                             </span>
                         </div>
-                        <Link
-                            href="/inventory?lowStock=true"
-                            className="text-xs text-red-400 hover:underline flex items-center gap-1 transition font-medium"
-                        >
-                            View all <ArrowRight size={12} />
-                        </Link>
+                        <div className="flex items-center gap-2.5">
+                            <Link
+                                href="/purchase-orders/new?reorder=low-stock"
+                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition font-semibold shadow-xs active:scale-95"
+                            >
+                                <Plus size={13} /> 1-Click Reorder PO
+                            </Link>
+                            <Link
+                                href="/inventory?lowStock=true"
+                                className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1 transition font-medium"
+                            >
+                                View all <ArrowRight size={12} />
+                            </Link>
+                        </div>
                     </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
                         {(lowStockData.items || [])

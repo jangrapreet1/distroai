@@ -6,6 +6,7 @@ import { RedisService } from '../common/services/redis.service';
 
 class POItemDto {
     @IsString() productId!: string;
+    @IsOptional() @IsString() variantId?: string;
     @IsNumber() @Min(1) quantity!: number;
     @IsString() unit!: string;
     @IsNumber() @Min(0) price!: number;
@@ -66,6 +67,7 @@ export class PurchaseOrdersService {
                 items: {
                     create: dto.items.map((i: any) => ({
                         productId: i.productId,
+                        variantId: i.variantId || undefined,
                         orderedQty: i.quantity,
                         receivedQty: 0,
                         deliveredQty: 0,
@@ -89,7 +91,12 @@ export class PurchaseOrdersService {
         const po = await this.prisma.purchaseOrder.findFirst({
             where: { id, orgId },
             include: {
-                items: { include: { product: { select: { name: true, sku: true, unit: true, conversionFactor: true, secondaryUnit: true } } } },
+                items: {
+                    include: {
+                        product: { select: { name: true, sku: true, unit: true, conversionFactor: true, secondaryUnit: true } },
+                        variant: { select: { id: true, name: true, sku: true, attributes: true } },
+                    }
+                },
                 supplier: true,
                 expenses: { orderBy: { date: 'desc' } },
             },
@@ -163,6 +170,26 @@ export class PurchaseOrdersService {
                     where: { id: inv.id },
                     data: { quantity: { increment: inventoryReceivedQty } },
                 });
+
+                if (poItem.variantId) {
+                    let varInv = await tx.variantInventory.findFirst({
+                        where: { orgId, variantId: poItem.variantId, warehouseId: targetWarehouseId }
+                    });
+                    if (!varInv) {
+                        varInv = await tx.variantInventory.create({
+                            data: {
+                                orgId,
+                                variantId: poItem.variantId,
+                                warehouseId: targetWarehouseId,
+                                quantity: 0,
+                            }
+                        });
+                    }
+                    await tx.variantInventory.update({
+                        where: { id: varInv.id },
+                        data: { quantity: { increment: inventoryReceivedQty } },
+                    });
+                }
 
                 await tx.inventoryTransaction.create({
                     data: {

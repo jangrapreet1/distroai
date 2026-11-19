@@ -14,6 +14,7 @@ import {
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { GoogleAuthGuard } from './google-auth.guard';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -37,7 +38,7 @@ export class AuthController {
 
     @Public()
     @Post('refresh')
-    @Throttle({ default: { ttl: 60000, limit: 3 } })
+    @Throttle({ default: { ttl: 60000, limit: 60 } })
     refresh(@Body() dto: RefreshTokenDto) {
         return this.auth.refresh(dto);
     }
@@ -72,14 +73,14 @@ export class AuthController {
 
     @Public()
     @Get('google')
-    @UseGuards(AuthGuard('google'))
+    @UseGuards(GoogleAuthGuard)
     async googleAuth() {
-        // Redirects to Google
+        // Redirects to Google with prompt: 'select_account'
     }
 
     @Public()
     @Get('google/callback')
-    @UseGuards(AuthGuard('google'))
+    @UseGuards(GoogleAuthGuard)
     async googleAuthRedirect(@Req() req: any, @Res() res: any) {
         // req.user contains the output of validateGoogleUser
         const authData = req.user;

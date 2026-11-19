@@ -1,4 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@distroai/db';
+import { CustomerLedgerCalculationEngine } from '../customer-transactions/customer-transactions.calculation';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -147,11 +149,31 @@ export class PaymentsService {
                 });
             }
 
-            // Decrement outstanding mathematically by the FULL payment amount
-            // Advance portion is just money we owe them (negative outstanding)
+            // ── Create CustomerTransaction so payment displays in Customer Khata ──
+            await tx.customerTransaction.create({
+                data: {
+                    orgId,
+                    customerId: dto.customerId,
+                    date: dto.paidAt ? new Date(dto.paidAt) : new Date(),
+                    type: 'PAYMENT',
+                    amount: new Prisma.Decimal(dto.amount),
+                    paymentMethod: dto.method as any,
+                    reference: dto.referenceNumber || null,
+                    description: dto.notes || `Payment received (${dto.method})`,
+                    notes: `Payment ID: ${payment.id}`,
+                }
+            });
+
+            // Authoritatively recompute Customer.outstandingAmount from CustomerTransaction
+            const allTx = await tx.customerTransaction.findMany({
+                where: { orgId, customerId: dto.customerId },
+                select: { type: true, amount: true },
+            });
+            const summary = CustomerLedgerCalculationEngine.computeSummary(allTx);
+
             const customer = await tx.customer.update({
                 where: { id: dto.customerId },
-                data: { outstandingAmount: { decrement: dto.amount } },
+                data: { outstandingAmount: summary.netBalance },
                 select: { outstandingAmount: true }
             });
 

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { LogOut, Settings, ArrowUpCircle, ChevronUp, Globe, ChevronRight } from "lucide-react";
+import { LogOut, Settings, ArrowUpCircle, ChevronUp, Globe, ChevronRight, SlidersHorizontal } from "lucide-react";
 import clsx from "clsx";
 import { Logo } from "@/components/Logo";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -77,64 +77,72 @@ export function SidebarContent({ navGroups, userRole, userName, orgName, orgPlan
             {/* Logo */}
             <div className="px-5 pt-6 pb-4 border-b border-[var(--border)]">
                 <Logo className="w-8 h-8" textCls="text-xl" />
-                <div className="mt-2 flex items-center gap-2">
-                    <span className="text-sm text-[var(--text-secondary)] truncate">{orgName ?? "My Organization"}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--gold)]/10 text-[var(--gold)] font-medium uppercase">
+                <div className="mt-2.5 flex items-center gap-2">
+                    <span className="text-xs font-medium text-[var(--text-secondary)] truncate">{orgName ?? "My Organization"}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-semibold tracking-wide uppercase">
                         {orgPlan ?? "FREE"}
                     </span>
                 </div>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto py-4 px-3">
+            <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-4">
                 {filteredNav.map((group) => (
-                    <div key={group.title} className="mb-5">
-                        <p className="text-[10px] font-semibold text-[var(--text-muted)] tracking-wider px-3 mb-2 uppercase">{t(group.title as any)}</p>
-                        {group.items.map((item) => {
-                            const active = isActive(item.href);
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={onNavClick}
-                                    className={clsx(
-                                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all mb-0.5",
-                                        active
-                                            ? "bg-[var(--gold)]/8 text-[var(--gold)] border-l-2 border-[var(--gold)]"
-                                            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
-                                    )}
-                                >
-                                    <item.icon size={18} />
-                                    {t(item.label)}
-                                </Link>
-                            );
-                        })}
+                    <div key={group.title}>
+                        <p className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 tracking-wider px-3 mb-1.5 uppercase">
+                            {t(group.title as any)}
+                        </p>
+                        <div className="space-y-0.5">
+                            {group.items.map((item) => {
+                                const active = isActive(item.href);
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        onClick={onNavClick}
+                                        className={clsx(
+                                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all",
+                                            active
+                                                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold"
+                                                : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-white/[0.04]"
+                                        )}
+                                    >
+                                        <item.icon size={17} className={clsx("shrink-0", active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-zinc-500")} />
+                                        <span>{t(item.label)}</span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
                     </div>
                 ))}
             </nav>
 
             {/* User */}
-            <div className="relative px-4 py-4 border-t border-[var(--border)]">
+            <div className="relative px-3 py-3 border-t border-[var(--border)]">
                 {isProfileMenuOpen && (
                     <>
                         <div className="fixed inset-0 z-40" onClick={() => setIsProfileMenuOpen(false)} />
-                        <div className="absolute bottom-full mb-2 left-4 right-4 bg-[var(--bg-secondary)] border border-[var(--border-accent)] rounded-lg shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
-                            <Link href="/settings" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors">
-                                <Settings size={16} /> Settings
+                        <div className="absolute bottom-full mb-2 left-3 right-3 bg-white dark:bg-[#18181b] border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+                            <Link href="/settings/preferences" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-blue-600 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                                <SlidersHorizontal size={14} className="text-blue-500" /> Preferences & Defaults
                             </Link>
 
-                            <button onClick={() => setShowLanguages(!showLanguages)} className="w-full flex items-center justify-between px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors">
-                                <div className="flex items-center gap-2"><Globe size={16} /> Language</div>
+                            <Link href="/settings" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                                <Settings size={14} /> All Settings
+                            </Link>
+
+                            <button onClick={() => setShowLanguages(!showLanguages)} className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                                <div className="flex items-center gap-2"><Globe size={14} /> Language</div>
                                 <ChevronRight size={14} className={`transition-transform duration-200 ${showLanguages ? "rotate-90" : ""}`} />
                             </button>
 
                             {showLanguages && (
-                                <div className="px-3 py-1 space-y-0.5 bg-[var(--bg-secondary)]/30 border-y border-[var(--border)] max-h-32 overflow-y-auto">
+                                <div className="px-2 py-1 space-y-0.5 bg-slate-50 dark:bg-zinc-900 border-y border-slate-100 dark:border-zinc-800 max-h-32 overflow-y-auto">
                                     {AVAILABLE_LANGUAGES.map(l => (
                                         <button
                                             key={l.code}
                                             onClick={() => { setLanguage(l.code); setIsProfileMenuOpen(false); setShowLanguages(false); }}
-                                            className={`w-full text-left text-xs py-1.5 px-3 rounded-md transition-colors ${language === l.code ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)]"}`}
+                                            className={`w-full text-left text-xs py-1 px-2 rounded-md transition-colors ${language === l.code ? "bg-blue-500/10 text-blue-600 font-semibold" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800"}`}
                                         >
                                             {l.name}
                                         </button>
@@ -142,12 +150,12 @@ export function SidebarContent({ navGroups, userRole, userName, orgName, orgPlan
                                 </div>
                             )}
 
-                            <button onClick={() => { setIsProfileMenuOpen(false); openModal('premium features'); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors">
-                                <ArrowUpCircle size={16} /> Upgrade plan
+                            <button onClick={() => { setIsProfileMenuOpen(false); openModal('premium features'); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                                <ArrowUpCircle size={14} className="text-amber-500" /> Upgrade plan
                             </button>
-                            <div className="h-px bg-[var(--border)] my-1 mx-2" />
-                            <button onClick={() => { setIsProfileMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                                <LogOut size={16} /> Log out
+                            <div className="h-px bg-slate-100 dark:bg-zinc-800 my-1 mx-2" />
+                            <button onClick={() => { setIsProfileMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
+                                <LogOut size={14} /> Log out
                             </button>
                         </div>
                     </>
@@ -155,16 +163,16 @@ export function SidebarContent({ navGroups, userRole, userName, orgName, orgPlan
 
                 <button
                     onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                    className="w-full flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors text-left"
+                    className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-colors text-left"
                 >
-                    <div className="w-9 h-9 rounded-full bg-[var(--gold)]/15 flex items-center justify-center text-sm font-semibold text-[var(--gold)] shrink-0">
-                        {userName?.[0] ?? "U"}
+                    <div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400 shrink-0">
+                        {(userName?.[0] || "U").toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{userName ?? "User"}</p>
-                        <p className="text-xs text-[var(--text-muted)] capitalize">{userRole?.toLowerCase() ?? "viewer"}</p>
+                        <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate">{userName ?? "User"}</p>
+                        <p className="text-[10px] text-slate-400 dark:text-zinc-500 capitalize">{userRole?.toLowerCase() ?? "viewer"}</p>
                     </div>
-                    <ChevronUp size={16} className={`text-[var(--text-muted)] shrink-0 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
+                    <ChevronUp size={14} className={`text-slate-400 dark:text-zinc-500 shrink-0 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
                 </button>
             </div>
         </>

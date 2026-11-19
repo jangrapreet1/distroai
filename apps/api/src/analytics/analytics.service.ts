@@ -35,7 +35,7 @@ export class AnalyticsService {
             this.prisma.payment.aggregate({ where: { orgId, createdAt: { gte: todayStart }, status: 'COMPLETED' }, _sum: { amount: true } }),
             this.prisma.orderItem.groupBy({ by: ['productId'], where: { order: { orgId, createdAt: { gte: monthStart }, status: { in: ['CONFIRMED', 'PACKED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED'] }, type: 'SALE' } }, _sum: { totalAmount: true }, orderBy: { _sum: { totalAmount: 'desc' } }, take: 5 }),
             this.prisma.customer.findMany({ where: { orgId }, orderBy: { outstandingAmount: 'desc' }, take: 5, select: { id: true, name: true, outstandingAmount: true, paymentScore: true } }),
-            this.prisma.order.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' }, take: 10, include: { customer: { select: { name: true } } } }),
+            this.prisma.order.findMany({ where: { orgId, type: 'SALE' }, orderBy: { createdAt: 'desc' }, take: 10, include: { customer: { select: { name: true } } } }),
             this.prisma.inventory.findMany({ where: { orgId }, select: { productId: true, quantity: true, product: { select: { hasVariants: true, minStockLevel: true, purchasePrice: true, conversionFactor: true } } } }),
             this.prisma.variantInventory.findMany({ where: { orgId }, select: { quantity: true, variant: { select: { productId: true, purchasePrice: true, product: { select: { minStockLevel: true, purchasePrice: true, conversionFactor: true } } } } } }),
             this.prisma.locationRequest.findMany({ where: { orgId, status: 'COMPLETED' }, orderBy: { updatedAt: 'desc' }, take: 5, include: { customer: { select: { name: true } } } }),

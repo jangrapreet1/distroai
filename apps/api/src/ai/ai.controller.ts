@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Req, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException, Logger } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AiService } from './ai.service';
@@ -7,6 +7,8 @@ import { Request } from 'express';
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {
+    private readonly logger = new Logger(AiController.name);
+
     constructor(private readonly aiService: AiService) { }
 
     @Post('query')
@@ -55,8 +57,9 @@ export class AiController {
             }
             // Send quota error as SSE so the frontend can display it gracefully
             res.setHeader('Content-Type', 'text/event-stream');
-            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Cache-Control', 'no-cache, no-transform');
             res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
             res.flushHeaders();
             const msg = err?.response?.message || 'Monthly AI query limit reached. Upgrade your plan for more.';
             res.write(`data: ${JSON.stringify({ token: `⚠️ ${msg}`, done: true, error: 'AI_QUOTA_EXCEEDED' })}\n\n`);
@@ -66,15 +69,18 @@ export class AiController {
 
         // Set SSE headers
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
 
         try {
             for await (const chunk of this.aiService.queryStream(orgId, userId, body.query, body.image, body.sessionId)) {
                 res.write(`data: ${chunk.data}\n\n`);
+                if (typeof res.flush === 'function') res.flush();
             }
         } catch (err: any) {
+            this.logger.error('AI Query Stream failed', err);
             res.write(`data: ${JSON.stringify({ token: '\n[Error processing query]', done: true })}\n\n`);
         } finally {
             res.end();

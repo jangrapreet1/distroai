@@ -65,7 +65,7 @@ export default function PnLReportPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Profit & Loss</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Profit & Loss</h1>
                     <p className="text-[var(--text-muted)] text-sm mt-1">Revenue, costs, and net profit for the selected period.</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">

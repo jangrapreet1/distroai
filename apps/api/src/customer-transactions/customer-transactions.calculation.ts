@@ -40,6 +40,7 @@ export interface TransactionInput {
   reference?: string | null;
   notes?: string | null;
   createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
   items?: TransactionItemInput[];
 }
 
@@ -64,6 +65,7 @@ export interface LedgerEntryWithBalance {
   reference?: string | null;
   notes?: string | null;
   createdAt: string;
+  updatedAt?: string;
   items: LedgerItemOutput[];
 }
 
@@ -322,6 +324,7 @@ export function calculateCustomerLedger(
       reference: tx.reference || null,
       notes: tx.notes || null,
       createdAt: normalizeDate(tx.createdAt).toISOString(),
+      updatedAt: tx.updatedAt ? normalizeDate(tx.updatedAt).toISOString() : normalizeDate(tx.createdAt).toISOString(),
       items,
     });
   }

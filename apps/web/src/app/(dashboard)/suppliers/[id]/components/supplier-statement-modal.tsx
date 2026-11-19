@@ -114,6 +114,9 @@ export function SupplierStatementModal({
   };
 
   const rows: StatementRow[] = Array.isArray(statement?.rows) ? statement.rows : [];
+  const hasQuantities = rows.some((r) => r.quantity != null && Number(r.quantity) > 0);
+  const hasCosts = rows.some((r) => r.cost != null && Number(r.cost) > 0);
+  const totalCols = 6 + (hasQuantities ? 1 : 0) + (hasCosts ? 1 : 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" onClick={onClose}>
@@ -259,8 +262,12 @@ export function SupplierStatementModal({
                     <tr>
                       <th className="py-2.5 px-3 whitespace-nowrap">DATE</th>
                       <th className="py-2.5 px-3 min-w-[200px]">Items Received (name)</th>
-                      <th className="py-2.5 px-3 text-right">Quantity</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Cost of 1</th>
+                      {hasQuantities && (
+                        <th className="py-2.5 px-3 text-right">Quantity</th>
+                      )}
+                      {hasCosts && (
+                        <th className="py-2.5 px-3 text-right whitespace-nowrap">Cost of 1</th>
+                      )}
                       <th className="py-2.5 px-3 text-right whitespace-nowrap">Worth items recieved</th>
                       <th className="py-2.5 px-3 text-right">RETURNED</th>
                       <th className="py-2.5 px-3 text-right whitespace-nowrap">Amount Paid</th>
@@ -270,7 +277,7 @@ export function SupplierStatementModal({
                   <tbody className="divide-y divide-[var(--border)]">
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-10 text-center text-[var(--text-muted)]">
+                        <td colSpan={totalCols} className="py-10 text-center text-[var(--text-muted)]">
                           No transactions or purchase orders found for this supplier in the selected period
                         </td>
                       </tr>
@@ -290,12 +297,16 @@ export function SupplierStatementModal({
                             <td className="py-2.5 px-3 text-[var(--text-primary)] font-medium">
                               {row.itemName}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-medium text-[var(--text-secondary)]">
-                              {row.quantity != null ? row.quantity : "—"}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-medium" style={{ fontFamily: "var(--font-mono)" }}>
-                              {row.cost != null ? formatINR(row.cost) : "—"}
-                            </td>
+                            {hasQuantities && (
+                              <td className="py-2.5 px-3 text-right font-medium text-[var(--text-secondary)]">
+                                {row.quantity != null && Number(row.quantity) > 0 ? row.quantity : "—"}
+                              </td>
+                            )}
+                            {hasCosts && (
+                              <td className="py-2.5 px-3 text-right font-medium" style={{ fontFamily: "var(--font-mono)" }}>
+                                {row.cost != null && Number(row.cost) > 0 ? formatINR(row.cost) : "—"}
+                              </td>
+                            )}
                             <td className="py-2.5 px-3 text-right font-medium text-[var(--text-primary)]" style={{ fontFamily: "var(--font-mono)" }}>
                               {row.worth != null ? formatINR(row.worth) : "—"}
                             </td>

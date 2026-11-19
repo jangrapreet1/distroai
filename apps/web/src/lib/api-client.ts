@@ -1,9 +1,10 @@
 import axios from "axios";
 import { useAuthStore } from "@/stores/auth.store";
 import { useUpgradeStore } from "@/stores/upgrade.store";
+import { getApiBaseUrl } from "./api-url";
 
 const apiClient = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || "",
+    baseURL: getApiBaseUrl(),
     headers: { "Content-Type": "application/json" },
 });
 
@@ -12,6 +13,16 @@ apiClient.interceptors.request.use((config) => {
     const token = useAuthStore.getState().accessToken;
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+    }
+    // For FormData requests (e.g. file uploads), remove default Content-Type so browser sets multipart boundary
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+        if (typeof (config.headers as any).delete === "function") {
+            (config.headers as any).delete("Content-Type");
+            (config.headers as any).delete("content-type");
+        } else if (config.headers) {
+            delete (config.headers as Record<string, any>)["Content-Type"];
+            delete (config.headers as Record<string, any>)["content-type"];
+        }
     }
     return config;
 });
@@ -81,7 +92,7 @@ apiClient.interceptors.response.use(
 
             try {
                 const res = await axios.post(
-                    `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/auth/refresh`,
+                    `${getApiBaseUrl()}/api/v1/auth/refresh`,
                     { refreshToken }
                 );
                 const { accessToken: newAccess, refreshToken: newRefresh } =
@@ -94,12 +105,17 @@ apiClient.interceptors.response.use(
                 processQueue(null, newAccess);
                 originalRequest.headers.Authorization = `Bearer ${newAccess}`;
                 return apiClient(originalRequest);
-            } catch (refreshError) {
+            } catch (refreshError: any) {
                 processQueue(refreshError, null);
-                logout();
-                document.cookie =
-                    "accessToken=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                if (typeof window !== "undefined") window.location.href = "/login";
+                // Only perform hard logout if backend explicitly rejected with 401/403 (invalid or revoked token).
+                // Do NOT log out on temporary network issues, 429 rate limits, or server restarts.
+                const isUnauthorized = refreshError?.response?.status === 401 || refreshError?.response?.status === 403;
+                if (isUnauthorized) {
+                    logout();
+                    document.cookie =
+                        "accessToken=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                    if (typeof window !== "undefined") window.location.href = "/login";
+                }
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

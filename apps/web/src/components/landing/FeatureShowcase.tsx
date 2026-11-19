@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MessageSquare, RefreshCw, TrendingUp, MapPin, CheckCircle2, Terminal, Sparkles, Shield, Cpu, Layers } from "lucide-react";
+import { ShoppingCart, Package, CreditCard, Users, LineChart, CheckCircle2, Terminal, Sparkles, Shield, Cpu, Layers } from "lucide-react";
 import { SpotlightCard } from "@/components/ui/SpotlightCard";
 
 interface FeaturePillar {
@@ -20,106 +20,130 @@ interface FeaturePillar {
 
 const FEATURES: FeaturePillar[] = [
     {
-        id: "whatsapp",
-        tag: "PILLAR 01 // MULTILINGUAL_NLP",
-        title: "AI WhatsApp Voice & Chat Order Taking",
-        description: "Indian retailers place orders via voice notes, Hinglish text, and photo lists. DistroAI's custom-trained Llama/Gemini engine matches catalog SKUs with 99.4% accuracy.",
-        icon: MessageSquare,
+        id: "order-manager",
+        tag: "Core Product #1",
+        title: "AI Order Manager: Zero-Error WhatsApp & Voice Ordering",
+        description: "Eliminate manual clerk order punching. Retailers send WhatsApp voice notes, Hinglish messages, or photo slips. DistroAI parses them with 99.4% SKU accuracy and queues a draft for 1-click Tally sync.",
+        icon: ShoppingCart,
         bullets: [
-            "Parses regional Hindi, Marathi, Gujarati, Telugu & Tamil voice notes",
-            "Auto-calculates quantity slabs, schemes, discounts, and GST brackets",
-            "Dispatches instant PDF invoice with Dynamic UPI QR in WhatsApp chat",
-            "Automated payment reminders with 1-tap UPI payment deep links",
+            "Transcribes regional Hindi, Hinglish, Marathi & Gujarati voice notes",
+            "Human-in-the-Loop Safeguard: 1-click review & approve before anything touches Tally or GST",
+            "Auto-calculates quantity slabs, dealer schemes, and tax brackets",
+            "Dispatches instant PDF invoice with scannable Dynamic UPI QR directly in WhatsApp",
         ],
         terminalPreview: {
-            title: "ai_order_engine.py",
+            title: "ai_order_manager.py",
             codeLines: [
-                { line: "# Inbound audio stream (Hindi / Hinglish)", color: "text-gray-500" },
+                { line: "# Inbound audio stream from Kirana / Dealer", color: "text-gray-500" },
                 { line: "audio = fetch_voice_note(msg.media_url)", color: "text-cyan-400" },
-                { line: "transcript = whisper_indic.transcribe(audio)", color: "text-emerald-400" },
-                { line: ">> 'Bhai 25 peti Parle-G aur 10 peti Marie dispatch kardo'", color: "text-amber-300" },
-                { line: "matched_skus = catalog_embedder.match(transcript)", color: "text-purple-400" },
-                { line: "order = create_sales_order(customer_id, matched_skus)", color: "text-emerald-400" },
-                { line: "queue_tally_voucher(order.id) # Status: 200 OK", color: "text-cyan-400" },
+                { line: ">> 'Bhaiya, 20 carton Maggi aur 10 carton Parle-G bhej dena'", color: "text-amber-300" },
+                { line: "matched_skus = catalog_embedder.match_items(audio)", color: "text-purple-400" },
+                { line: "confidence = 0.994 # Verified against Tally catalog", color: "text-emerald-400" },
+                { line: "draft = create_draft_order(customer_id, matched_skus)", color: "text-cyan-400" },
+                { line: ">> 'Draft #ORD-8492 ready for 1-click Tally dispatch'", color: "text-emerald-400" },
             ],
         },
     },
     {
-        id: "tally",
-        tag: "PILLAR 02 // DESKTOP_BRIDGE",
-        title: "Real-Time Tally Prime & 9 XML Bridge",
-        description: "Zero change management for your accountant. Our lightweight local bridge runs in the background on your Tally computer, synchronizing inventory and sales vouchers in under 2.5 seconds.",
-        icon: RefreshCw,
+        id: "credit-manager",
+        tag: "Core Product #2",
+        title: "AI Credit Manager: Khata Aging & Dynamic UPI Collections",
+        description: "Recover working capital locked in delayed market credit. Real-time aging buckets (0-30, 31-60, 60-90+ days), smart payment scoring, and automated respectful WhatsApp payment nudges.",
+        icon: CreditCard,
         bullets: [
-            "Bidirectional ledger balance & payment sync without cloud export hassle",
-            "Auto-creates Sales Vouchers and Credit Notes in correct Tally ledger",
-            "Operates offline: queues mutations locally and flushes on reconnection",
-            "Supports multi-company and multi-godown stock allocation",
+            "NPCI Dynamic UPI QR printed on every invoice with exact pre-filled balance",
+            "Automated payment reminders sent via WhatsApp with 1-tap PhonePe/GPay deep links",
+            "Credit scoring (0–100) auto-locks billing for chronic defaulters",
+            "Bidirectional Tally bank reconciliation: marks receipts instantly without manual ledger voucher entry",
         ],
         terminalPreview: {
-            title: "tally_bridge_agent.rs",
+            title: "ai_credit_manager.py",
             codeLines: [
-                { line: "// Listening for Tally XML RPC on port 9000", color: "text-gray-500" },
-                { line: "let payload = build_tally_envelope(&sales_voucher);", color: "text-purple-400" },
-                { line: "let res = tally_client.post_xml(payload).await?;", color: "text-cyan-400" },
-                { line: ">> <RESPONSE><CREATED>1</CREATED><VOUCHERID>8492</VOUCHERID></RESPONSE>", color: "text-emerald-400" },
-                { line: "sync_godown_stock('Warehouse-1', skus).await;", color: "text-amber-300" },
-                { line: "emit_event('TALLY_MUTATION_CONFIRMED');", color: "text-emerald-400" },
+                { line: "# Real-time Khata aging & risk evaluation", color: "text-gray-500" },
+                { line: "overdue = evaluate_aging_buckets(customer.ledger_id)", color: "text-purple-400" },
+                { line: ">> Overdue > 45 days: ₹1,42,800 across 3 invoices", color: "text-rose-400" },
+                { line: "payment_link = generate_dynamic_upi_link(overdue.total)", color: "text-cyan-400" },
+                { line: "whatsapp.send_gentle_nudge(customer.phone, payment_link)", color: "text-amber-300" },
+                { line: ">> 'Payment received ₹1,42,800 via PhonePe - Tally ledger reconciled'", color: "text-emerald-400" },
             ],
         },
     },
     {
-        id: "forecasting",
-        tag: "PILLAR 03 // PROPHET_ML",
-        title: "Predictive Stock Replenishment & Credit Scoring",
-        description: "Stop tying up capital in slow-moving inventory. Our ML models forecast demand spikes before Diwali & festivals while computing real-time payment risk scores for every kirana.",
-        icon: TrendingUp,
+        id: "inventory-manager",
+        tag: "Core Product #3",
+        title: "AI Inventory Manager: Landed Cost & Dead-Stock Protection",
+        description: "Tailored for tiles, sanitaryware, hardware, and FMCG distributors. Track landed cost vs wholesale selling rate, manage multi-units (Boxes, Sq.Ft, Cartons, Bags), and prevent costly stockouts.",
+        icon: Package,
         bullets: [
-            "Prophet ML demand forecasting prevents stockouts on top 20% revenue SKUs",
-            "Auto-generates Supplier Purchase Orders when stock reaches safety thresholds",
-            "Dynamic credit limit scoring (0–100) blocks high-risk overdue defaulters",
-            "Automated aging bucket reports (0-30, 31-60, 60-90, 90+ days)",
+            "Dual-unit support: native Boxes + Sq.Ft calculation for tiles, Cartons + Pieces for FMCG",
+            "Landed Cost Margin Guardrail: warns salesmen if quoting below minimum floor margin",
+            "Prophet ML seasonal replenishment: predicts Diwali & monsoon demand spikes 14 days early",
+            "Automated Supplier Purchase Orders generated when stock dips below reorder thresholds",
         ],
         terminalPreview: {
-            title: "credit_risk_model.py",
+            title: "ai_inventory_manager.py",
             codeLines: [
-                { line: "# Prophet ML Time-Series & Credit Scoring", color: "text-gray-500" },
-                { line: "forecast = prophet.predict(sku_sales_history)", color: "text-purple-400" },
-                { line: ">> Predicted Demand (Next 14D): 450 Cases (+28% MoM)", color: "text-emerald-400" },
-                { line: "risk_score = evaluate_kirana_dso(customer.payment_history)", color: "text-cyan-400" },
-                { line: "if risk_score > 80: approve_credit_order(order)", color: "text-amber-300" },
-                { line: "else: require_advance_upi(order) # Risk Mitigation", color: "text-rose-400" },
+                { line: "# Landed cost & multi-unit stock monitoring", color: "text-gray-500" },
+                { line: "stock = get_stock_profile('TILE-2X2-10010')", color: "text-cyan-400" },
+                { line: ">> 106 Boxes (1,696 Sq.Ft) in godown | Landed Cost: ₹233/box", color: "text-amber-300" },
+                { line: "if order_quote.rate < stock.min_floor_rate: alert_margin()", color: "text-rose-400" },
+                { line: "prophet_forecast = predict_runout_days(stock)", color: "text-purple-400" },
+                { line: ">> 'Stockout projected in 8 days - Draft PO auto-created'", color: "text-emerald-400" },
             ],
         },
     },
     {
-        id: "sfa",
-        tag: "PILLAR 04 // FIELD_FORCE_SFA",
-        title: "Sales Rep Mobile GPS Beat Route Tracking",
-        description: "Give your field sales team a lightning-fast offline-first mobile app. Track daily beat visits, check-in geo-fencing, spot invoice printing, and commission leaderboards.",
-        icon: MapPin,
+        id: "sales-manager",
+        tag: "Core Product #4",
+        title: "AI Sales Manager: Field SFA Beat Route Tracking",
+        description: "Equip your sales reps with an offline-first mobile app that operates even in rural basements. Geo-fenced store check-ins, spot order booking, Bluetooth receipt printing, and commission tracking.",
+        icon: Users,
         bullets: [
-            "Live GPS beat plan routing with geotagged store check-ins",
-            "Offline order entry: works in rural basements with zero mobile coverage",
-            "Bluetooth thermal invoice printer support for immediate store slips",
-            "Real-time sales target vs achievement gamification & commissions",
+            "Live GPS beat route plan with geotagged kirana / dealer check-ins",
+            "100% Offline-First SFA: records orders with local SQLite caching and auto-syncs when online",
+            "Spot Bluetooth thermal printing for immediate delivery chalans and bill slips",
+            "Real-time sales target vs achievement gamification and commission leaderboards",
         ],
         terminalPreview: {
-            title: "sfa_beat_tracker.ts",
+            title: "ai_sales_manager.ts",
             codeLines: [
-                { line: "// Geo-fenced store check-in verification", color: "text-gray-500" },
+                { line: "// Geo-fenced beat check-in & offline catalog sync", color: "text-gray-500" },
                 { line: "const distance = calculateHaversine(repGps, storeCoords);", color: "text-purple-400" },
                 { line: "if (distance <= 50 /* meters */) {", color: "text-cyan-400" },
                 { line: "  recordCheckin({ repId, storeId, verified: true });", color: "text-emerald-400" },
-                { line: "  loadStorePromotionsAndSchemes(storeId);", color: "text-amber-300" },
+                { line: "  syncOfflineCatalogToHandset(storeId);", color: "text-amber-300" },
+                { line: "  printBluetoothSlip({ orderId, thermalPrinter: true });", color: "text-emerald-400" },
                 { line: "}", color: "text-cyan-400" },
+            ],
+        },
+    },
+    {
+        id: "business-analyst",
+        tag: "Core Product #5",
+        title: "AI Business Analyst: Conversational Intelligence for Owners",
+        description: "Your 24/7 AI Chief Financial Officer. Ask questions in plain English or Hindi about margins, top defaulters, dead stock, and month-over-month revenue without waiting for your accountant.",
+        icon: LineChart,
+        bullets: [
+            "Instant answers: 'Which 5 customers have the highest overdue balance?'",
+            "Margin breakdown: compares gross vs net margin across product categories and salesmen",
+            "Dead stock audit: identifies slow-moving capital sitting idle in your warehouse > 60 days",
+            "Natural language reports exportable directly to Excel, PDF, or Tally XML",
+        ],
+        terminalPreview: {
+            title: "ai_business_analyst.py",
+            codeLines: [
+                { line: "# Natural language analytical reasoning", color: "text-gray-500" },
+                { line: "query = 'Show top 5 overdue customers and average DSO'", color: "text-cyan-400" },
+                { line: "analysis = pgvector_financial_engine.analyze(query)", color: "text-purple-400" },
+                { line: ">> Identified 5 debtors with ₹8.4L overdue (Avg DSO: 52 days)", color: "text-amber-300" },
+                { line: "export_report_pdf(analysis, destination='whatsapp_owner')", color: "text-emerald-400" },
             ],
         },
     },
 ];
 
 export function FeatureShowcase() {
-    const [activeTab, setActiveTab] = useState("whatsapp");
+    const [activeTab, setActiveTab] = useState("order-manager");
     const feature = FEATURES.find((f) => f.id === activeTab) || FEATURES[0];
     const Icon = feature.icon;
 
@@ -128,11 +152,11 @@ export function FeatureShowcase() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
                 {/* Section Header */}
                 <div className="text-center max-w-3xl mx-auto space-y-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-white/[0.08]">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider border border-blue-500/20">
                         <Layers size={12} />
-                        <span>[CORE_ARCHITECTURE // 4_PILLARS]</span>
+                        <span>Core Platform Capabilities</span>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
+                    <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--text-primary)]">
                         Engineered for High-Volume Indian Trade
                     </h2>
                     <p className="text-sm sm:text-base text-[var(--text-secondary)]">

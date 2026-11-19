@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import apiClient from "@/lib/api-client";
@@ -38,9 +38,9 @@ export default function CommissionsPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Salesman Commissions</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Salesman & Mistri Commissions</h1>
                     <p className="text-[var(--text-muted)] text-sm mt-1">
-                        Per-product commission calculation for delivered orders. <span className="text-[var(--gold)]">Owner/Admin only.</span>
+                        Commission calculation for Salesmen, Mistris, and Contractors across orders. <span className="text-[var(--gold)]">Owner/Admin only.</span>
                     </p>
                 </div>
                 <div className="flex gap-2 items-center">
@@ -77,34 +77,34 @@ export default function CommissionsPage() {
                             <p className="text-2xl font-bold font-mono text-[var(--gold)] mt-2">{formatINR(data?.totalCommissions || 0)}</p>
                         </div>
                         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-5">
-                            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Active Salesmen</span>
+                            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Active Recipients</span>
                             <p className="text-2xl font-bold font-mono mt-2">{salesmen.length}</p>
                         </div>
                     </div>
 
-                    {/* Salesman Table */}
+                    {/* Salesman & Partner Table */}
                     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-[var(--bg-secondary)] border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
-                                        <th className="text-left p-4">Salesman</th>
-                                        <th className="text-left p-4">Territory</th>
+                                        <th className="text-left p-4">Recipient / Salesman</th>
+                                        <th className="text-left p-4">Role / Territory</th>
                                         <th className="text-right p-4">Orders</th>
                                         <th className="text-right p-4">Sales</th>
                                         <th className="text-right p-4">Target</th>
-                                        <th className="text-center p-4">Achievement</th>
+                                        <th className="text-center p-4">Status / Goal</th>
                                         <th className="text-right p-4">Commission</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {salesmen.length === 0 ? (
                                         <tr><td colSpan={7} className="text-center py-12 text-[var(--text-muted)]">
-                                            No commission data for this period. Ensure products have commission rates set.
+                                            No commission data for this period. Add commission to orders or set commission rates on products.
                                         </td></tr>
                                     ) : salesmen.map((s: any) => (
-                                        <>
-                                            <tr key={s.salesmanId}
+                                        <Fragment key={s.salesmanId}>
+                                            <tr
                                                 onClick={() => setExpandedSalesman(expandedSalesman === s.salesmanId ? null : s.salesmanId)}
                                                 className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] cursor-pointer transition-colors">
                                                 <td className="p-4 font-medium flex items-center gap-2">
@@ -114,17 +114,23 @@ export default function CommissionsPage() {
                                                 <td className="p-4 text-[var(--text-secondary)]">{s.territory || '—'}</td>
                                                 <td className="p-4 text-right font-mono">{s.orderCount}</td>
                                                 <td className="p-4 text-right font-mono">{formatINR(s.totalSales)}</td>
-                                                <td className="p-4 text-right font-mono text-[var(--text-muted)]">{formatINR(s.targetMonthly)}</td>
+                                                <td className="p-4 text-right font-mono text-[var(--text-muted)]">{s.targetMonthly > 0 ? formatINR(s.targetMonthly) : '—'}</td>
                                                 <td className="p-4 text-center">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium tracking-wider border
-                                                        ${s.achievement >= 100
-                                                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                                                            : s.achievement >= 75
-                                                                ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                                                                : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                                        }`}>
-                                                        {s.achievement.toFixed(0)}%
-                                                    </span>
+                                                    {s.targetMonthly > 0 ? (
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium tracking-wider border
+                                                            ${s.achievement >= 100
+                                                                ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                                                : s.achievement >= 75
+                                                                    ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                                                    : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                            }`}>
+                                                            {s.achievement.toFixed(0)}%
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium tracking-wider border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                                                            Payable
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-right font-mono font-bold text-[var(--gold)]">{formatINR(s.totalCommission)}</td>
                                             </tr>
@@ -149,7 +155,7 @@ export default function CommissionsPage() {
                                                     </td>
                                                 </tr>
                                             )}
-                                        </>
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>

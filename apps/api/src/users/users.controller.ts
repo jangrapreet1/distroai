@@ -33,6 +33,16 @@ export class UsersController {
         return this.users.create(user.orgId, dto);
     }
 
+    @Get('me')
+    getMe(@CurrentUser() user: JwtPayload) {
+        return this.users.findOne(user.orgId, user.sub);
+    }
+
+    @Patch('me')
+    updateMe(@CurrentUser() user: JwtPayload, @Body() dto: UpdateUserDto) {
+        return this.users.update(user.orgId, user.sub, dto, user.sub, user.role);
+    }
+
     @Get(':id')
     findOne(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
         return this.users.findOne(user.orgId, id);

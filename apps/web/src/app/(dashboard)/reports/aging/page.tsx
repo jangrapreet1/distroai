@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, AlertTriangle, Clock } from "lucide-react";
 import apiClient from "@/lib/api-client";
 import { formatINR } from "@/lib/utils";
-import { useState } from "react";
+import { useState, Fragment } from "react";
 
 const BUCKET_COLORS: Record<string, string> = {
     current: "var(--green-bright)",
@@ -40,7 +40,7 @@ export default function AgingReportPage() {
         <div className="space-y-6 animate-in fade-in duration-300">
             {/* Header */}
             <div>
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Aging Report</h1>
+                <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>Aging Report</h1>
                 <p className="text-[var(--text-muted)] text-sm mt-1">Outstanding invoice balances bucketed by days overdue.</p>
             </div>
 
@@ -96,8 +96,8 @@ export default function AgingReportPage() {
                                             No outstanding invoices. All caught up!
                                         </td></tr>
                                     ) : customers.map((c: any) => (
-                                        <>
-                                            <tr key={c.customerId}
+                                        <Fragment key={c.customerId}>
+                                            <tr
                                                 onClick={() => setExpandedCustomer(expandedCustomer === c.customerId ? null : c.customerId)}
                                                 className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] cursor-pointer transition-colors">
                                                 <td className="p-4 font-medium">
@@ -126,7 +126,7 @@ export default function AgingReportPage() {
                                                     <td className="p-2 text-right font-mono text-xs">{formatINR(inv.balanceAmount)}</td>
                                                 </tr>
                                             ))}
-                                        </>
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>

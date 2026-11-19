@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { IsString, IsOptional, IsNumber, IsEmail, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsEmail, IsBoolean, Min } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupplierStatementPdfService } from './supplier-statement-pdf.service';
 import { SupplierStatementQueryDto } from './dto/supplier-statement-query.dto';
@@ -12,12 +12,32 @@ export class CreateSupplierDto {
     @IsOptional() @IsString() phone?: string;
     @IsOptional() @IsEmail() email?: string;
     @IsOptional() @IsString() gstNumber?: string;
+    @IsOptional() @IsString() panNumber?: string;
     @IsOptional() @IsString() address?: string;
     @IsOptional() @IsString() city?: string;
     @IsOptional() @IsString() state?: string;
+    @IsOptional() @IsString() pincode?: string;
     @IsOptional() @IsNumber() @Min(0) creditDays?: number;
     @IsOptional() @IsNumber() @Min(0) leadTimeDays?: number;
     @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class UpdateSupplierDto {
+    @IsOptional() @IsString() name?: string;
+    @IsOptional() @IsString() contactPerson?: string;
+    @IsOptional() @IsString() phone?: string;
+    @IsOptional() @IsEmail() email?: string;
+    @IsOptional() @IsString() gstNumber?: string;
+    @IsOptional() @IsString() panNumber?: string;
+    @IsOptional() @IsString() address?: string;
+    @IsOptional() @IsString() city?: string;
+    @IsOptional() @IsString() state?: string;
+    @IsOptional() @IsString() pincode?: string;
+    @IsOptional() @IsNumber() @Min(0) creditDays?: number;
+    @IsOptional() @IsNumber() @Min(0) leadTimeDays?: number;
+    @IsOptional() @IsString() notes?: string;
+    @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 @Injectable()
@@ -125,13 +145,16 @@ export class SuppliersService {
             for (const item of po.items) {
                 const qty = item.receivedQty > 0 ? item.receivedQty : item.orderedQty;
                 const cost = item.price || 0;
-                const worth = qty * cost;
+                const worth = item.totalAmount || (qty * cost);
+
+                // If quantity was not specified / omitted / dummy 1 default on lump sum, show as null / —
+                const hasExplicitQty = qty > 0 && !(qty === 1 && (cost === worth || cost === 0) && (!item.product?.name || item.product?.name.startsWith('General Purchase Goods')));
 
                 rawEntries.push({
                     date: dateStr,
                     itemName: `${item.product?.name || 'Item'} (${po.poNumber})`,
-                    quantity: qty,
-                    cost: cost,
+                    quantity: hasExplicitQty ? qty : null,
+                    cost: hasExplicitQty ? cost : null,
                     worth: worth,
                     returned: null,
                     amountPaid: null,
@@ -219,28 +242,56 @@ export class SuppliersService {
     }
 
     /**
-     * Record a payment made to a supplier (stored as an operational expense)
+     * Record a payment made to a supplier (stored as an operational expense and decrements supplier balance)
      */
     async recordPayment(orgId: string, supplierId: string, dto: RecordSupplierPaymentDto, userId: string) {
         const supplier = await this.prisma.supplier.findFirst({ where: { id: supplierId, orgId } });
         if (!supplier) throw new NotFoundException({ code: 'SUPPLIER_NOT_FOUND', message: 'Supplier not found' });
 
-        const expense = await this.prisma.expense.create({
-            data: {
-                orgId,
-                type: 'OPERATIONAL',
-                category: 'Supplier Payment',
-                vendorName: supplier.name,
-                amount: dto.amount,
-                date: dto.date ? new Date(dto.date) : new Date(),
-                paymentMethod: (dto.paymentMethod as any) || 'CASH',
-                notes: dto.notes,
-                purchaseOrderId: dto.purchaseOrderId || undefined,
-                status: 'PAID',
-            },
-        });
+        return this.prisma.$transaction(async (tx) => {
+            const expense = await tx.expense.create({
+                data: {
+                    orgId,
+                    type: 'OPERATIONAL',
+                    category: 'Supplier Payment',
+                    vendorName: supplier.name,
+                    amount: dto.amount,
+                    date: dto.date ? new Date(dto.date) : new Date(),
+                    paymentMethod: (dto.paymentMethod as any) || 'CASH',
+                    notes: dto.notes,
+                    purchaseOrderId: dto.purchaseOrderId || undefined,
+                    status: 'PAID',
+                },
+            });
 
-        return { success: true, expense };
+            // If payment was made against a specific PO, update PO paidAmount and status
+            if (dto.purchaseOrderId) {
+                const po = await tx.purchaseOrder.findFirst({
+                    where: { id: dto.purchaseOrderId, orgId },
+                });
+                if (po) {
+                    const newPaid = (po.paidAmount || 0) + dto.amount;
+                    const newStatus = newPaid >= po.totalAmount ? 'PAID' : (newPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
+                    await tx.purchaseOrder.update({
+                        where: { id: po.id },
+                        data: {
+                            paidAmount: newPaid,
+                            paymentStatus: newStatus,
+                        },
+                    });
+                }
+            }
+
+            // Always decrement supplier's outstanding balance
+            const updatedSupplier = await tx.supplier.update({
+                where: { id: supplierId },
+                data: {
+                    outstandingBalance: { decrement: dto.amount },
+                },
+            });
+
+            return { success: true, expense, outstandingBalance: updatedSupplier.outstandingBalance };
+        });
     }
 
     /**

@@ -33,24 +33,58 @@ export default function ProductDetailPage({
     );
 
     const [activeImageIdx, setActiveImageIdx] = useState(0);
+    const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+
+    const currentVariant = useMemo(() => {
+        if (!product?.hasVariants || !product?.variants?.length) return null;
+        if (selectedVariantId) {
+            const found = product.variants.find((v: any) => v.id === selectedVariantId);
+            if (found) return found;
+        }
+        return product.variants[0];
+    }, [product, selectedVariantId]);
+
     const displayImages = product?.imageUrls?.length > 0 ? product.imageUrls : (product?.imageUrl ? [product.imageUrl] : []);
 
-    const cartItem = cart.items[productId];
+    const activeItemKey = currentVariant ? `${product?.id}_${currentVariant.id}` : productId;
+    const cartItem = cart.items[activeItemKey];
     const quantity = cartItem?.quantity || 0;
+
+    const displayPrice = currentVariant ? currentVariant.price : (product?.price ?? 0);
+    const displayOriginalPrice = currentVariant ? currentVariant.originalPrice : (product?.originalPrice ?? 0);
+    const displayStock = currentVariant ? currentVariant.stock : (product?.stock ?? 0);
+    const displayInStock = currentVariant ? currentVariant.inStock : (product?.inStock ?? false);
 
     const addToCart = () => {
         if (!product) return;
-        cart.addItem({
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            originalPrice: product.originalPrice,
-            imageUrl: product.imageUrl,
-            category: product.category,
-            isB2B: product.isB2B,
-            unit: product.unit,
-        });
-        toast.success(`Added ${product.name}`);
+        if (currentVariant) {
+            cart.addItem({
+                id: activeItemKey,
+                productId: product.id,
+                variantId: currentVariant.id,
+                name: `${product.name} (${currentVariant.name})`,
+                price: currentVariant.price,
+                originalPrice: currentVariant.originalPrice,
+                imageUrl: currentVariant.imageUrl || product.imageUrl,
+                category: product.category,
+                isB2B: product.isB2B,
+                unit: product.unit,
+            });
+            toast.success(`Added ${product.name} (${currentVariant.name})`);
+        } else {
+            cart.addItem({
+                id: product.id,
+                productId: product.id,
+                name: product.name,
+                price: product.price,
+                originalPrice: product.originalPrice,
+                imageUrl: product.imageUrl,
+                category: product.category,
+                isB2B: product.isB2B,
+                unit: product.unit,
+            });
+            toast.success(`Added ${product.name}`);
+        }
     };
 
     if (isLoading) {
@@ -121,11 +155,11 @@ export default function ProductDetailPage({
                     {/* Pricing */}
                     <div className="mt-6 flex items-baseline gap-3">
                         <span className="text-3xl font-bold text-[var(--gold)] font-mono">
-                            ₹{(product.price ?? 0).toLocaleString("en-IN")}
+                            ₹{(displayPrice ?? 0).toLocaleString("en-IN")}
                         </span>
-                        {product.isB2B && product.price < product.originalPrice && (
+                        {product.isB2B && displayPrice < displayOriginalPrice && (
                             <span className="text-lg text-zinc-500 line-through font-mono">
-                                ₹{(product.originalPrice ?? 0).toLocaleString("en-IN")}
+                                ₹{(displayOriginalPrice ?? 0).toLocaleString("en-IN")}
                             </span>
                         )}
                         {product.isB2B && (
@@ -134,6 +168,32 @@ export default function ProductDetailPage({
                             </span>
                         )}
                     </div>
+
+                    {/* Variation Selector */}
+                    {product.hasVariants && product.variants?.length > 0 && (
+                        <div className="mt-6 p-4 rounded-xl bg-[#111] border border-[#222] space-y-3">
+                            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">
+                                Select Variation: <span className="text-white normal-case font-bold">{currentVariant?.name}</span>
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                                {product.variants.map((v: any) => {
+                                    const isSelected = (currentVariant?.id === v.id);
+                                    return (
+                                        <button
+                                            key={v.id}
+                                            type="button"
+                                            onClick={() => setSelectedVariantId(v.id)}
+                                            className={`px-3.5 py-2 text-xs font-medium rounded-lg border transition-all flex items-center gap-2 ${isSelected ? 'border-[var(--gold)] bg-[var(--gold)]/10 text-white shadow-sm font-semibold' : 'border-[#333] bg-[#0a0a0a] text-zinc-400 hover:border-zinc-500 hover:text-white'}`}
+                                        >
+                                            <span>{v.name}</span>
+                                            <span className="text-[10px] text-zinc-500 font-mono">₹{v.price}</span>
+                                            {v.stock <= 0 && <span className="text-[9px] text-red-400">(Out of stock)</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Details Grid */}
                     <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -149,10 +209,10 @@ export default function ProductDetailPage({
                                 <p className="text-sm text-white font-medium mt-0.5 font-mono">{product.hsnCode}</p>
                             </div>
                         )}
-                        <div className={`bg-[#111] border rounded-lg p-3 ${product.inStock ? "border-[#222]" : "border-red-900/30"}`}>
+                        <div className={`bg-[#111] border rounded-lg p-3 ${displayInStock ? "border-[#222]" : "border-red-900/30"}`}>
                             <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Availability</p>
-                            <p className={`text-sm font-medium mt-0.5 ${product.inStock ? "text-green-400" : "text-red-400"}`}>
-                                {product.inStock ? (product.stock > 10 ? "In Stock" : `Only ${product.stock} left`) : "Out of Stock"}
+                            <p className={`text-sm font-medium mt-0.5 ${displayInStock ? "text-green-400" : "text-red-400"}`}>
+                                {displayInStock ? (displayStock > 10 ? "In Stock" : `Only ${displayStock} left`) : "Out of Stock"}
                             </p>
                         </div>
                     </div>
@@ -169,15 +229,15 @@ export default function ProductDetailPage({
                         {quantity > 0 ? (
                             <div className="flex items-center border border-[#333] rounded-lg overflow-hidden bg-[#0a0a0a]">
                                 <button
-                                    onClick={() => cart.updateQuantity(productId, -1)}
+                                    onClick={() => cart.updateQuantity(activeItemKey, -1)}
                                     className="w-10 h-10 flex items-center justify-center hover:bg-white/10 transition-colors"
                                 >
                                     <Minus className="w-4 h-4" />
                                 </button>
                                 <span className="w-12 text-center font-mono font-semibold">{quantity}</span>
                                 <button
-                                    onClick={() => cart.updateQuantity(productId, 1)}
-                                    disabled={quantity >= product.stock}
+                                    onClick={() => cart.updateQuantity(activeItemKey, 1)}
+                                    disabled={quantity >= displayStock}
                                     className="w-10 h-10 flex items-center justify-center hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Plus className="w-4 h-4" />
@@ -187,11 +247,11 @@ export default function ProductDetailPage({
 
                         <button
                             onClick={addToCart}
-                            disabled={!product.inStock || quantity >= product.stock}
+                            disabled={!displayInStock || quantity >= displayStock}
                             className="flex-1 bg-[var(--gold)] hover:bg-[#eab308] text-black font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-[0_0_20px_rgba(234,179,8,0.2)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none bg-zinc-800 disabled:hover:bg-zinc-800 disabled:text-zinc-500"
                         >
                             <ShoppingCart className="w-5 h-5" />
-                            {!product.inStock ? "Out of Stock" : quantity > 0 ? "Add More" : "Add to Cart"}
+                            {!displayInStock ? "Out of Stock" : quantity > 0 ? "Add More" : "Add to Cart"}
                         </button>
                     </div>
                 </div>

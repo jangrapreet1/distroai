@@ -4,6 +4,7 @@ export type PaymentMethod = 'CASH' | 'UPI' | 'CHEQUE' | 'BANK_TRANSFER' | 'CREDI
 
 export interface CreateTransactionItemDto {
   productId?: string;
+  variantId?: string;
   productName: string;
   quantity: number;
   unitPrice: number;
@@ -20,6 +21,7 @@ export interface CreateTransactionDto {
   reference?: string;
   notes?: string;
   items?: CreateTransactionItemDto[];
+  warehouseId?: string;
 }
 
 export interface UpdateTransactionDto {
@@ -55,6 +57,7 @@ export interface LedgerEntryWithBalance {
   reference?: string | null;
   notes?: string | null;
   createdAt: string;
+  updatedAt?: string;
   items: LedgerItemOutput[];
 }
 
@@ -116,4 +119,39 @@ export interface RTKStatementData {
     rawType?: CustomerTransactionType;
   }>;
   summary: LedgerSummary;
+}
+
+
+export interface LedgerAuditChange {
+  field: string;
+  label: string;
+  oldValue: any;
+  newValue: any;
+  description: string;
+}
+
+export interface FormattedLedgerAuditLog {
+  id: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'IMPORT' | string;
+  entityType: string;
+  entityId: string;
+  createdAt: string;
+  user: {
+    id?: string;
+    name: string;
+    email?: string;
+  };
+  summary: string;
+  changes: LedgerAuditChange[];
+  transactionSnapshot?: {
+    date?: string;
+    type?: CustomerTransactionType | string;
+    amount?: number;
+    description?: string;
+  };
+}
+
+export interface CustomerLedgerLogsResponse {
+  logs: FormattedLedgerAuditLog[];
+  total: number;
 }

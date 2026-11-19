@@ -7,10 +7,14 @@ export const createGetForecastTool = (orgId: string, prisma: PrismaService) => {
         name: "get_forecast",
         description: "Get demand forecast and reorder recommendations for products.",
         schema: z.object({
-            productId: z.string().optional(),
-            type: z.enum(['specific', 'reorder_list']),
+            productId: z.string().optional().describe("Optional product UUID"),
+            type: z.enum(['specific', 'reorder_list']).optional().default('reorder_list').describe("Type of forecast: specific product or reorder_list recommendations"),
         }),
-        func: (async ({ productId, type }: any) => {
+        func: (async (args: any) => {
+            const productId = args?.productId || args?.id;
+            const rawType = args?.type || args?.filter;
+            const type = rawType || (productId ? 'specific' : 'reorder_list');
+
             if (type === 'specific') {
                 if (!productId) return "productId is required for 'specific' type.";
 
@@ -34,23 +38,24 @@ export const createGetForecastTool = (orgId: string, prisma: PrismaService) => {
             }
 
             if (type === 'reorder_list') {
-                // Real implementation would look at inventory vs reorder points
-                // Simplified query for AI tool context
                 const lowStock = await prisma.inventory.findMany({
                     where: { orgId },
                     include: { product: true },
                 });
 
                 const recommendations = lowStock
-                    .filter(i => (i.quantity - i.reservedQty) <= (i.product.minStockLevel || 0))
+                    .filter(i => i.product && (i.quantity - i.reservedQty) <= (i.product.minStockLevel || 0))
                     .map(i => ({
-                        productName: i.product.name,
+                        productName: i.product?.name || 'Unknown',
+                        sku: i.product?.sku || '',
                         currentStock: i.quantity - i.reservedQty,
-                        minStock: i.product.minStockLevel,
-                        recommendedReorderQty: i.product.minStockLevel * 2, // simplified logic
+                        minStock: i.product?.minStockLevel || 0,
+                        recommendedReorderQty: (i.product?.minStockLevel || 10) * 2,
+                        sellingPrice: i.product?.sellingPrice || 0,
+                        purchasePrice: i.product?.purchasePrice || 0,
                     }))
                     .sort((a, b) => a.currentStock - b.currentStock)
-                    .slice(0, 10);
+                    .slice(0, 20);
 
                 return JSON.stringify(recommendations);
             }
@@ -65,11 +70,15 @@ export const createGetCustomerTool = (orgId: string, prisma: PrismaService) => {
         name: "get_customer",
         description: "Get detailed information about a specific customer, top customers, or dormant customers.",
         schema: z.object({
-            customerId: z.string().optional(),
+            customerId: z.string().optional().describe("Customer UUID"),
             customerName: z.string().optional().describe("Used for fuzzy matching if ID is unknown"),
-            type: z.enum(['profile', 'top_customers', 'dormant', 'high_risk']),
+            type: z.enum(['profile', 'top_customers', 'dormant', 'high_risk']).optional().default('profile').describe("Lookup type: profile, top_customers, dormant, high_risk"),
         }),
-        func: (async ({ customerId, customerName, type }: any) => {
+        func: (async (args: any) => {
+            const customerId = args?.customerId || args?.id;
+            const customerName = args?.customerName || args?.name;
+            const type = args?.type || (customerId || customerName ? 'profile' : 'top_customers');
+
             if (type === 'profile') {
                 if (!customerId && !customerName) return "Must provide customerId or customerName for profile lookup.";
 

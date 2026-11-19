@@ -30,9 +30,9 @@ const PRESETS: PresetItem[] = [
     {
         id: "order",
         label: "📦 20 Cases Maggi + 10 Cases Parle-G",
-        badge: "Hinglish Order",
+        badge: "FMCG Hinglish Order",
         userPrompt: "Bhai 20 peti Maggi 70g & 10 peti Parle-G Gold bhej do kal tak, urgent hai!",
-        botReply: "✅ Order Confirmed! (Order #ORD-8492)\n\n• 20x Maggi 70g (₹1,440/case) = ₹28,800\n• 10x Parle-G Gold (₹720/case) = ₹7,200\n\n💰 Subtotal: ₹36,000\n🏷️ Gold Dealer Scheme (3%): -₹1,080\n📊 GST (18% / 12%): ₹4,820\n━━━━━━━━━━━━━━━━━━━━\n💵 Total Bill: ₹39,740\n\nStock reserved in Warehouse-1. Dispatch scheduled for tomorrow 10:00 AM.",
+        botReply: "✅ Draft Order Generated! (Order #ORD-8492)\n\n• 20x Maggi 70g (₹1,440/case) = ₹28,800\n• 10x Parle-G Gold (₹720/case) = ₹7,200\n\n💰 Subtotal: ₹36,000\n🏷️ Gold Dealer Scheme (3%): -₹1,080\n📊 GST (18% / 12%): ₹4,820\n━━━━━━━━━━━━━━━━━━━━\n💵 Total Bill: ₹39,740\n\n🛡️ Human Safeguard: Verified with 99.4% SKU match. 1-click approve to push to Tally.",
         invoice: {
             invoiceNumber: "INV-2026-0849",
             amount: 39740,
@@ -41,10 +41,31 @@ const PRESETS: PresetItem[] = [
         erpStatus: {
             orderNumber: "ORD-8492",
             retailer: "Sharma Kirana Store (Gold Tier)",
-            status: "TALLY_SYNC_QUEUED",
+            status: "DRAFT_REVIEW_READY",
             items: "Maggi 70g (20), Parle-G (10)",
             amount: "₹39,740",
             riskScore: 94,
+        },
+    },
+    {
+        id: "tiles-hardware",
+        label: "🏗️ 20 Bags Roff T01 + 50 Boxes Tiles",
+        badge: "Tiles & Hardware",
+        isVoice: true,
+        userPrompt: "Voice Note (0:09): \"Bhaiya 20 bag Roff T01 adhesive aur 50 peti 2*2 vitrified tiles site pe bhejna hai urgent!\"",
+        botReply: "🎙️ *Voice Note Transcribed & Matched (99.6% Accuracy):*\n\n1. Roff Tile Adhesive (T01) — 20 Bags (₹360/bag) = ₹7,200\n2. 2x2 Glazed Vitrified Tiles (800 Sq.Ft) — 50 Boxes (₹620/box) = ₹31,000\n\n💰 Net Total: ₹38,200 (GST 18% Included)\n🛡️ Draft created with margin check (Landed cost protected). Ready for 1-click Tally voucher dispatch.",
+        invoice: {
+            invoiceNumber: "INV-2026-0851",
+            amount: 38200,
+            itemsCount: 2,
+        },
+        erpStatus: {
+            orderNumber: "ORD-8494",
+            retailer: "Om Hardware & Sanitaryware",
+            status: "LANDED_COST_CHECKED",
+            items: "Roff T01 (20 Bags), 2x2 Tiles (50 Boxes / 800 Sqft)",
+            amount: "₹38,200",
+            riskScore: 96,
         },
     },
     {
@@ -110,11 +131,11 @@ export function InteractiveDemo() {
             {/* Header / Preset Picker */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-white/[0.06]">
                 <div>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--gold)]/10 text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider mb-2">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-2 border border-blue-500/20">
                         <Sparkles size={12} />
-                        <span>[DEMO // LIVE_SIMULATOR]</span>
+                        <span>Live Interactive Simulator</span>
                     </div>
-                    <h3 className="text-lg sm:text-2xl font-bold text-[var(--text-primary)]">
+                    <h3 className="text-lg sm:text-2xl font-bold text-white">
                         Experience the WhatsApp ➔ Tally Invoicing Pipeline
                     </h3>
                 </div>
@@ -127,15 +148,15 @@ export function InteractiveDemo() {
                             onClick={() => handleSelectPreset(idx)}
                             className={`relative px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors duration-200 ${
                                 activePresetIndex === idx
-                                    ? "text-[#07070E]"
-                                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-white/[0.02] border border-white/[0.06]"
+                                    ? "text-white"
+                                    : "text-zinc-300 hover:text-white bg-white/[0.04] border border-white/[0.08]"
                             }`}
                         >
                             {activePresetIndex === idx && (
                                 <motion.div
                                     layoutId="activePresetPill"
                                     transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-[var(--gold)] via-[var(--gold-light)] to-[#FFE8A3] shadow-md shadow-amber-500/20"
+                                    className="absolute inset-0 rounded-xl bg-blue-600 shadow-md shadow-blue-500/25"
                                 />
                             )}
                             <span className="relative z-10">{preset.label}</span>
@@ -159,7 +180,7 @@ export function InteractiveDemo() {
                                     DistroAI Inbound Assistant
                                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                                 </h4>
-                                <p className="text-[10px] text-emerald-400/80 font-mono">META_CLOUD_API // ACTIVE</p>
+                                <p className="text-[10px] text-emerald-400/90 font-medium">WhatsApp Cloud API · Active</p>
                             </div>
                         </div>
                         <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-medium border border-emerald-500/30">
@@ -262,9 +283,9 @@ export function InteractiveDemo() {
                     </div>
 
                     {/* WhatsApp Input Bar */}
-                    <div className="bg-[#1F2C34] px-4 py-2.5 flex items-center justify-between border-t border-white/5 text-gray-400 text-xs font-mono">
-                        <span>💬 NLP PARSER // READY</span>
-                        <span className="text-emerald-400 text-[11px]">⚡ 2.4s Latency</span>
+                    <div className="bg-[#1F2C34] px-4 py-2.5 flex items-center justify-between border-t border-white/5 text-gray-400 text-xs">
+                        <span>💬 Multilingual NLP Parser Active</span>
+                        <span className="text-emerald-400 text-[11px] font-medium">⚡ 2.4s Turnaround</span>
                     </div>
                 </div>
 
@@ -273,13 +294,13 @@ export function InteractiveDemo() {
                     {/* ERP Header */}
                     <div className="bg-white/[0.02] px-4 py-3 flex items-center justify-between border-b border-white/[0.06]">
                         <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[var(--gold)] shadow-[0_0_8px_rgba(201,168,76,0.6)]" />
-                            <h4 className="text-xs font-mono font-bold text-[var(--text-primary)]">
-                                [CONSOLE // REAL_TIME_OPS]
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                            <h4 className="text-xs font-semibold text-white tracking-wide uppercase">
+                                Real-Time Operations Console
                             </h4>
                         </div>
-                        <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-semibold border border-emerald-500/25 flex items-center gap-1">
-                            <CheckCircle2 size={11} /> TALLY_SYNC_CONNECTED
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-semibold border border-emerald-500/25 flex items-center gap-1">
+                            <CheckCircle2 size={11} /> Tally Synced
                         </span>
                     </div>
 
@@ -303,21 +324,21 @@ export function InteractiveDemo() {
 
                             <div className="space-y-2 text-xs">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[var(--text-secondary)]">Customer Account:</span>
-                                    <span className="font-semibold text-[var(--text-primary)]">{active.erpStatus.retailer}</span>
+                                    <span className="text-zinc-400">Customer Account:</span>
+                                    <span className="font-semibold text-white">{active.erpStatus.retailer}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[var(--text-secondary)]">Catalog SKUs:</span>
-                                    <span className="font-medium text-[var(--text-primary)]">{active.erpStatus.items}</span>
+                                    <span className="text-zinc-400">Catalog SKUs:</span>
+                                    <span className="font-medium text-white">{active.erpStatus.items}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[var(--text-secondary)]">Bill Net Value:</span>
+                                    <span className="text-zinc-400">Bill Net Value:</span>
                                     <span className="font-bold text-[var(--gold)] font-mono text-base">{active.erpStatus.amount}</span>
                                 </div>
                             </div>
 
                             <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs">
-                                <span className="text-[var(--text-secondary)]">AI Credit Risk Velocity:</span>
+                                <span className="text-zinc-400">AI Credit Risk Velocity:</span>
                                 <span className="text-emerald-400 font-bold font-mono flex items-center gap-1.5">
                                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                                     {active.erpStatus.riskScore}/100 (Optimal Credit)
@@ -327,23 +348,23 @@ export function InteractiveDemo() {
 
                         {/* Completed Pipelines */}
                         <div className="space-y-2">
-                            <p className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
+                            <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
                                 [AUTOMATED_PIPELINES_COMPLETED]
                             </p>
                             <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-[var(--text-secondary)]">
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-zinc-300">
                                     <CheckCircle2 size={14} className="text-[var(--green-bright)] shrink-0" />
                                     <span>Stock Reserved (W-1)</span>
                                 </div>
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-[var(--text-secondary)]">
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-zinc-300">
                                     <CheckCircle2 size={14} className="text-[var(--green-bright)] shrink-0" />
                                     <span>Tally Voucher Synced</span>
                                 </div>
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-[var(--text-secondary)]">
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-zinc-300">
                                     <CheckCircle2 size={14} className="text-[var(--green-bright)] shrink-0" />
                                     <span>GST Taxes Auto-Split</span>
                                 </div>
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-[var(--text-secondary)]">
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-2 text-zinc-300">
                                     <CheckCircle2 size={14} className="text-[var(--green-bright)] shrink-0" />
                                     <span>Dynamic UPI QR Created</span>
                                 </div>

@@ -18,6 +18,8 @@ import {
   useDeleteCustomerTransaction,
   useCreateLocationRequest,
   useProducts,
+  useWarehouses,
+  useCustomerLedgerLogs,
 } from "@/hooks/api-hooks";
 import {
   downloadCustomerStatementPdf,
@@ -45,6 +47,9 @@ jest.mock("next/dynamic", () => () => {
 describe("Customer Ledger UI & Account Management Suite (Milestone M3)", () => {
   const customerId = "cust-123";
   const customerName = "Manish Enterprises";
+  const testQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const renderWithClient = (ui: React.ReactElement) =>
+    render(<QueryClientProvider client={testQueryClient}>{ui}</QueryClientProvider>);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -98,6 +103,21 @@ describe("Customer Ledger UI & Account Management Suite (Milestone M3)", () => {
       isFetching: false,
       refetch: jest.fn(),
     });
+
+    if (useWarehouses) {
+      (useWarehouses as jest.Mock).mockReturnValue({
+        data: [],
+        isLoading: false,
+      });
+    }
+
+    if (useCustomerLedgerLogs) {
+      (useCustomerLedgerLogs as jest.Mock).mockReturnValue({
+        data: { logs: [], total: 0 },
+        isLoading: false,
+        refetch: jest.fn(),
+      });
+    }
   });
 
   // =========================================================================
@@ -146,7 +166,7 @@ describe("Customer Ledger UI & Account Management Suite (Milestone M3)", () => {
         isLoading: false,
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       // Verify customer name
       expect(screen.getByText(customerName)).toBeInTheDocument();
@@ -198,7 +218,7 @@ describe("Customer Ledger UI & Account Management Suite (Milestone M3)", () => {
         },
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       expect(screen.getAllByText(/ADVANCE CREDIT/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/₹12,500/).length).toBeGreaterThan(0);
@@ -235,7 +255,7 @@ describe("Customer Ledger UI & Account Management Suite (Milestone M3)", () => {
         },
       });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       expect(screen.getAllByText(/SETTLED/i).length).toBeGreaterThan(0);
       expect(screen.getByText(/Current Balance: ₹0/)).toBeInTheDocument();
@@ -261,7 +281,7 @@ describe("Customer Ledger UI & Account Management Suite (Milestone M3)", () => {
       (useCustomerCreditScore as jest.Mock).mockReturnValue({ data: null });
       (useCustomerActivity as jest.Mock).mockReturnValue({ data: { data: [] }, isLoading: false });
 
-      render(<CustomerDetailPage params={{ id: customerId }} />);
+      renderWithClient(<CustomerDetailPage params={{ id: customerId }} />);
 
       // Click + Payment Received quick action button
       const paymentBtn = screen.getByRole("button", { name: /\+ Payment Received/i });

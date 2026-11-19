@@ -74,8 +74,10 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
                     )) : (
                         <div className="p-4 text-center text-sm text-[var(--text-muted)]">No notifications</div>
                     )}
-                    <div className="p-2 text-center">
-                        <Link href="/settings" onClick={() => setNotifOpen(false)} className="text-xs text-[var(--gold)] hover:underline">Notification Settings</Link>
+                    <div className="p-2 border-t border-[var(--border)] text-center">
+                        <Link href="/settings/preferences#notifications" onClick={() => setNotifOpen(false)} className="text-xs text-[var(--gold)] hover:underline">
+                            Notification & Push Settings
+                        </Link>
                     </div>
                 </div>
             )}

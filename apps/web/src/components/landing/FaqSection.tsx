@@ -49,11 +49,11 @@ export function FaqSection() {
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
                 {/* Header */}
                 <div className="text-center space-y-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-white/[0.08]">
-                        <HelpCircle size={12} />
-                        <span>[KNOWLEDGE_BASE // FREQUENTLY_ASKED]</span>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider border border-blue-500/20">
+                        <HelpCircle size={13} />
+                        <span>FAQ & Guidance</span>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
+                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)] tracking-tight">
                         Frequently Asked Questions
                     </h2>
                     <p className="text-sm sm:text-base text-[var(--text-secondary)]">
@@ -68,9 +68,9 @@ export function FaqSection() {
                         return (
                             <SpotlightCard
                                 key={idx}
-                                spotlightColor="rgba(201, 168, 76, 0.08)"
+                                spotlightColor="rgba(59, 130, 246, 0.08)"
                                 className={`border-white/[0.08] bg-[#07070C] transition-colors duration-200 ${
-                                    isOpen ? "border-[var(--gold)]/30 bg-[#090912]" : ""
+                                    isOpen ? "border-blue-500/30 bg-[#090912]" : ""
                                 }`}
                             >
                                 <button
@@ -83,7 +83,7 @@ export function FaqSection() {
                                     <motion.div
                                         animate={{ rotate: isOpen ? 180 : 0 }}
                                         transition={{ duration: 0.2, ease: "easeInOut" }}
-                                        className="text-[var(--gold)] shrink-0"
+                                        className="text-blue-500 shrink-0"
                                     >
                                         <ChevronDown size={18} />
                                     </motion.div>

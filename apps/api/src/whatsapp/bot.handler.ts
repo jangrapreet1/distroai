@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from './whatsapp.service';
 import { QueueService } from '../queue/queue.service';
 import { AiService } from '../ai/ai.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // Bot states
 type BotState =
@@ -77,6 +78,7 @@ export class BotHandler {
         private wa: WhatsAppService,
         private queueService: QueueService,
         @Inject(forwardRef(() => AiService)) private aiService: AiService,
+        private notificationsService: NotificationsService,
     ) { }
 
     async handleIncoming(phoneNumberId: string, msg: Record<string, unknown>) {
@@ -212,7 +214,7 @@ export class BotHandler {
                 case 'ORDER_PRODUCT_SELECT':
                     if (listRowId) {
                         const product = await this.prisma.product.findFirst({
-                            where: { id: listRowId, orgId },
+                            where: { id: listRowId, orgId, isDraft: false },
                         });
                         if (product) {
                             await this.wa.sendButtons(orgId, from, `How many ${product.name}? (Price: ${formatINR(Number(product.sellingPrice))} per ${product.unit})`, [
@@ -383,7 +385,7 @@ export class BotHandler {
 
     private async sendProductList(orgId: string, to: string) {
         const products = await this.prisma.product.findMany({
-            where: { orgId, isActive: true },
+            where: { orgId, isActive: true, isDraft: false },
             orderBy: { name: 'asc' },
             take: 20,
             select: { id: true, name: true, sellingPrice: true, category: true, unit: true },
@@ -519,6 +521,21 @@ export class BotHandler {
                     },
                 },
             });
+
+            // Dispatch Web Push notification to distributor
+            try {
+                await this.notificationsService.notify(orgId, {
+                    type: 'NEW_WHATSAPP_ORDER',
+                    orgId,
+                    orderId: order.id,
+                    customerId: customer.id,
+                    orderNumber,
+                    customerName: customer.name,
+                    netAmount: totalAmount,
+                });
+            } catch (notifErr) {
+                this.logger.warn(`Failed to dispatch WhatsApp order notification: ${(notifErr as Error).message}`);
+            }
 
             return order;
         } catch (err) {

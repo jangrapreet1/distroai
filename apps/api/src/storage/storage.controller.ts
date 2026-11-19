@@ -35,7 +35,10 @@ export class StorageController {
             new ParseFilePipe({
                 validators: [
                     new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 20 }), // 20MB max for videos/images
-                    new FileTypeValidator({ fileType: /.(jpg|jpeg|png|webp|avif|mp4|mov|webm|quicktime)$/i }),
+                    new FileTypeValidator({
+                        fileType: /(image\/(jpeg|png|webp|avif)|video\/(mp4|quicktime|webm)|\.(jpg|jpeg|png|webp|avif|mp4|mov|webm|quicktime))$/i,
+                        skipMagicNumbersValidation: true,
+                    }),
                 ],
             }),
         )

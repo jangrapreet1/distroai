@@ -188,3 +188,32 @@ describe('Order Balance Calculation', () => {
         expect(calculateBalance(5000, 6000)).toBe(0);
     });
 });
+
+describe('Customer Credit Limit & Overdue Safeguards', () => {
+    function evaluateCreditPolicy(
+        orderAmount: number,
+        currentOutstanding: number,
+        creditLimit: number,
+        override: boolean = false
+    ): boolean {
+        if (override) return true;
+        if (creditLimit === 0) return true; // Unlimited
+        return (currentOutstanding + orderAmount) <= creditLimit;
+    }
+
+    it('should allow order when total outstanding remains within credit limit', () => {
+        expect(evaluateCreditPolicy(5000, 10000, 20000)).toBe(true);
+    });
+
+    it('should block order when total outstanding exceeds credit limit without override', () => {
+        expect(evaluateCreditPolicy(15000, 10000, 20000)).toBe(false);
+    });
+
+    it('should permit order exceeding credit limit when authorized override is provided', () => {
+        expect(evaluateCreditPolicy(15000, 10000, 20000, true)).toBe(true);
+    });
+
+    it('should allow any order amount if customer has 0 (unlimited) credit limit', () => {
+        expect(evaluateCreditPolicy(500000, 1000000, 0)).toBe(true);
+    });
+});

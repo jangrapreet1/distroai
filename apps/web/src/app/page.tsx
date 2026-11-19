@@ -7,6 +7,7 @@ import { ComparisonTable } from "@/components/landing/ComparisonTable";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { FaqSection } from "@/components/landing/FaqSection";
 import { LandingFooter } from "@/components/landing/LandingFooter";
+import { AuthRedirector } from "@/components/auth-redirector";
 
 export const metadata = {
     title: "DistroAI — The AI-Native ERP & Distribution Engine for India",
@@ -17,6 +18,9 @@ export const metadata = {
 export default function LandingPage() {
     return (
         <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] selection:bg-[var(--gold)]/30 selection:text-[var(--gold-light)]">
+            {/* Automatic redirect if already authenticated */}
+            <AuthRedirector />
+
             {/* Top Navigation */}
             <LandingNavbar />
 

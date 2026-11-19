@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText, Send, Download, CreditCard, CheckCircle, X, Link as LinkIcon, Receipt, QrCode } from "lucide-react";
+import { ArrowLeft, FileText, Send, Download, CreditCard, CheckCircle, X, Link as LinkIcon, Receipt, QrCode, Truck, Sliders } from "lucide-react";
 import { useInvoice, useRecordPayment } from "@/hooks/api-hooks";
 import { formatDate, buildWhatsAppInvoiceLink, formatINR } from "@/lib/utils";
 import apiClient from "@/lib/api-client";
 import toast from "react-hot-toast";
 import { UpiPaymentModal } from "@/components/modals/UpiPaymentModal";
+import { EWayBillModal } from "@/components/modals/EWayBillModal";
+import { ViewEWayBillModal } from "@/components/modals/ViewEWayBillModal";
+import { CustomizeInvoiceModal } from "@/components/modals/CustomizeInvoiceModal";
 
 
 const statusClass: Record<string, string> = { DRAFT: "badge-draft", SENT: "badge-sent", PARTIAL: "badge-partial", PAID: "badge-paid", OVERDUE: "badge-overdue", CANCELLED: "badge-cancelled" };
@@ -35,7 +38,7 @@ function RecordPaymentModal({ open, onClose, invoiceId, customerId, maxAmount }:
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Record Payment</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
@@ -79,6 +82,10 @@ export default function InvoiceDetailPage() {
     const invoice = data?.data ?? data ?? {};
     const [showPayment, setShowPayment] = useState(false);
     const [showUpiModal, setShowUpiModal] = useState(false);
+    const [showEWayBillModal, setShowEWayBillModal] = useState(false);
+    const [showViewEwbModal, setShowViewEwbModal] = useState(false);
+    const [showCustomizeModal, setShowCustomizeModal] = useState(false);
+    const [ewbDetails, setEwbDetails] = useState<any>(null);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState("");
 
@@ -179,16 +186,60 @@ export default function InvoiceDetailPage() {
                         <ArrowLeft size={18} className="text-[var(--text-muted)]" />
                     </Link>
                     <div className="min-w-0">
-                        <h1 className="text-2xl font-bold break-words" style={{ fontFamily: "var(--font-playfair)" }}>
+                        <h1 className="text-2xl font-bold break-words text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
                             {invoice.invoiceNumber ?? "Invoice"}
                         </h1>
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium mt-1 ${statusClass[invoice.status as string] ?? "badge-draft"}`}>{invoice.status as string}</span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass[invoice.status as string] ?? "badge-draft"}`}>{invoice.status as string}</span>
+                            {invoice.eWayBillNumber && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowViewEwbModal(true)}
+                                    title="Click to view e-Way Bill Slip (Form GST EWB-01)"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/25 transition cursor-pointer"
+                                >
+                                    <Truck size={12} /> EWB: {invoice.eWayBillNumber}
+                                </button>
+                            )}
+                            {invoice.eInvoiceIrn && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    <CheckCircle size={12} /> IRN Active
+                                </span>
+                            )}
+                            {invoice.customOptions?.showGstNumber === false && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                    Non-GST / Bill of Supply
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        onClick={() => setShowCustomizeModal(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--gold)]/50 bg-[var(--gold)]/10 text-[var(--gold)] hover:bg-[var(--gold)]/20 transition font-medium cursor-pointer"
+                        title="Customize invoice fields (GSTIN, PAN, HSN, bank details, terms) and print/download"
+                    >
+                        <Sliders size={14} /> Customize & Print
+                    </button>
                     <button onClick={handleGeneratePdf} disabled={pdfLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
                         <Download size={14} /> {pdfLoading ? "..." : "PDF"}
                     </button>
+                    {invoice.eWayBillNumber ? (
+                        <button
+                            onClick={() => setShowViewEwbModal(true)}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition font-medium cursor-pointer"
+                        >
+                            <Truck size={14} /> View e-Way Bill
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setShowEWayBillModal(true)}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10 transition cursor-pointer"
+                        >
+                            <Truck size={14} /> e-Way Bill
+                        </button>
+                    )}
                     {!invoice.eInvoiceIrn && (
                         <button onClick={() => handleAction("Generate E-Invoice", `/api/v1/invoices/${id}/e-invoice`)} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
                             <Receipt size={14} /> {actionLoading === "Generate E-Invoice" ? "..." : "E-Invoice"}
@@ -198,16 +249,36 @@ export default function InvoiceDetailPage() {
                         <LinkIcon size={14} /> {actionLoading === "Create Payment Link" ? "..." : "Payment Link"}
                     </button>
                     {invoice.customer?.phone && (
-                        <a href={buildWhatsAppInvoiceLink({
-                            customerPhone: invoice.customer.phone,
-                            customerName: invoice.customer.name ?? "Customer",
-                            invoiceNumber: invoice.invoiceNumber,
-                            invoiceAmount: invoice.totalAmount,
-                            invoiceId: id,
-                        })} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--whatsapp)] hover:bg-[var(--bg-card)] transition">
-                            <Send size={14} /> WhatsApp
-                        </a>
+                        <div className="flex items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={() => handleSend("whatsapp")}
+                                disabled={!!actionLoading}
+                                className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[#25D366]/15 border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/25 font-semibold transition disabled:opacity-50 cursor-pointer"
+                                title="Send official PDF invoice and 1-tap UPI payment link to customer's WhatsApp"
+                            >
+                                <Send size={14} className={actionLoading === "whatsapp" ? "animate-spin" : ""} />
+                                {actionLoading === "whatsapp" ? "Sending..." : "WhatsApp"}
+                            </button>
+                            <a
+                                href={buildWhatsAppInvoiceLink({
+                                    customerPhone: invoice.customer.phone,
+                                    customerName: invoice.customer.name ?? "Customer",
+                                    invoiceNumber: invoice.invoiceNumber,
+                                    invoiceAmount: invoice.totalAmount,
+                                    balanceAmount: invoice.balanceAmount,
+                                    invoiceId: id,
+                                    upiId: invoice.organization?.settings?.upiId,
+                                    orgName: invoice.organization?.name,
+                                })}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-2 py-2 text-xs rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[#25D366] hover:bg-[var(--bg-card)] transition"
+                                title="Open in WhatsApp Web"
+                            >
+                                Web
+                            </a>
+                        </div>
                     )}
                     {invoice.customer?.email && (
                         <button onClick={() => handleSend("email")} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition disabled:opacity-50">
@@ -366,6 +437,35 @@ export default function InvoiceDetailPage() {
                 upiId={invoice.organization?.settings?.upiId || "distroai@icici"}
                 orgName={invoice.organization?.name || "DistroAI Merchant"}
                 onPaymentConfirmed={() => refetch()}
+            />
+
+            <EWayBillModal
+                isOpen={showEWayBillModal}
+                onClose={() => setShowEWayBillModal(false)}
+                invoiceId={id}
+                invoiceNumber={invoice.invoiceNumber ?? "INV"}
+                totalAmount={Number(invoice.totalAmount ?? 0)}
+                customerName={customer.name ?? "Customer"}
+                customerCity={customer.city}
+                onSuccess={(result) => {
+                    setEwbDetails(result);
+                    refetch();
+                    setShowViewEwbModal(true);
+                }}
+            />
+
+            <ViewEWayBillModal
+                isOpen={showViewEwbModal}
+                onClose={() => setShowViewEwbModal(false)}
+                invoice={invoice}
+                ewbDetails={ewbDetails}
+            />
+
+            <CustomizeInvoiceModal
+                open={showCustomizeModal}
+                onClose={() => setShowCustomizeModal(false)}
+                invoice={invoice}
+                onUpdated={() => refetch()}
             />
         </div>
     );

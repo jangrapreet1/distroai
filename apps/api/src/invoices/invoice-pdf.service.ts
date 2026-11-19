@@ -6,6 +6,7 @@ import React from 'react';
 import * as QRCode from 'qrcode';
 import InvoicePDF from './invoice.document';
 import { ensureReactPdfCompat } from '../common/utils/react-pdf-compat';
+import { InvoiceCustomOptions } from './dto/custom-invoice-options.dto';
 
 @Injectable()
 export class InvoicePdfService {
@@ -16,8 +17,7 @@ export class InvoicePdfService {
     private s3: S3Service,
   ) { }
 
-  async generateInvoicePdf(invoiceId: string): Promise<string> {
-    // 1. Fetch invoice with all relations
+  private async prepareInvoiceForPdf(invoiceId: string, options?: InvoiceCustomOptions) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
@@ -29,7 +29,12 @@ export class InvoicePdfService {
 
     if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 
-    if (invoice.eInvoiceQrCode) {
+    const effectiveOptions: InvoiceCustomOptions = {
+      ...(typeof invoice.customOptions === 'object' && invoice.customOptions ? invoice.customOptions : {}),
+      ...(options ?? {}),
+    };
+
+    if (invoice.eInvoiceQrCode && effectiveOptions.showGstNumber !== false) {
       try {
         invoice.qrCodeDataUri = await QRCode.toDataURL(invoice.eInvoiceQrCode, { margin: 1 });
       } catch (err) {
@@ -37,9 +42,9 @@ export class InvoicePdfService {
       }
     }
 
-    // Generate Dynamic NPCI UPI QR Code
+    // Generate Dynamic NPCI UPI QR Code if enabled
     const upiId = invoice.organization?.settings?.upiId;
-    if (upiId) {
+    if (upiId && effectiveOptions.showUpiQr !== false) {
       try {
         const orgName = invoice.organization?.name || 'Distributor';
         const amount = Number(invoice.balanceAmount ?? invoice.totalAmount ?? 0);
@@ -52,22 +57,48 @@ export class InvoicePdfService {
       }
     }
 
-    // 2. Build PDF content using @react-pdf/renderer
+    return { invoice, effectiveOptions };
+  }
+
+  async generateInvoicePdfBuffer(invoiceId: string, options?: InvoiceCustomOptions): Promise<{ buffer: Buffer; invoiceNumber: string }> {
+    const { invoice, effectiveOptions } = await this.prepareInvoiceForPdf(invoiceId, options);
+
     ensureReactPdfCompat(React);
-    const pdfBuffer = await renderToBuffer(React.createElement(InvoicePDF as any, { invoice }) as any);
+    const pdfBuffer = await renderToBuffer(
+      React.createElement(InvoicePDF as any, { invoice, options: effectiveOptions }) as any
+    );
+
+    return { buffer: pdfBuffer, invoiceNumber: invoice.invoiceNumber };
+  }
+
+  async generateInvoicePdf(invoiceId: string, options?: InvoiceCustomOptions, saveAsDefault = false): Promise<string> {
+    const { invoice, effectiveOptions } = await this.prepareInvoiceForPdf(invoiceId, options);
+
+    // Save custom options to DB if requested
+    if (saveAsDefault && options) {
+      await this.prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { customOptions: options as any },
+      });
+    }
+
+    ensureReactPdfCompat(React);
+    const pdfBuffer = await renderToBuffer(
+      React.createElement(InvoicePDF as any, { invoice, options: effectiveOptions }) as any
+    );
 
     const key = `invoices/${invoice.orgId}/${invoiceId}.pdf`;
 
-    // 3. Upload to S3
+    // Upload to S3 (or local fallback)
     const url = await this.s3.upload(key, pdfBuffer, 'application/pdf');
 
-    // 4. Update Invoice.pdfUrl
+    // Update Invoice.pdfUrl
     await this.prisma.invoice.update({
       where: { id: invoiceId },
       data: { pdfUrl: url },
     });
 
-    // 5. Get signed URL for download
+    // Get signed URL for download
     const signedUrl = await this.s3.getSignedDownloadUrl(key, 604800); // 7 days
     this.logger.log(`Invoice PDF generated for ${invoice.invoiceNumber}: ${key}`);
     return signedUrl;

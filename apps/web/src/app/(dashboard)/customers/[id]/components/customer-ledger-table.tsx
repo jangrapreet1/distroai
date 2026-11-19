@@ -9,7 +9,11 @@ import {
   Search,
   Filter,
   Package,
+  Clock,
+  History,
 } from "lucide-react";
+import { TransactionHistoryModal } from "./transaction-history-modal";
+import { CustomerLedgerHistoryDrawer } from "./customer-ledger-history-drawer";
 import { formatDate, formatINR } from "@/lib/utils";
 import { useCustomerLedger } from "@/hooks/api-hooks";
 import type {
@@ -19,6 +23,7 @@ import type {
 } from "@/types/customer-transactions";
 import { EditTransactionModal } from "./edit-transaction-modal";
 import { DeleteTransactionDialog } from "./delete-transaction-dialog";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 export interface CustomerLedgerTableProps {
   customerId?: string;
@@ -44,6 +49,9 @@ export function CustomerLedgerTable({
   // Modal states for internal handling when callbacks are not provided
   const [editingTransaction, setEditingTransaction] = useState<LedgerEntryWithBalance | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState<LedgerEntryWithBalance | null>(null);
+  const [selectedTxForHistory, setSelectedTxForHistory] = useState<LedgerEntryWithBalance | null>(null);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const isMobile = useIsMobile(768);
 
   // TanStack query when customerId is provided and propEntries are not
   const { data: ledgerData, isLoading: queryIsLoading } = useCustomerLedger(
@@ -144,52 +152,213 @@ export function CustomerLedgerTable({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-[var(--text-muted)] shrink-0" />
-          <select
-            value={filters.type || ""}
-            onChange={(e) =>
-              setFilters((prev) => ({
-                ...prev,
-                type: (e.target.value as CustomerTransactionType) || undefined,
-              }))
-            }
-            aria-label="Filter by transaction type"
-            className="px-2.5 py-1.5 text-xs rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] focus:border-[var(--gold)] focus:outline-none"
-          >
-            <option value="">All Types</option>
-            <option value="SALE">Goods Given (SALE)</option>
-            <option value="RETURN">Goods Returned (RETURN)</option>
-            <option value="PAYMENT">Payment Received (PAYMENT)</option>
-            <option value="ADJUSTMENT">Adjustments (ADJUSTMENT)</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Filter size={14} className="text-[var(--text-muted)] shrink-0" />
+            <select
+              value={filters.type || ""}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  type: (e.target.value as CustomerTransactionType) || undefined,
+                }))
+              }
+              aria-label="Filter by transaction type"
+              className="px-2.5 py-1.5 text-xs rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] focus:border-[var(--gold)] focus:outline-none"
+            >
+              <option value="">All Types</option>
+              <option value="SALE">Goods Given (SALE)</option>
+              <option value="RETURN">Goods Returned (RETURN)</option>
+              <option value="PAYMENT">Payment Received (PAYMENT)</option>
+              <option value="ADJUSTMENT">Adjustments (ADJUSTMENT)</option>
+            </select>
+          </div>
 
-          <input
-            type="date"
-            value={filters.startDate || ""}
-            onChange={(e) =>
-              setFilters((prev) => ({ ...prev, startDate: e.target.value || undefined }))
-            }
-            className="px-2 py-1.5 text-xs rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] focus:border-[var(--gold)] focus:outline-none"
-            title="Filter Start Date"
-            aria-label="Start Date"
-          />
-          <span className="text-xs text-[var(--text-muted)]">to</span>
-          <input
-            type="date"
-            value={filters.endDate || ""}
-            onChange={(e) =>
-              setFilters((prev) => ({ ...prev, endDate: e.target.value || undefined }))
-            }
-            className="px-2 py-1.5 text-xs rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] focus:border-[var(--gold)] focus:outline-none"
-            title="Filter End Date"
-            aria-label="End Date"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={filters.startDate || ""}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, startDate: e.target.value || undefined }))
+              }
+              className="px-2 py-1.5 text-xs rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] focus:border-[var(--gold)] focus:outline-none"
+              title="Filter Start Date"
+              aria-label="Start Date"
+            />
+            <span className="text-xs text-[var(--text-muted)]">to</span>
+            <input
+              type="date"
+              value={filters.endDate || ""}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, endDate: e.target.value || undefined }))
+              }
+              className="px-2 py-1.5 text-xs rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] focus:border-[var(--gold)] focus:outline-none"
+              title="Filter End Date"
+              aria-label="End Date"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowHistoryDrawer(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--gold)] hover:border-[var(--gold)]/50 transition shrink-0 ml-auto md:ml-1"
+            title="View Ledger History & Change Logs"
+          >
+            <Clock size={13} className="text-[var(--gold)]" />
+            <span>History</span>
+          </button>
         </div>
       </div>
 
-      {/* 7-Column Chronological Ledger Table */}
-      <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-white/[0.01] shadow-md">
+      {/* ─── Responsive Presentation: Mobile Cards (< 768px) vs Desktop Table (>= 768px) ─── */}
+      {isMobile ? (
+        <div className="space-y-3">
+        {isLoading ? (
+          <div className="p-8 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
+            <div className="w-5 h-5 border-2 border-[var(--gold)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            Loading chronological ledger...
+          </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="p-8 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border)] rounded-xl">
+            <Package size={28} className="mx-auto mb-2 opacity-30" />
+            No ledger transactions found
+          </div>
+        ) : (
+          filteredEntries.map((entry) => {
+            const isExpanded = expandedRows.has(entry.id);
+            const hasItems = entry.items && entry.items.length > 0;
+            const isDebit = entry.type === "SALE" || (entry.type === "ADJUSTMENT" && entry.amount > 0);
+            const isCredit = entry.type === "RETURN" || entry.type === "PAYMENT" || (entry.type === "ADJUSTMENT" && entry.amount < 0);
+            const debitAmount = isDebit ? Math.abs(entry.amount) : null;
+            const creditAmount = isCredit ? Math.abs(entry.amount) : null;
+            const balance = entry.runningBalance;
+            const balanceSuffix = balance > 0 ? "Dr" : balance < 0 ? "Cr" : "Nil";
+            const balanceColor = balance > 0 ? "text-[var(--red)]" : balance < 0 ? "text-[var(--green-bright)]" : "text-[var(--text-muted)]";
+
+            return (
+              <div
+                key={entry.id}
+                className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5 shadow-sm hover:border-[var(--gold)]/30 transition"
+              >
+                {/* Top row: Date + Type Badge + Edited Pill + Quick Actions */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-[var(--text-primary)]">
+                      {formatDate(entry.date)}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getTypeBadge(entry.type)}`}>
+                      {entry.type}
+                    </span>
+                    {entry.updatedAt && entry.createdAt && new Date(entry.updatedAt).getTime() - new Date(entry.createdAt).getTime() > 2000 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTxForHistory(entry)}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                        title="Click to view change history"
+                      >
+                        <Clock size={10} />
+                        <span>Edited</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleEditClick(entry)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--gold)] hover:bg-[var(--bg-secondary)]"
+                      title="Edit transaction"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteClick(entry)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--red)] hover:bg-[var(--bg-secondary)]"
+                      title="Delete transaction"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Description & Particulars */}
+                {entry.description && (
+                  <p className="text-xs text-[var(--text-primary)] font-medium leading-snug">
+                    {entry.description}
+                  </p>
+                )}
+
+                {/* Payment Method / Reference */}
+                {(entry.paymentMethod || entry.reference) && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+                    {entry.paymentMethod && <span className="font-semibold text-[var(--text-secondary)]">{entry.paymentMethod.replace("_", " ")}</span>}
+                    {entry.paymentMethod && entry.reference && <span>•</span>}
+                    {entry.reference && <span>Ref: {entry.reference}</span>}
+                  </div>
+                )}
+
+                {/* Line Items Accordion */}
+                {hasItems && (
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleRowExpansion(entry.id)}
+                      className="inline-flex items-center gap-1 text-[11px] text-[var(--gold)] font-medium"
+                    >
+                      {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                      <span>{entry.items.length} {entry.items.length === 1 ? "item" : "items"}</span>
+                      <span className="text-[var(--text-muted)] font-normal truncate max-w-[150px]">
+                        ({entry.items.map((it) => it.productName).join(", ")})
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)] space-y-1.5 text-xs animate-in fade-in">
+                        {entry.items.map((it, idx) => (
+                          <div key={it.id || idx} className="flex items-center justify-between py-1 border-b border-[var(--border)]/40 last:border-0">
+                            <div>
+                              <p className="font-medium text-[var(--text-primary)]">{it.productName}</p>
+                              <p className="text-[10px] text-[var(--text-muted)]">{it.quantity} {it.unit || "pcs"} @ ₹{it.unitPrice}</p>
+                            </div>
+                            <span className="font-mono font-semibold text-[var(--text-primary)]">{formatINR(it.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Bottom Row: Amount & Running Balance */}
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]/60 text-xs">
+                  <div>
+                    {debitAmount !== null ? (
+                      <div className="font-mono font-bold text-[var(--red)]">
+                        +{formatINR(debitAmount)} <span className="text-[10px] font-semibold text-[var(--red)]/80">Dr (Given)</span>
+                      </div>
+                    ) : creditAmount !== null ? (
+                      <div className="font-mono font-bold text-[var(--green-bright)]">
+                        -{formatINR(creditAmount)} <span className="text-[10px] font-semibold text-[var(--green-bright)]/80">Cr (Received)</span>
+                      </div>
+                    ) : (
+                      <span className="text-[var(--text-muted)]">—</span>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] text-[var(--text-muted)] mr-1">Bal:</span>
+                    <span className={`font-mono font-bold ${balanceColor}`}>
+                      {formatINR(Math.abs(balance))} <span className="text-[10px] font-semibold">{balanceSuffix}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-white/[0.01] shadow-md">
         <table className="w-full text-xs text-left border-collapse">
           <thead className="bg-[var(--bg-secondary)] text-[var(--text-muted)] uppercase tracking-wider font-semibold border-b border-[var(--border)] sticky top-0 z-10">
             <tr>
@@ -263,11 +432,31 @@ export function CustomerLedgerTable({
                     {/* Description / Line Items */}
                     <td className="py-3 px-4 align-top">
                       <div className="space-y-1">
-                        {entry.description && (
-                          <div className="font-medium text-[var(--text-primary)] leading-snug">
-                            {entry.description}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {entry.description && (
+                            <span className="font-medium text-[var(--text-primary)] leading-snug">
+                              {entry.description}
+                            </span>
+                          )}
+
+                          {/* Edited indicator badge */}
+                          {entry.updatedAt &&
+                            entry.createdAt &&
+                            new Date(entry.updatedAt).getTime() - new Date(entry.createdAt).getTime() > 2000 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedTxForHistory(entry);
+                                }}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/25 transition cursor-pointer"
+                                title="Click to view change history for this entry"
+                              >
+                                <Clock size={10} />
+                                <span>Edited</span>
+                              </button>
+                            )}
+                        </div>
 
                         {/* Payment method & Reference badges */}
                         {(entry.paymentMethod || entry.reference) && (
@@ -386,7 +575,8 @@ export function CustomerLedgerTable({
             )}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
 
       {/* Internal Modals when standalone */}
       {editingTransaction && (
@@ -406,6 +596,25 @@ export function CustomerLedgerTable({
           customerId={customerId}
           customerName={customerName}
           transaction={deletingTransaction}
+        />
+      )}
+
+      {/* Audit Log & History Modals */}
+      {selectedTxForHistory && (
+        <TransactionHistoryModal
+          open={!!selectedTxForHistory}
+          onClose={() => setSelectedTxForHistory(null)}
+          customerId={customerId}
+          transaction={selectedTxForHistory}
+        />
+      )}
+
+      {showHistoryDrawer && (
+        <CustomerLedgerHistoryDrawer
+          open={showHistoryDrawer}
+          onClose={() => setShowHistoryDrawer(false)}
+          customerId={customerId}
+          customerName={customerName}
         />
       )}
     </div>

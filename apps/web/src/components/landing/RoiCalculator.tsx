@@ -37,11 +37,11 @@ export function RoiCalculator() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
                 {/* Header */}
                 <div className="text-center max-w-3xl mx-auto space-y-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-white/[0.08]">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider border border-blue-500/20">
                         <Calculator size={12} />
-                        <span>[ROI_ENGINE // REAL_TIME_SAVINGS]</span>
+                        <span>ROI & Cash Flow Calculator</span>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
+                    <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--text-primary)]">
                         Calculate Your Monthly Cash Flow Unlock
                     </h2>
                     <p className="text-sm sm:text-base text-[var(--text-secondary)]">

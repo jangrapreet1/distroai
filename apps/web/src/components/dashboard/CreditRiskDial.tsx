@@ -64,17 +64,17 @@ export function CreditRiskDial({
 
             {/* Header */}
             <div className="relative z-10 flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: bgColor }}>
                         <ShieldCheck size={18} style={{ color }} />
                     </div>
                     <div>
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Credit & Risk Velocity</h3>
-                        <p className="text-[11px] text-[var(--text-muted)] font-mono">Bklit Health Metric</p>
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Credit Health</h3>
+                        <p className="text-[11px] text-[var(--text-muted)]">Retailer Aging & Velocity</p>
                     </div>
                 </div>
                 <span
-                    className="text-[10px] font-mono px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border"
+                    className="text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border"
                     style={{
                         backgroundColor: bgColor,
                         color: color,
@@ -87,8 +87,8 @@ export function CreditRiskDial({
 
             {/* Gauge Dial Visual */}
             <div className="relative z-10 my-2 flex flex-col items-center justify-center">
-                <div className="relative w-44 h-24 flex items-end justify-center overflow-hidden">
-                    <svg className="w-44 h-44 absolute -top-0" viewBox="0 0 160 160">
+                <div className="relative w-44 h-24 flex items-end justify-center">
+                    <svg className="w-44 h-44 absolute top-0" viewBox="0 0 160 160">
                         {/* Background Track Arc */}
                         <path
                             d="M 16 80 A 64 64 0 0 1 144 80"
@@ -122,9 +122,9 @@ export function CreditRiskDial({
                             {score}
                         </motion.span>
                         <span className="text-xs font-mono text-[var(--text-muted)]">/100</span>
-                        <p className="text-[10px] text-[var(--text-muted)] font-medium mt-0.5">{label}</p>
                     </div>
                 </div>
+                <p className="text-[11px] text-[var(--text-muted)] font-medium mt-1 text-center">{label}</p>
             </div>
 
             {/* Micro-telemetry Breakdown Grid */}

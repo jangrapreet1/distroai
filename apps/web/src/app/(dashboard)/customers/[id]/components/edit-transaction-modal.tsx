@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { X, Plus, Trash2, Calendar, ShieldAlert } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatINR } from "@/lib/utils";
-import { useUpdateCustomerTransaction } from "@/hooks/api-hooks";
+import { useUpdateCustomerTransaction, useProducts } from "@/hooks/api-hooks";
+import { LineItemsTable, type CatalogOption, type FormItem } from "./create-transaction-modal";
 import type {
   LedgerEntryWithBalance,
   PaymentMethod,
@@ -21,15 +22,6 @@ interface EditTransactionModalProps {
   transaction: LedgerEntryWithBalance | null;
   onSubmit?: (data: { id: string; data: UpdateTransactionDto }) => void;
   isPending?: boolean;
-}
-
-interface FormItem {
-  id: string;
-  productId?: string;
-  productName: string;
-  quantity: number | "";
-  unitPrice: number | "";
-  unit: string;
 }
 
 function EditTransactionModalContent({
@@ -49,6 +41,82 @@ function EditTransactionModalContent({
 }) {
   const updateTx = useUpdateCustomerTransaction(customerId);
   const isSubmitting = externalIsPending ?? updateTx.isPending;
+
+  const { data: prodData } = useProducts({ limit: 100, isActive: true, isDraft: false });
+
+  const rawProducts = useMemo(() => {
+    const p = prodData as any;
+    if (Array.isArray(p?.data?.data)) return p.data.data;
+    if (Array.isArray(p?.data)) return p.data;
+    if (Array.isArray(p)) return p;
+    return [];
+  }, [prodData]);
+
+  const catalogOptions = useMemo<CatalogOption[]>(() => {
+    const list: CatalogOption[] = [];
+    for (const prod of rawProducts) {
+      if (prod.hasVariants && Array.isArray(prod.variants) && prod.variants.length > 0) {
+        for (const v of prod.variants) {
+          list.push({
+            key: `${prod.id}:${v.id}`,
+            productId: prod.id,
+            variantId: v.id,
+            name: `${prod.name} (${v.name})`,
+            displayName: `${prod.name} — ${v.name}`,
+            unit: prod.unit || "PCS",
+            sellingPrice: typeof v.sellingPrice === "number" ? v.sellingPrice : (prod.sellingPrice || 0),
+          });
+        }
+      } else {
+        list.push({
+          key: prod.id,
+          productId: prod.id,
+          name: prod.name,
+          displayName: prod.name,
+          unit: prod.unit || "PCS",
+          sellingPrice: prod.sellingPrice || 0,
+        });
+      }
+    }
+    return list;
+  }, [rawProducts]);
+
+  const handleProductSelect = (index: number, optionKey: string) => {
+    if (!optionKey) {
+      setItems((prev) =>
+        prev.map((item, i) =>
+          i === index ? { ...item, productId: undefined, variantId: undefined, productName: "" } : item
+        )
+      );
+      return;
+    }
+
+    if (optionKey === "__CUSTOM__") {
+      setItems((prev) =>
+        prev.map((item, i) =>
+          i === index ? { ...item, productId: undefined, variantId: undefined } : item
+        )
+      );
+      return;
+    }
+
+    const opt = catalogOptions.find((o) => o.key === optionKey);
+    if (!opt) return;
+
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        return {
+          ...item,
+          productId: opt.productId,
+          variantId: opt.variantId,
+          productName: opt.name,
+          unit: opt.unit || "PCS",
+          unitPrice: opt.sellingPrice || 0,
+        };
+      })
+    );
+  };
 
   const [date, setDate] = useState<string>(() => transaction.date || new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState<string>(() => transaction.description || "");
@@ -123,6 +191,7 @@ function EditTransactionModalContent({
           const u = Number(it.unitPrice) || 0;
           return {
             productId: it.productId,
+            variantId: it.variantId,
             productName: it.productName.trim(),
             quantity: q,
             unitPrice: u,
@@ -183,7 +252,7 @@ function EditTransactionModalContent({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-3xl bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-4xl bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -277,63 +346,15 @@ function EditTransactionModalContent({
                   />
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold px-1">
-                    <div>Item Name / Hindi Particulars</div>
-                    <div>Qty</div>
-                    <div>Unit</div>
-                    <div>Rate (₹)</div>
-                    <div className="text-right">Amount (₹)</div>
-                    <div className="w-8"></div>
-                  </div>
-
-                  {items.map((item, idx) => (
-                    <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 items-center">
-                      <input
-                        type="text"
-                        value={item.productName}
-                        onChange={(e) => handleItemChange(idx, "productName", e.target.value)}
-                        className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="any"
-                        value={item.quantity === "" ? "" : item.quantity}
-                        onChange={(e) =>
-                          handleItemChange(idx, "quantity", e.target.value === "" ? "" : parseFloat(e.target.value))
-                        }
-                        className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <input
-                        type="text"
-                        value={item.unit}
-                        onChange={(e) => handleItemChange(idx, "unit", e.target.value)}
-                        className="px-2 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={item.unitPrice === "" ? "" : item.unitPrice}
-                        onChange={(e) =>
-                          handleItemChange(idx, "unitPrice", e.target.value === "" ? "" : parseFloat(e.target.value))
-                        }
-                        className="px-3 py-1.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
-                      />
-                      <div className="text-right font-mono text-sm font-semibold text-[var(--text-primary)] px-2">
-                        {formatINR((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        className="w-8 h-8 flex items-center justify-center text-[var(--text-muted)] hover:text-red-400"
-                        aria-label="Remove item"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  <LineItemsTable
+                    items={items}
+                    catalogOptions={catalogOptions}
+                    onProductSelect={handleProductSelect}
+                    onItemChange={handleItemChange}
+                    onRemoveItem={handleRemoveItem}
+                    amountColor="var(--green-bright)"
+                  />
 
                   <div className="flex justify-between items-center p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border)]">
                     <span className="text-xs text-[var(--text-muted)]">Calculated Total:</span>

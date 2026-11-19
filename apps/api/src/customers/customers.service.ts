@@ -74,9 +74,9 @@ export class CustomersService {
 
         const now = new Date();
         const [orders, payments, stats] = await Promise.all([
-            this.prisma.order.findMany({ where: { customerId: id, orgId }, take: 5, orderBy: { createdAt: 'desc' }, select: { id: true, orderNumber: true, status: true, netAmount: true, createdAt: true } }),
+            this.prisma.order.findMany({ where: { customerId: id, orgId, type: 'SALE' }, take: 10, orderBy: { createdAt: 'desc' }, select: { id: true, orderNumber: true, status: true, netAmount: true, createdAt: true, invoiceId: true } }),
             this.prisma.payment.findMany({ where: { customerId: id, orgId }, take: 10, orderBy: { createdAt: 'desc' } }),
-            this.prisma.order.aggregate({ where: { customerId: id, orgId, status: { not: 'CANCELLED' } }, _count: { id: true }, _sum: { netAmount: true, paidAmount: true } }),
+            this.prisma.order.aggregate({ where: { customerId: id, orgId, status: { not: 'CANCELLED' }, type: 'SALE' }, _count: { id: true }, _sum: { netAmount: true, paidAmount: true } }),
         ]);
 
         // Payment ageing
@@ -112,13 +112,20 @@ export class CustomersService {
     async update(orgId: string, id: string, dto: UpdateCustomerDto) {
         const customer = await this.prisma.customer.findFirst({ where: { id, orgId } });
         if (!customer) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Customer not found' });
-        return this.prisma.customer.update({ where: { id }, data: { ...dto, tier: dto.tier as any } });
+        return this.prisma.customer.update({
+            where: { id },
+            data: {
+                ...dto,
+                ...(dto.tier ? { tier: dto.tier as any } : {}),
+                ...(dto.type ? { type: dto.type as any } : {}),
+            },
+        });
     }
 
     async getOrders(orgId: string, id: string, page: number, limit: number) {
         const [data, total] = await Promise.all([
-            this.prisma.order.findMany({ where: { customerId: id, orgId }, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' } }),
-            this.prisma.order.count({ where: { customerId: id, orgId } }),
+            this.prisma.order.findMany({ where: { customerId: id, orgId, type: 'SALE' }, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' } }),
+            this.prisma.order.count({ where: { customerId: id, orgId, type: 'SALE' } }),
         ]);
         return { data, meta: { total, page, limit, pages: Math.ceil(total / limit) } };
     }

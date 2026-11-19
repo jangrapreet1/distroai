@@ -70,10 +70,45 @@ export function useAuth() {
         },
     });
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
+        const { refreshToken } = useAuthStore.getState();
+        // 1. Invalidate tokens on backend
+        if (refreshToken) {
+            try {
+                await apiClient.post("/api/v1/auth/logout", { refreshToken }).catch(() => {});
+            } catch {
+                // Ignore network errors during logout
+            }
+        }
+
+        // 2. Clear client auth store
         clearAuth();
+
+        // 3. Clear auth cookies (root and domain scoped)
         document.cookie = "accessToken=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        router.push("/login");
+        if (typeof window !== "undefined") {
+            document.cookie = `accessToken=;path=/;domain=${window.location.hostname};expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+
+            // 4. Wipe localStorage and sessionStorage
+            try {
+                sessionStorage.clear();
+                localStorage.removeItem("auth-storage");
+                localStorage.removeItem("distroai-auth");
+            } catch {}
+
+            // 5. Clear CacheStorage (Service Worker cached pages/chunks)
+            if ("caches" in window) {
+                try {
+                    const cacheKeys = await window.caches.keys();
+                    await Promise.all(cacheKeys.map((key) => window.caches.delete(key)));
+                } catch {}
+            }
+
+            // 6. Hard redirect to /login to flush React state and in-memory caches
+            window.location.href = "/login";
+        } else {
+            router.push("/login");
+        }
     }, [clearAuth, router]);
 
     const handleGoogleCallbackMutation = useMutation({

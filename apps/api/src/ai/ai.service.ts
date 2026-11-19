@@ -12,30 +12,37 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
 // Tools
+import { createGetLedgerHistoryTool, createGetCustomerBalanceTool } from './tools/finance-actions';
 import { createQuerySalesTool } from './tools/query-sales';
 import { createGetInventoryTool } from './tools/get-inventory';
 import { createGetPaymentsTool } from './tools/get-payments';
 import { createGetForecastTool, createGetCustomerTool, createGetSalesmanTool } from './tools/get-forecast-customer-salesman';
+import { createGetProductDetailsTool } from './tools/product-actions';
+import { createGetSuppliersTool, createRunReportTool } from './tools/get-suppliers-report';
 import { createOrderTool, createPaymentTool, createSendReminderTool } from './tools/write-actions';
 import { createOpenRouterLLM } from './utils/llm-factory';
 import { v4 as uuid } from 'uuid';
 
-let _llm: any = null;
-let _llmInitialized = false;
+export function getLlm(tools?: any[]): any {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) return null;
 
-export function getLlm(model: 'fast' | 'advanced' = 'fast'): any {
-    if (!_llmInitialized) {
-        _llmInitialized = true;
-        const apiKey = process.env.OPENROUTER_API_KEY;
-        if (apiKey) {
-            const primary = createOpenRouterLLM(process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free');
-            const fallback1 = createOpenRouterLLM('google/gemini-2.5-flash');
-            const fallback2 = createOpenRouterLLM('meta-llama/llama-3-8b-instruct:free');
-            
-            _llm = primary.withFallbacks({ fallbacks: [fallback1, fallback2] });
-        }
+    const primaryModel = process.env.OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
+    const fallbackModel1 = 'nvidia/nemotron-3.5-lightning:free';
+    const fallbackModel2 = 'nvidia/nemotron-3.5-super-vl:free';
+
+    const primary = createOpenRouterLLM(primaryModel);
+    const fallback1 = createOpenRouterLLM(fallbackModel1);
+    const fallback2 = createOpenRouterLLM(fallbackModel2);
+
+    if (tools && tools.length > 0) {
+        const primaryWithTools = primary.bindTools(tools);
+        const fallback1WithTools = fallback1.bindTools(tools);
+        const fallback2WithTools = fallback2.bindTools(tools);
+        return primaryWithTools.withFallbacks({ fallbacks: [fallback1WithTools, fallback2WithTools] });
     }
-    return _llm;
+
+    return primary.withFallbacks({ fallbacks: [fallback1, fallback2] });
 }
 
 const PLAN_LIMITS = {
@@ -132,6 +139,33 @@ For workflow summaries, use this markdown format:
 ⚠️ *This is a draft — action not yet executed.*
 
 For errors or warnings, prefix with ⚠️.
+
+## PRICING, COST & MARGIN DEFINITIONS (CRITICAL FOR INDIAN DISTRIBUTOR)
+- **Landed Cost / Cost Price (\`purchasePrice\`)**: What the distributor paid to buy/procure the product from the manufacturer or company. This is the distributor's acquisition cost!
+- **Wholesale Selling Price (\`sellingPrice\`)**: What the distributor charges retailers/dealers for wholesale orders.
+- **MRP (\`mrp\`)**: Maximum Retail Price printed on the product packaging for end consumers.
+- When the distributor asks:
+  - "What is the cost of [product]?" or "Landed cost of [product]?": ALWAYS state the Landed Cost / Purchase Price (\`purchasePrice\`), NOT the selling price!
+  - "How much minimum should I sell it for?" or asks for pricing/markup recommendations:
+    - ALWAYS base markup recommendations on the **Landed Cost (\`purchasePrice\`)**, NEVER on \`sellingPrice\`!
+    - Formula: Markup is added on Landed Cost (\`purchasePrice\`). E.g. with landed cost ₹233:
+      - 5% markup floor = ₹233 × 1.05 = ₹245
+      - 10% standard = ₹233 × 1.10 = ₹256
+      - 20% margin = ₹233 × 1.20 = ₹280
+      - Point out the current wholesale selling price (e.g. ₹360) and current margin over landed cost.
+    - NEVER confuse Landed Cost (\`purchasePrice\`) with Selling Price (\`sellingPrice\`)!
+
+## SUPPLIERS & VENDORS (PROCUREMENT, PURCHASE ORDERS & PAYABLES)
+You have FULL ACCESS to both Customers (retailers who buy from this distributor) AND Suppliers / Vendors (companies/manufacturers the distributor purchases goods from):
+- **Customers**: Use \`get_customer\` for customer khata, sales history, payment dues.
+- **Suppliers**: Use \`get_suppliers\` for supplier profiles, purchase orders (POs), vendor ledgers, payables, and reorder suggestions.
+- When the user asks about a supplier (e.g. "financial history for Ronak Supplier", "how much do we owe to supplier X?", "show purchase orders from Y", "vendor ledger"):
+  - NEVER say supplier data is outside your capabilities or not tracked. You have \`get_suppliers\` ready!
+  - Call \`get_suppliers\` with \`type: "financial_history"\` and \`supplierName: "<name>"\`.
+  - Provide a clear, professional breakdown:
+    - Supplier details (Name, Contact, Phone, GSTIN, Credit Days)
+    - Total Purchases vs Total Paid vs Outstanding Balance / Due
+    - Table of Recent Purchase Orders (PO #, Date, Status, Total Amount, Paid Amount, Due Amount)
 
 ## RULES
 - NEVER make up data. If a tool returns no results, say so clearly.
@@ -235,9 +269,14 @@ export class AiService {
             }),
             createQuerySalesTool(orgId, this.prisma),
             createGetInventoryTool(orgId, this.prisma),
+            createGetProductDetailsTool(orgId, this.prisma),
             createGetPaymentsTool(orgId, this.prisma),
+            createGetLedgerHistoryTool(orgId, this.prisma),
+            createGetCustomerBalanceTool(orgId, this.prisma),
             createGetForecastTool(orgId, this.prisma),
             createGetCustomerTool(orgId, this.prisma),
+            createGetSuppliersTool(orgId, this.prisma),
+            createRunReportTool(orgId, this.prisma),
             createGetSalesmanTool(orgId, this.prisma),
             // Write tools: Execute actions after user confirmation
             createOrderTool(orgId, this.prisma),
@@ -303,7 +342,7 @@ export class AiService {
         const systemMsg = buildSystemPrompt(org?.name || 'your organization', detectLanguage(userQuery));
         const tools = this.buildTools(orgId, userId);
         const toolMap = new Map(tools.map(t => [t.name, t]));
-        const llmWithTools = getLlm()!.bindTools(tools);
+        const llmWithTools = getLlm(tools);
 
         const previousMessages = await this.loadSessionHistory(sessionId);
         const messages: BaseMessage[] = [new SystemMessage(systemMsg), ...previousMessages, new HumanMessage(userQuery)];
@@ -371,7 +410,7 @@ export class AiService {
         let imageContext = '';
         if (imageBase64) {
             try {
-                const visionLlm = createOpenRouterLLM('google/gemini-2.5-flash');
+                const visionLlm = createOpenRouterLLM('nvidia/nemotron-3.5-super-vl:free');
                 const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
                 const visionResponse = await visionLlm.invoke([
                     new HumanMessage({
@@ -399,7 +438,7 @@ export class AiService {
                             imageContext += `[Database Search Results for "${query}":\n`;
                             products.forEach(p => {
                                 const stockInfo = p.inventories.map(i => `${i.quantity} at ${i.warehouse.name}`).join(', ') || 'Out of stock, 0 total';
-                                imageContext += `- ${p.name} (brand: ${p.brand || 'N/A'}, sku: ${p.sku}) | Price: ₹${p.sellingPrice} | MRP: ₹${p.mrp} | Stock: ${stockInfo}\n`;
+                                imageContext += `- ${p.name} (brand: ${p.brand || 'N/A'}, sku: ${p.sku}) | Landed Cost: ₹${p.purchasePrice} | Selling Price: ₹${p.sellingPrice} | MRP: ₹${p.mrp} | Stock: ${stockInfo}\n`;
                             });
                             imageContext += `]`;
                         } else {
@@ -415,7 +454,7 @@ export class AiService {
 
         const tools = this.buildTools(orgId, userId);
         const toolMap = new Map(tools.map(t => [t.name, t]));
-        const llmWithTools = getLlm()!.bindTools(tools);
+        const llmWithTools = getLlm(tools);
 
         const previousMessages = await this.loadSessionHistory(sessionId);
         const messages: BaseMessage[] = [new SystemMessage(systemPrompt), ...previousMessages, new HumanMessage(userQuery + imageContext)];
@@ -483,7 +522,7 @@ export class AiService {
         const base64Audio = audioBuffer.toString('base64');
 
         try {
-            const visionLlm = createOpenRouterLLM('google/gemini-2.5-flash');
+            const visionLlm = createOpenRouterLLM('nvidia/nemotron-3.5-super-vl:free');
 
             const transcriptionResponse = await visionLlm.invoke([
                 new HumanMessage({
@@ -627,7 +666,7 @@ Return ONLY a JSON object exactly matching this schema:
 }`;
 
         try {
-            const visionLlm = createOpenRouterLLM('google/gemini-2.5-flash');
+            const visionLlm = createOpenRouterLLM('nvidia/nemotron-3.5-super-vl:free');
 
             const response = await visionLlm.invoke([
                 new HumanMessage({
@@ -708,7 +747,7 @@ Return ONLY a JSON object exactly matching this schema:
             if (queryVector.length === 768) {
                 // Vector search for COMPLETED products
                 const vectorRes = await this.prisma.$queryRawUnsafe<any[]>(
-                    `SELECT id, name, sku, category, brand, mrp, "sellingPrice" 
+                    `SELECT id, name, sku, category, brand, mrp, "sellingPrice", "purchasePrice" 
                      FROM "Product" 
                      WHERE "orgId" = $1 AND "isActive" = true AND "embeddingStatus" = 'COMPLETED'
                      ORDER BY embedding <=> $2::vector 
@@ -738,7 +777,7 @@ Return ONLY a JSON object exactly matching this schema:
                         ]
                     },
                     take: fallbackLimit,
-                    select: { id: true, name: true, sku: true, category: true, brand: true, mrp: true, sellingPrice: true },
+                    select: { id: true, name: true, sku: true, category: true, brand: true, mrp: true, sellingPrice: true, purchasePrice: true },
                 });
                 results.push(...fallbackRes);
             }
@@ -749,7 +788,9 @@ Return ONLY a JSON object exactly matching this schema:
 Name: ${p.name}
 SKU: ${p.sku}
 Brand: ${p.brand || 'N/A'}
-Price: ${p.sellingPrice}
+Landed Cost (Distributor Purchase Price / Base Cost): ₹${p.purchasePrice ?? 'N/A'}
+Wholesale Selling Price (Charged to Retailers): ₹${p.sellingPrice ?? 'N/A'}
+MRP (Maximum Retail Price): ₹${p.mrp ?? 'N/A'}
 [END PRODUCT DATA]`;
             });
 

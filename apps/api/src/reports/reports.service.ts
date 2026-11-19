@@ -27,18 +27,25 @@ export class ReportsService {
         });
         const revenue = invoices.reduce((s, i) => s + (i.totalAmount ?? 0), 0);
 
-        // COGS: sum of (quantity * purchasePrice) for delivered orders
+        // COGS: sum of (quantity * purchasePrice) for delivered or completed orders (prioritizing variant purchasePrice)
         const orderItems = await this.prisma.orderItem.findMany({
             where: {
                 order: {
                     orgId,
-                    status: { in: ['DELIVERED'] },
+                    status: { in: ['DELIVERED', 'COMPLETED'] },
                     createdAt: { gte: start, lte: end },
                 },
             },
-            select: { quantity: true, product: { select: { purchasePrice: true } } },
+            select: {
+                quantity: true,
+                product: { select: { purchasePrice: true } },
+                variant: { select: { purchasePrice: true } },
+            },
         });
-        const cogs = orderItems.reduce((s, i) => s + (i.quantity * (i.product?.purchasePrice ?? 0)), 0);
+        const cogs = orderItems.reduce((s, i) => {
+            const unitCost = i.variant?.purchasePrice ?? i.product?.purchasePrice ?? 0;
+            return s + (i.quantity * unitCost);
+        }, 0);
 
         // Expenses grouped by category
         const expenses = await this.prisma.expense.findMany({
@@ -165,11 +172,11 @@ export class ReportsService {
         const nextYear = month === 12 ? year + 1 : year;
         const endIst = new Date(`${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00+05:30`);
 
-        // Get all valid orders for the period (including estimated pending/confirmed)
+        // Get all active orders for the period (including draft, pending, confirmed, delivered)
         const orders = await this.prisma.order.findMany({
             where: {
                 orgId,
-                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                status: { not: 'CANCELLED' },
                 OR: [
                     { salesmanId: { not: null } },
                     { commissionTo: { not: null } }
@@ -276,10 +283,16 @@ export class ReportsService {
                 const customId = `custom_${order.commissionTo}`;
 
                 if (!commissionData[customId]) {
+                    const roleLabel = order.commissionTo.toLowerCase().includes('mistri')
+                        ? 'Mistri / Fabricator'
+                        : order.commissionTo.toLowerCase().includes('contractor')
+                            ? 'Contractor'
+                            : 'Direct Recipient';
+
                     commissionData[customId] = {
                         salesmanId: customId,
                         name: order.commissionTo,
-                        territory: 'Custom Recipient',
+                        territory: roleLabel,
                         targetMonthly: 0,
                         totalSales: 0,
                         totalCommission: 0,

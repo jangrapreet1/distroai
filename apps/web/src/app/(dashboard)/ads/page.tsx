@@ -20,9 +20,9 @@ export default function AdsPage() {
     const searchParams = useSearchParams();
     const [wizardOpen, setWizardOpen] = useState(false);
 
-    // ── Plan Gate (Growth+ only) ──
-    const plan = (org as any)?.plan || "FREE";
-    const hasAdsAccess = plan === "GROWTH" || plan === "ENTERPRISE";
+    // ── Plan Gate (Unlocked) ──
+    const plan = ((org as any)?.plan || "ENTERPRISE").toUpperCase();
+    const hasAdsAccess = true;
     if (!hasAdsAccess) {
         return (
             <div style={{

@@ -167,10 +167,32 @@ export class InventoryService {
     }
 
     async getValuation(orgId: string) {
+        // Base inventories for products WITHOUT variants
         const inventories = await this.prisma.inventory.findMany({
-            where: { orgId, product: { isActive: true } },
+            where: { orgId, product: { isActive: true, isDraft: false, hasVariants: false } },
             include: {
                 product: { select: { purchasePrice: true, sellingPrice: true } },
+                warehouse: { select: { id: true, name: true } },
+            },
+        });
+
+        // Variant inventories for products WITH variants
+        const variantInventories = await this.prisma.variantInventory.findMany({
+            where: {
+                orgId,
+                variant: {
+                    isActive: true,
+                    product: { isActive: true, isDraft: false },
+                },
+            },
+            include: {
+                variant: {
+                    select: {
+                        purchasePrice: true,
+                        sellingPrice: true,
+                        product: { select: { purchasePrice: true, sellingPrice: true } },
+                    },
+                },
                 warehouse: { select: { id: true, name: true } },
             },
         });
@@ -191,6 +213,19 @@ export class InventoryService {
             }
         }
 
+        for (const vi of variantInventories) {
+            const pp = vi.variant.sellingPrice || vi.variant.purchasePrice || vi.variant.product.sellingPrice || vi.variant.product.purchasePrice || 0;
+            const value = vi.quantity * pp;
+            totalUnits += vi.quantity;
+            const existing = warehouseMap.get(vi.warehouseId);
+            if (existing) {
+                existing.totalValue += value;
+                existing.productCount++;
+            } else {
+                warehouseMap.set(vi.warehouseId, { warehouseId: vi.warehouseId, warehouseName: vi.warehouse.name, totalValue: value, productCount: 1 });
+            }
+        }
+
         const rows = Array.from(warehouseMap.values());
         const grandTotal = rows.reduce((s, r) => s + r.totalValue, 0);
         return { warehouses: rows, grandTotal, totalUnits };
@@ -198,10 +233,28 @@ export class InventoryService {
 
     // ─── Low Stock Summary (for dashboard) ─────────
     async getLowStockSummary(orgId: string) {
+        // Base inventories for products WITHOUT variants (exclude drafts and inactive)
         const inventories = await this.prisma.inventory.findMany({
-            where: { orgId },
+            where: { orgId, product: { hasVariants: false, isDraft: false, isActive: true } },
             include: {
-                product: { select: { id: true, name: true, sku: true, unit: true, minStockLevel: true, isActive: true } },
+                product: { select: { id: true, name: true, sku: true, unit: true, minStockLevel: true, isActive: true, isDraft: true } },
+                warehouse: { select: { name: true } },
+            },
+        });
+
+        // Variant inventories for products WITH variants (exclude drafts and inactive)
+        const variantInventories = await this.prisma.variantInventory.findMany({
+            where: { orgId, variant: { product: { isDraft: false, isActive: true }, isActive: true } },
+            include: {
+                variant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        sku: true,
+                        isActive: true,
+                        product: { select: { id: true, name: true, sku: true, unit: true, minStockLevel: true, isActive: true, isDraft: true } },
+                    },
+                },
                 warehouse: { select: { name: true } },
             },
         });
@@ -209,7 +262,7 @@ export class InventoryService {
         // Group by product and sum quantities across warehouses
         const productMap = new Map<string, { product: any; totalQty: number; warehouses: string[] }>();
         for (const inv of inventories) {
-            if (!inv.product.isActive || (inv.product.minStockLevel ?? 0) <= 0) continue;
+            if (!inv.product.isActive || inv.product.isDraft || (inv.product.minStockLevel ?? 0) <= 0) continue;
             const existing = productMap.get(inv.productId);
             if (existing) {
                 existing.totalQty += inv.quantity;
@@ -219,6 +272,24 @@ export class InventoryService {
                     product: inv.product,
                     totalQty: inv.quantity,
                     warehouses: [inv.warehouse.name],
+                });
+            }
+        }
+
+        for (const vi of variantInventories) {
+            const p = vi.variant.product;
+            if (!p.isActive || p.isDraft || !vi.variant.isActive || (p.minStockLevel ?? 0) <= 0) continue;
+            const existing = productMap.get(p.id);
+            if (existing) {
+                existing.totalQty += vi.quantity;
+                if (!existing.warehouses.includes(vi.warehouse.name)) {
+                    existing.warehouses.push(vi.warehouse.name);
+                }
+            } else {
+                productMap.set(p.id, {
+                    product: p,
+                    totalQty: vi.quantity,
+                    warehouses: [vi.warehouse.name],
                 });
             }
         }

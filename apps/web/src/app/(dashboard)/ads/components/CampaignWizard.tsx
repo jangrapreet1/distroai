@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { X, MessageCircle, Package, MapPin, Loader2, ChevronLeft, ChevronRight, Rocket, Upload, Image, Film, Trash2 } from "lucide-react";
 import { useProducts, useCreateCampaign, useGenerateCreatives, useUploadAudience, useUploadFile } from "@/hooks/api-hooks";
 import { CreativePreview } from "./CreativePreview";
+import { getApiBaseUrl } from "@/lib/api-url";
 
 interface Props {
     onClose: () => void;
@@ -44,7 +45,7 @@ export function CampaignWizard({ onClose }: Props) {
     const [dailyBudget, setDailyBudget] = useState(500);
     const [duration, setDuration] = useState(7);
 
-    const { data: productsData } = useProducts({ isActive: true, limit: 100 });
+    const { data: productsData } = useProducts({ isActive: true, isDraft: false, limit: 100 });
     // Products API returns { data: [...], meta: {...} } — drill into nested .data.data or .data
     const productsRaw = productsData?.data;
     const products: any[] = Array.isArray(productsRaw)
@@ -643,7 +644,7 @@ export function CampaignWizard({ onClose }: Props) {
                                         type="button"
                                         onClick={() => {
                                             // Trigger Facebook OAuth again to fetch the newly created page
-                                            window.location.href = `${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/auth/facebook/connect`;
+                                            window.location.href = `${getApiBaseUrl()}/api/v1/auth/facebook/connect`;
                                         }}
                                         style={{
                                             padding: ".75rem", borderRadius: 8, background: "var(--bg-card)", 

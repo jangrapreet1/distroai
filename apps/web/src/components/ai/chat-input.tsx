@@ -100,7 +100,7 @@ export function ChatInput({
     };
 
     return (
-        <div className="p-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
+        <div className="p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[var(--bg-secondary)] border-t border-[var(--border)]">
             <div className="max-w-4xl mx-auto relative flex items-end gap-2">
                 <div className="flex-1 relative">
                     {/* Attached Image Preview */}
@@ -120,7 +120,7 @@ export function ChatInput({
                         placeholder={imageBase64 ? "Ask anything about this image..." : "Type / for commands or ask anything..."}
                         rows={1}
                         disabled={isStreaming}
-                        className="w-full pl-12 pr-4 py-3.5 rounded-[var(--radius-lg)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--purple)] focus:ring-1 focus:ring-[var(--purple)] focus:outline-none transition resize-none text-sm disabled:opacity-50 shadow-sm"
+                        className="w-full pl-12 pr-4 py-3.5 rounded-[var(--radius-lg)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition resize-none text-sm disabled:opacity-50 shadow-sm"
                         style={{ maxHeight: 150 }}
                     />
 
@@ -148,19 +148,19 @@ export function ChatInput({
                                                 onInputChange('');
                                                 onSend(cmd.prompt);
                                             }}
-                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition ${i === paletteIndex ? 'bg-[var(--purple)]/10 text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'}`}
+                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition ${i === paletteIndex ? 'bg-blue-500/10 text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'}`}
                                         >
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${i === paletteIndex ? 'bg-[var(--purple)]/20' : 'bg-[var(--bg-secondary)]'}`}>
-                                                <Icon size={16} className={i === paletteIndex ? 'text-[var(--purple)]' : 'text-[var(--text-muted)]'} />
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${i === paletteIndex ? 'bg-blue-500/20' : 'bg-[var(--bg-secondary)]'}`}>
+                                                <Icon size={16} className={i === paletteIndex ? 'text-blue-500' : 'text-[var(--text-muted)]'} />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-medium text-xs">
-                                                    <span className="text-[var(--purple)] font-mono">{cmd.command}</span>
+                                                    <span className="text-blue-500 font-mono">{cmd.command}</span>
                                                     <span className="ml-2 text-[var(--text-muted)]">{cmd.label}</span>
                                                 </div>
                                                 <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{cmd.description}</p>
                                             </div>
-                                            <ChevronRight size={14} className={`shrink-0 ${i === paletteIndex ? 'text-[var(--purple)]' : 'text-[var(--text-muted)]/50'}`} />
+                                            <ChevronRight size={14} className={`shrink-0 ${i === paletteIndex ? 'text-blue-500' : 'text-[var(--text-muted)]/50'}`} />
                                         </button>
                                     );
                                 })}
@@ -173,7 +173,7 @@ export function ChatInput({
                         <button
                             onClick={() => setShowAttachMenu(!showAttachMenu)}
                             disabled={isStreaming}
-                            className={`p-2 rounded-md transition ${showAttachMenu || imageBase64 ? 'text-[var(--purple)] bg-[var(--purple)]/10' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'}`}
+                            className={`p-2 rounded-md transition ${showAttachMenu || imageBase64 ? 'text-blue-500 bg-blue-500/10' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'}`}
                             title="Add Attachment"
                         >
                             <Plus size={18} className={`transition-transform duration-200 ${showAttachMenu ? 'rotate-45' : ''}`} />
@@ -182,10 +182,10 @@ export function ChatInput({
                         {showAttachMenu && (
                             <div className="absolute left-0 bottom-full mb-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] shadow-2xl p-1.5 flex flex-col gap-1 w-40 animate-in slide-in-from-bottom-2 z-50">
                                 <button onClick={() => { setShowAttachMenu(false); fileInputRef.current?.click(); }} className="flex items-center gap-3 px-2.5 py-2 text-sm rounded-md hover:bg-[var(--bg-secondary)] text-[var(--text-primary)] transition text-left">
-                                    <ImagePlus size={16} className="text-[var(--purple)] shrink-0" /> <span className="truncate">Upload Image</span>
+                                    <ImagePlus size={16} className="text-blue-500 shrink-0" /> <span className="truncate">Upload Image</span>
                                 </button>
                                 <button onClick={() => { setShowAttachMenu(false); onShowScanner(); }} className="md:hidden flex items-center gap-3 px-2.5 py-2 text-sm rounded-md hover:bg-[var(--bg-secondary)] text-[var(--text-primary)] transition text-left">
-                                    <ScanLine size={16} className="text-[var(--gold)] shrink-0" /> <span className="truncate">AR Scanner</span>
+                                    <ScanLine size={16} className="text-blue-500 shrink-0" /> <span className="truncate">AR Scanner</span>
                                 </button>
                             </div>
                         )}
@@ -197,7 +197,7 @@ export function ChatInput({
                 <button
                     onClick={onShowScanner}
                     disabled={isStreaming}
-                    className="hidden md:flex p-3.5 rounded-[var(--radius-lg)] transition text-[var(--gold)] bg-[var(--bg-card)] border border-[var(--border)] hover:bg-[var(--gold)]/10 hover:border-[var(--gold)]/30 shadow-sm shrink-0"
+                    className="hidden md:flex p-3.5 rounded-[var(--radius-lg)] transition text-blue-500 bg-[var(--bg-card)] border border-[var(--border)] hover:bg-blue-500/10 hover:border-blue-500/30 shadow-sm shrink-0"
                     title="Offline AR Scanner"
                 >
                     <ScanLine size={18} />
@@ -215,7 +215,7 @@ export function ChatInput({
                 <button
                     onClick={() => onSend(input)}
                     disabled={(!input.trim() && !imageBase64) || isStreaming}
-                    className="p-3.5 rounded-[var(--radius-lg)] bg-[var(--purple)] text-white hover:bg-[var(--purple)]/90 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center min-w-[3rem]"
+                    className="p-3.5 rounded-[var(--radius-lg)] bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center min-w-[3rem]"
                 >
                     <Send size={18} className={input.trim() || imageBase64 ? "translate-x-0.5 -translate-y-0.5 transition-transform" : ""} />
                 </button>

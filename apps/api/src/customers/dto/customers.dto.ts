@@ -23,11 +23,23 @@ export class UpdateCustomerDto {
     @IsOptional() @IsString() name?: string;
     @IsOptional() @IsString() contactPerson?: string;
     @IsOptional() @IsString() phone?: string;
+    @IsOptional() @IsString() altPhone?: string;
+    @IsOptional() @IsString() whatsappNumber?: string;
     @IsOptional() @IsString() email?: string;
+    @IsOptional() @IsString() gstNumber?: string;
+    @IsOptional() @IsString() panNumber?: string;
+    @IsOptional() @IsString() fullAddress?: string;
+    @IsOptional() @IsString() city?: string;
+    @IsOptional() @IsString() state?: string;
+    @IsOptional() @IsString() pincode?: string;
+    @IsOptional() @IsEnum(['RETAILER', 'WHOLESALER', 'INSTITUTION', 'INDIVIDUAL']) type?: string;
+    @IsOptional() @IsEnum(['GOLD', 'SILVER', 'BRONZE']) tier?: string;
     @IsOptional() @IsNumber() creditLimit?: number;
     @IsOptional() @IsNumber() creditDays?: number;
+    @IsOptional() @IsNumber() gracePeriodDays?: number;
+    @IsOptional() @IsString() salesmanId?: string;
+    @IsOptional() @IsString() routeId?: string;
     @IsOptional() @IsBoolean() isActive?: boolean;
-    @IsOptional() @IsEnum(['GOLD', 'SILVER', 'BRONZE']) tier?: string;
 }
 
 export class ListCustomersQueryDto {

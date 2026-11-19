@@ -16,9 +16,9 @@ export class InvoiceProcessor extends WorkerHost {
 
         try {
             if (job.name === 'generate-pdf') {
-                const { invoiceId } = job.data;
+                const { invoiceId, options, saveAsDefault } = job.data;
                 this.logger.log(`Generating PDF for invoice: ${invoiceId}`);
-                const url = await this.pdfService.generateInvoicePdf(invoiceId);
+                const url = await this.pdfService.generateInvoicePdf(invoiceId, options, saveAsDefault);
                 return { success: true, url };
             }
         } catch (error) {

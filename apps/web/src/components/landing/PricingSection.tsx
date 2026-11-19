@@ -75,11 +75,11 @@ export function PricingSection() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
                 {/* Header */}
                 <div className="text-center max-w-3xl mx-auto space-y-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-white/[0.08]">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider border border-blue-500/20">
                         <Zap size={12} />
-                        <span>[PRICING // TRANSPARENT_INR_TIERS]</span>
+                        <span>Transparent Pricing Plans</span>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
+                    <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--text-primary)]">
                         Transparent Pricing with 14-Day Free Trial
                     </h2>
                     <p className="text-sm sm:text-base text-[var(--text-secondary)]">
@@ -144,11 +144,11 @@ export function PricingSection() {
                                     {/* Header */}
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-mono font-bold tracking-wider text-[var(--gold)] uppercase">
+                                            <span className="text-[10px] font-mono font-bold tracking-wider text-blue-400 uppercase">
                                                 {plan.tag}
                                             </span>
                                             {plan.popular && (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--gold)] text-[#07070E] text-[10px] font-extrabold uppercase shadow-sm">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-extrabold uppercase shadow-sm">
                                                     <Sparkles size={11} /> Recommended
                                                 </span>
                                             )}
@@ -182,12 +182,12 @@ export function PricingSection() {
                                     {/* Feature Checklist */}
                                     <div className="space-y-3">
                                         <p className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
-                                            [INCLUDED_CAPABILITIES]
+                                            Included Capabilities
                                         </p>
                                         <div className="space-y-2.5">
                                             {plan.features.map((feat, i) => (
                                                 <div key={i} className="flex items-start gap-2.5 text-xs text-[var(--text-primary)]">
-                                                    <div className="p-0.5 rounded-full bg-[var(--gold)]/20 text-[var(--gold)] shrink-0 mt-0.5">
+                                                    <div className="p-0.5 rounded-full bg-blue-500/20 text-blue-400 shrink-0 mt-0.5">
                                                         <Check size={12} />
                                                     </div>
                                                     <span>{feat}</span>
@@ -203,8 +203,8 @@ export function PricingSection() {
                                         href={plan.ctaLink}
                                         className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition duration-150 ${
                                             plan.popular
-                                                ? "bg-gradient-to-r from-[var(--gold)] via-[var(--gold-light)] to-[#FFE8A3] text-[#07070E] shadow-lg shadow-amber-500/25 hover:opacity-95"
-                                                : "border border-white/[0.1] bg-white/[0.03] text-white hover:border-[var(--border-accent)] hover:bg-white/[0.06]"
+                                                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25"
+                                                : "border border-white/[0.1] bg-white/[0.03] text-white hover:border-blue-500/40 hover:bg-white/[0.06]"
                                         }`}
                                     >
                                         <span>{plan.cta}</span>
@@ -214,6 +214,49 @@ export function PricingSection() {
                             </SpotlightCard>
                         );
                     })}
+                </div>
+
+                {/* The Tally ROI Justification Card */}
+                <div className="mt-16 rounded-3xl border border-blue-500/30 bg-gradient-to-b from-[#0e1726] to-[#070b12] p-8 sm:p-10 space-y-6 shadow-2xl">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
+                        <div className="space-y-1">
+                            <span className="text-xs font-mono font-semibold text-blue-400 uppercase tracking-wider">Tally vs DistroAI Economics</span>
+                            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Why Pay Recurring Subscription When Tally Silver Is ₹26,550 Lifetime?</h3>
+                        </div>
+                        <div className="px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold shrink-0">
+                            14x Proven Annual ROI
+                        </div>
+                    </div>
+
+                    <p className="text-sm text-slate-300 leading-relaxed max-w-4xl">
+                        <strong className="text-white">Tally is an accounting record. DistroAI is an operational profit engine.</strong> DistroAI doesn&apos;t replace Tally Prime—it connects directly to your desktop installation. Your accountant continues working in Tally as usual, while DistroAI eliminates administrative overhead and accelerates your cash cycle.
+                    </p>
+
+                    <div className="grid sm:grid-cols-3 gap-4 pt-2">
+                        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-2">
+                            <span className="text-xs text-slate-400 font-medium">1. Data Entry Elimination</span>
+                            <div className="text-2xl font-black text-emerald-400 font-mono">₹2,16,000 / yr</div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                Saves 1 full-time clerk @ ₹18,000/mo spent manually transcribing WhatsApp orders into Tally vouchers.
+                            </p>
+                        </div>
+
+                        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-2">
+                            <span className="text-xs text-slate-400 font-medium">2. Accelerated Khata Collections</span>
+                            <div className="text-2xl font-black text-blue-400 font-mono">18 Days Faster</div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                Automated WhatsApp Dynamic UPI reminders drop DSO, unlocking ₹3L–₹10L in previously stagnant market credit.
+                            </p>
+                        </div>
+
+                        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-2">
+                            <span className="text-xs text-slate-400 font-medium">3. Stockout & Dead-Stock Protection</span>
+                            <div className="text-2xl font-black text-indigo-400 font-mono">₹75,000+ / yr</div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                Machine learning stock replenishment alerts you 14 days before peak seasonal demand dips below safety thresholds.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

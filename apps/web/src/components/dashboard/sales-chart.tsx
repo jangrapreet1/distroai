@@ -62,21 +62,21 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--gold)] bg-[var(--gold)]/10 px-2 py-0.5 rounded border border-[var(--gold)]/20">
-                            [ANALYTICS // BKLIT_ENGINE]
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+                            Sales Analytics
                         </span>
                         <h3 className="font-semibold text-[var(--text-primary)] text-sm">{t("sales_trend")}</h3>
                     </div>
                     <div className="flex items-center gap-4 text-xs mt-2">
                         <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded bg-[#C9A84C]" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                             <span className="text-[var(--text-muted)]">Net Revenue:</span>
                             <span className="font-mono font-semibold text-[var(--text-primary)]">
                                 {formatINR(chartTotalRevenue)}
                             </span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded bg-[#10B981]" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                             <span className="text-[var(--text-muted)]">Orders:</span>
                             <span className="font-mono font-semibold text-[var(--text-primary)]">
                                 {chartTotalOrders}
@@ -93,8 +93,8 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                             title="Revenue vs Orders"
                             className={`p-1.5 rounded text-xs transition ${
                                 metricMode === "revenue_orders"
-                                    ? "bg-white/[0.08] text-[var(--gold)]"
-                                    : "text-[var(--text-muted)] hover:text-white"
+                                    ? "bg-blue-500/10 text-blue-500 font-medium"
+                                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                             }`}
                         >
                             <TrendingUp size={14} />
@@ -104,8 +104,8 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                             title="WhatsApp vs Tally Sync"
                             className={`p-1.5 rounded text-xs transition ${
                                 metricMode === "channel_sync"
-                                    ? "bg-white/[0.08] text-[#10B981]"
-                                    : "text-[var(--text-muted)] hover:text-white"
+                                    ? "bg-emerald-500/10 text-emerald-500 font-medium"
+                                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                             }`}
                         >
                             <Activity size={14} />
@@ -115,8 +115,8 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                             title="Cash vs Credit Split"
                             className={`p-1.5 rounded text-xs transition ${
                                 metricMode === "cash_credit"
-                                    ? "bg-white/[0.08] text-[#8B5CF6]"
-                                    : "text-[var(--text-muted)] hover:text-white"
+                                    ? "bg-purple-500/10 text-purple-500 font-medium"
+                                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                             }`}
                         >
                             <Layers size={14} />
@@ -132,13 +132,13 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                                     key={r}
                                     onClick={() => onRangeChange(r)}
                                     className={`relative px-3 py-1 text-xs font-medium rounded-full transition-colors z-10 ${
-                                        isSelected ? "text-[var(--bg-primary)] font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                                        isSelected ? "text-white font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                                     }`}
                                 >
                                     {isSelected && (
                                         <motion.div
                                             layoutId="activeChartRange"
-                                            className="absolute inset-0 bg-[var(--gold)] rounded-full -z-10 shadow-sm"
+                                            className="absolute inset-0 bg-blue-600 rounded-full -z-10 shadow-sm"
                                             transition={{ type: "spring", stiffness: 380, damping: 28 }}
                                         />
                                     )}
@@ -208,30 +208,30 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                             <AreaChart data={enhancedData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#C9A84C" stopOpacity={0.35} />
-                                        <stop offset="100%" stopColor="#C9A84C" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.3} />
+                                        <stop offset="100%" stopColor="#3B82F6" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
                                 <YAxis
                                     domain={[0, "auto"]}
-                                    tick={{ fontSize: 11, fill: "#71717A" }}
+                                    tick={{ fontSize: 11, fill: "#94a3b8" }}
                                     axisLine={false}
                                     tickLine={false}
                                     tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
                                 />
                                 <Tooltip
                                     contentStyle={{
-                                        background: "rgba(10, 10, 15, 0.95)",
+                                        background: "rgba(15, 23, 42, 0.95)",
                                         border: "1px solid rgba(255, 255, 255, 0.1)",
                                         backdropFilter: "blur(12px)",
                                         borderRadius: 10,
                                         fontSize: 12,
                                     }}
-                                    labelStyle={{ color: "#A1A1AA", marginBottom: 4 }}
+                                    labelStyle={{ color: "#94a3b8", marginBottom: 4 }}
                                     formatter={(value: any) => [
-                                        <span key="val" className="font-semibold text-[var(--gold)] font-mono">
+                                        <span key="val" className="font-semibold text-blue-400 font-mono">
                                             {formatINR(Number(value) || 0)}
                                         </span>,
                                         "Revenue",
@@ -241,18 +241,26 @@ export function SalesChart({ chartData, chartRange, onRangeChange, isLoading, t 
                                 <Area
                                     type="monotone"
                                     dataKey="revenue"
-                                    stroke="#C9A84C"
+                                    stroke="#3B82F6"
                                     fill="url(#salesGrad)"
                                     strokeWidth={2}
-                                    dot={{ fill: "#C9A84C", r: 3 }}
-                                    activeDot={{ r: 5, strokeWidth: 0, fill: "#FDE68A" }}
+                                    dot={{ fill: "#3B82F6", r: 3 }}
+                                    activeDot={{ r: 5, strokeWidth: 0, fill: "#93C5FD" }}
                                 />
                             </AreaChart>
                         )}
                     </ResponsiveContainer>
                 ) : (
-                    <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
-                        {isLoading ? t("loading_sales") : t("no_sales_data")}
+                    <div className="h-full min-h-[220px] flex flex-col items-center justify-center p-6 text-center rounded-xl bg-slate-50/50 dark:bg-white/[0.01] border border-dashed border-slate-200 dark:border-zinc-800">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-2.5">
+                            <TrendingUp size={20} />
+                        </div>
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-zinc-200 mb-1">
+                            {isLoading ? "Loading Sales Trend..." : "No Sales Recorded In This Period"}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-sm">
+                            {isLoading ? "Fetching latest ledger transactions..." : "Orders confirmed or imported from WhatsApp/Tally will automatically generate live revenue analytics here."}
+                        </p>
                     </div>
                 )}
             </div>

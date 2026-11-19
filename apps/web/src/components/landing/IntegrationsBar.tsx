@@ -56,10 +56,10 @@ export function IntegrationsBar() {
                     {metrics.map((m, i) => (
                         <SpotlightCard
                             key={m.label}
-                            spotlightColor="rgba(201, 168, 76, 0.1)"
+                            spotlightColor="rgba(59, 130, 246, 0.1)"
                             className="p-6 border-white/[0.08] bg-white/[0.02] text-center space-y-1.5"
                         >
-                            <span className="text-3xl sm:text-4xl font-extrabold text-[var(--gold)] font-mono tracking-tight">
+                            <span className="text-3xl sm:text-4xl font-extrabold text-blue-500 dark:text-blue-400 font-mono tracking-tight">
                                 {m.value}
                             </span>
                             <h4 className="text-xs sm:text-sm font-semibold text-[var(--text-primary)]">
@@ -74,9 +74,9 @@ export function IntegrationsBar() {
 
                 {/* Integrations Header */}
                 <div className="text-center max-w-2xl mx-auto space-y-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-[var(--gold)] text-[11px] font-mono font-semibold uppercase tracking-wider border border-white/[0.08]">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider border border-blue-500/20">
                         <Server size={12} />
-                        <span>[INFRA // ECOSYSTEM_INTEGRATIONS]</span>
+                        <span>Ecosystem & Integrations</span>
                     </div>
                     <h3 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
                         Plugs Directly Into Your Existing Distribution Stack
@@ -93,12 +93,12 @@ export function IntegrationsBar() {
                         return (
                             <SpotlightCard
                                 key={item.name}
-                                spotlightColor="rgba(201, 168, 76, 0.15)"
+                                spotlightColor="rgba(59, 130, 246, 0.15)"
                                 className="p-6 border-white/[0.08] bg-white/[0.02] space-y-4 flex flex-col justify-between"
                             >
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <div className="p-2.5 rounded-xl bg-[var(--gold)]/10 text-[var(--gold)] border border-[var(--gold)]/20 shadow-inner">
+                                        <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-inner">
                                             <Icon size={20} />
                                         </div>
                                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-white/[0.04] text-[var(--text-muted)] border border-white/[0.06]">

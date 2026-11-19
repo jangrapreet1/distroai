@@ -5,6 +5,7 @@ import { createPortalCartStore, type CartItem } from "@/stores/portal-cart.store
 import { createPortalAuthStore, type PortalCustomer } from "@/stores/portal-auth.store";
 import type { StoreApi } from "zustand";
 import { useStore } from "zustand";
+import { getApiBaseUrl } from "@/lib/api-url";
 
 type CartStore = ReturnType<typeof createPortalCartStore>;
 type AuthStore = ReturnType<typeof createPortalAuthStore>;
@@ -64,7 +65,7 @@ export function usePortalAuth() {
 }
 
 // Portal API utility
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const API_BASE = getApiBaseUrl();
 
 export const portalApi = {
     get: async (url: string, token?: string | null) => {

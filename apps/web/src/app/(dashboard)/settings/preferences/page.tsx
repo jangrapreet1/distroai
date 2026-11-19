@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plug, Globe, MessageSquare, Phone, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Plug, Globe, MessageSquare, Phone, CheckCircle2, XCircle, Loader2, Bell, Smartphone, Send } from "lucide-react";
 import { useOrg, useOrgSettings, useUpdateOrgSettings, useWhatsAppStatus, useWhatsAppConnect, useWhatsAppDisconnect } from "@/hooks/api-hooks";
+import { useWebPush } from "@/hooks/use-web-push";
 import toast from "react-hot-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGES } from "@/lib/translations";
@@ -40,6 +41,16 @@ function NotificationsTab() {
     const updateSettings = useUpdateOrgSettings();
     const settings = settingsData?.data ?? settingsData ?? {};
 
+    const {
+        isSupported,
+        permission,
+        isSubscribed,
+        loading: pushLoading,
+        subscribe: enablePush,
+        unsubscribe: disablePush,
+        sendTestNotification,
+    } = useWebPush();
+
     const [notifications, setNotifications] = useState({
         whatsappBriefing: true, paymentReminders: true, lowStockAlerts: true, newOrderAlerts: true,
     });
@@ -61,18 +72,82 @@ function NotificationsTab() {
     };
 
     return (
-        <div id="notifications" className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 scroll-mt-6">
-            <h2 className="font-semibold mb-4">Notifications</h2>
-            <Toggle label="WhatsApp daily briefing" description="Receive a daily summary on WhatsApp" enabled={notifications.whatsappBriefing} onToggle={() => toggle("whatsappBriefing")} />
-            <Toggle label="Payment reminders" description="Auto-send payment reminders to customers" enabled={notifications.paymentReminders} onToggle={() => toggle("paymentReminders")} />
-            <Toggle label="Low stock alerts" description="Get notified when products fall below minimum" enabled={notifications.lowStockAlerts} onToggle={() => toggle("lowStockAlerts")} />
-            <Toggle label="New order alerts" description="Get notified for new orders" enabled={notifications.newOrderAlerts} onToggle={() => toggle("newOrderAlerts")} />
-            <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                <InputField label="Payment Reminder Days" value={String(reminderDays)} onChange={(v) => setReminderDays(Number(v))} type="number" />
+        <div id="notifications" className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 scroll-mt-6 space-y-6">
+            <div>
+                <h2 className="font-semibold mb-4">Notifications</h2>
+                <Toggle label="WhatsApp daily briefing" description="Receive a daily summary on WhatsApp" enabled={notifications.whatsappBriefing} onToggle={() => toggle("whatsappBriefing")} />
+                <Toggle label="Payment reminders" description="Auto-send payment reminders to customers" enabled={notifications.paymentReminders} onToggle={() => toggle("paymentReminders")} />
+                <Toggle label="Low stock alerts" description="Get notified when products fall below minimum" enabled={notifications.lowStockAlerts} onToggle={() => toggle("lowStockAlerts")} />
+                <Toggle label="New order alerts" description="Get notified for new orders" enabled={notifications.newOrderAlerts} onToggle={() => toggle("newOrderAlerts")} />
+                <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                    <InputField label="Payment Reminder Days" value={String(reminderDays)} onChange={(v) => setReminderDays(Number(v))} type="number" />
+                </div>
+                <button onClick={handleSave} disabled={updateSettings.isPending} className="mt-4 px-6 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] disabled:opacity-50 transition">
+                    {updateSettings.isPending ? "Saving..." : "Save"}
+                </button>
             </div>
-            <button onClick={handleSave} disabled={updateSettings.isPending} className="mt-4 px-6 py-2.5 rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] text-sm font-semibold hover:bg-[var(--gold-light)] disabled:opacity-50 transition">
-                {updateSettings.isPending ? "Saving..." : "Save"}
-            </button>
+
+            {/* Device Lock-Screen Push Notifications (iPhone PWA / Android / Desktop) */}
+            <div className="pt-6 border-t border-[var(--border)]">
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                        <Smartphone size={18} className="text-[var(--gold)]" />
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                            Mobile Lock-Screen & PWA Push Notifications
+                        </h3>
+                    </div>
+                    {isSubscribed ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--green)]/15 text-[var(--green-bright)] border border-[var(--green)]/30">
+                            <CheckCircle2 size={12} /> Active on this device
+                        </span>
+                    ) : (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--bg-secondary)] text-[var(--text-muted)] border border-[var(--border)]">
+                            Not enabled
+                        </span>
+                    )}
+                </div>
+
+                <p className="text-xs text-[var(--text-secondary)] mb-4 leading-relaxed">
+                    Receive native lock-screen banners on your iPhone (iOS 16.4+ Home Screen web app), Android, or computer the moment an order arrives or a customer makes an enquiry.
+                </p>
+
+                {permission === "denied" && (
+                    <div className="mb-4 p-3 rounded-[var(--radius-md)] bg-[var(--red)]/10 border border-[var(--red)]/20 text-xs text-[var(--red)] leading-relaxed">
+                        ⚠️ Notifications are blocked in this browser. To enable them, please open your device / Safari settings and allow notifications for DistroAI.
+                    </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-3">
+                    {isSubscribed ? (
+                        <>
+                            <button
+                                onClick={sendTestNotification}
+                                disabled={pushLoading}
+                                className="px-4 py-2 rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] hover:border-[var(--gold)] text-xs font-medium text-[var(--text-primary)] transition flex items-center gap-2 disabled:opacity-50"
+                            >
+                                <Send size={14} className="text-[var(--gold)]" />
+                                {pushLoading ? "Sending..." : "Send Test Notification"}
+                            </button>
+                            <button
+                                onClick={disablePush}
+                                disabled={pushLoading}
+                                className="px-4 py-2 rounded-[var(--radius-md)] bg-transparent hover:bg-[var(--red)]/10 text-xs font-medium text-[var(--red)] transition disabled:opacity-50"
+                            >
+                                Disable on this device
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={enablePush}
+                            disabled={pushLoading || !isSupported}
+                            className="px-4 py-2 rounded-[var(--radius-md)] bg-[var(--gold)] hover:bg-[var(--gold-light)] text-[var(--bg-primary)] text-xs font-semibold transition flex items-center gap-2 disabled:opacity-50 shadow-sm"
+                        >
+                            <Bell size={14} />
+                            {pushLoading ? "Enabling..." : "Enable Push Notifications on this Phone"}
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
@@ -269,6 +344,82 @@ function OtherIntegrationsCard() {
     );
 }
 
+/* ─── Default Home Screen Tab ─── */
+function DefaultHomeTab() {
+    const [selectedHome, setSelectedHome] = useState("/dashboard");
+
+    useEffect(() => {
+        const saved = (typeof window !== "undefined" && localStorage.getItem("distroai_default_home")) || "/dashboard";
+        setSelectedHome(saved);
+    }, []);
+
+    const HOME_OPTIONS = [
+        { route: "/dashboard", label: "Dashboard", hindi: "डैशबोर्ड", desc: "Business KPIs, top lists, daily alerts & sales chart", icon: "📊" },
+        { route: "/customers", label: "Khata / Customers", hindi: "खाता / ग्राहक", desc: "Customer balances, chronological ledger & khata statements", icon: "📖" },
+        { route: "/orders", label: "Orders", hindi: "ऑर्डर सूची", desc: "Live order book, dispatch tracking & status filters", icon: "🛒" },
+        { route: "/invoices", label: "Invoices", hindi: "बिल / इनवॉइस", desc: "Invoices list, overdue collections & e-way bills", icon: "📄" },
+        { route: "/inventory", label: "Inventory", hindi: "स्टॉक / इन्वेंटरी", desc: "Stock quantities, warehouse valuation & low-stock alerts", icon: "📦" },
+    ];
+
+    const handleSelect = (route: string, label: string) => {
+        setSelectedHome(route);
+        try {
+            localStorage.setItem("distroai_default_home", route);
+            document.cookie = `defaultHome=${route};path=/;max-age=31536000;SameSite=Lax`;
+            toast.success(`Default home screen set to "${label}". Reopening the app will land here!`, { icon: "🏠" });
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    return (
+        <div id="default-home" className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-6 space-y-4 scroll-mt-6">
+            <div>
+                <div className="flex items-center gap-2">
+                    <span className="text-xl">🏠</span>
+                    <h2 className="font-semibold text-[var(--text-primary)]">Default Opening Screen (शुरुआती स्क्रीन)</h2>
+                </div>
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                    Choose which screen automatically opens when you launch DistroAI on this device or visit the app directly.
+                </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                {HOME_OPTIONS.map((opt) => {
+                    const isSelected = selectedHome === opt.route;
+                    return (
+                        <div
+                            key={opt.route}
+                            onClick={() => handleSelect(opt.route, opt.label)}
+                            className={`p-4 rounded-xl border-2 cursor-pointer transition flex items-start gap-3.5 ${
+                                isSelected
+                                    ? "border-[var(--gold)] bg-[var(--gold)]/10 shadow-[0_0_15px_rgba(201,168,76,0.15)]"
+                                    : "border-[var(--border)] hover:border-[var(--text-muted)] bg-[var(--bg-secondary)]/50"
+                            }`}
+                        >
+                            <span className="text-2xl mt-0.5">{opt.icon}</span>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-sm text-[var(--text-primary)]">{opt.label}</span>
+                                    <span className="text-xs text-[var(--text-muted)] font-normal">({opt.hindi})</span>
+                                    {isSelected && (
+                                        <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--gold)] text-black">
+                                            ACTIVE
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+                                    {opt.desc}
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 /* ─── Language Tab ─── */
 function LanguageTab() {
     const { language, setLanguage, t } = useLanguage();
@@ -301,14 +452,11 @@ function LanguageTab() {
 
 export default function PreferencesSettingsPage() {
     return (
-        <SettingsLayout title="Preferences & Integrations" description="Manage WhatsApp integrations, notifications, API keys, and language settings.">
+        <SettingsLayout title="Preferences & Defaults" description="Configure your default home screen, language preferences, and notification alerts.">
             <div className="space-y-8">
-                <div id="integrations" className="scroll-mt-6 space-y-4">
-                    <WhatsAppCard />
-                    <OtherIntegrationsCard />
-                </div>
-                <NotificationsTab />
+                <DefaultHomeTab />
                 <LanguageTab />
+                <NotificationsTab />
             </div>
         </SettingsLayout>
     );

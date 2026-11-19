@@ -33,7 +33,8 @@ export function PortalCheckoutModal({ onClose, onSuccess }: CheckoutModalProps) 
     const checkoutMutation = useMutation({
         mutationFn: async () => {
             const orderItems = items.map((c) => ({
-                productId: c.product.id,
+                productId: c.product.productId || c.product.id,
+                variantId: c.product.variantId || undefined,
                 quantity: c.quantity,
                 price: c.product.price,
             }));

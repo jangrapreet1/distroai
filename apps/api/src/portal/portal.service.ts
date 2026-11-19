@@ -54,12 +54,23 @@ export class PortalService {
 
         // Fetch active products with their current inventory
         const products = await this.prisma.product.findMany({
-            where: { orgId, isActive: true },
+            where: { orgId, isActive: true, isDraft: false },
             select: {
                 id: true, name: true, category: true, brand: true, imageUrl: true, imageUrls: true,
                 description: true, mrp: true, sellingPrice: true, purchasePrice: true, unit: true, minStockLevel: true,
+                hasVariants: true, variantAttributes: true,
                 inventories: {
                     select: { quantity: true, reservedQty: true }
+                },
+                variants: {
+                    where: { isActive: true },
+                    select: {
+                        id: true, name: true, sku: true, attributes: true,
+                        sellingPrice: true, purchasePrice: true, mrp: true, imageUrl: true,
+                        inventories: {
+                            select: { quantity: true, reservedQty: true }
+                        }
+                    }
                 }
             }
         });
@@ -70,13 +81,43 @@ export class PortalService {
         //   INSTITUTION  → sellingPrice  (same as retailer)
         //   Guest/INDIVIDUAL → mrp       (retail price)
         return products.map(p => {
-            const totalStock = p.inventories.reduce((sum, inv) => sum + (inv.quantity - inv.reservedQty), 0);
+            let totalStock = p.inventories.reduce((sum, inv) => sum + (inv.quantity - inv.reservedQty), 0);
 
             let price = p.mrp;
             if (customerType === 'WHOLESALER') {
                 price = p.purchasePrice || p.sellingPrice || p.mrp;
             } else if (customerType === 'RETAILER' || customerType === 'INSTITUTION') {
                 price = p.sellingPrice || p.mrp;
+            }
+
+            const formattedVariants = (p.variants || []).map(v => {
+                const vStock = v.inventories.reduce((sum, inv) => sum + (inv.quantity - inv.reservedQty), 0);
+                const vBaseMrp = v.mrp ?? p.mrp;
+                const vSelling = v.sellingPrice ?? p.sellingPrice;
+                const vPurchase = v.purchasePrice ?? p.purchasePrice;
+
+                let vPrice = vBaseMrp;
+                if (customerType === 'WHOLESALER') {
+                    vPrice = vPurchase || vSelling || vBaseMrp;
+                } else if (customerType === 'RETAILER' || customerType === 'INSTITUTION') {
+                    vPrice = vSelling || vBaseMrp;
+                }
+
+                return {
+                    id: v.id,
+                    name: v.name,
+                    sku: v.sku,
+                    attributes: v.attributes,
+                    imageUrl: v.imageUrl,
+                    price: vPrice,
+                    originalPrice: vBaseMrp,
+                    stock: vStock,
+                    inStock: vStock > 0
+                };
+            });
+
+            if (p.hasVariants && formattedVariants.length > 0) {
+                totalStock = formattedVariants.reduce((sum, v) => sum + v.stock, 0);
             }
 
             return {
@@ -94,7 +135,10 @@ export class PortalService {
                 isB2B: !!customerId,
                 customerType: customerType || 'GUEST',
                 stock: totalStock,
-                inStock: totalStock > 0
+                inStock: totalStock > 0,
+                hasVariants: p.hasVariants,
+                variantAttributes: p.variantAttributes,
+                variants: formattedVariants
             };
         });
     }

@@ -51,6 +51,7 @@ export const createGetProductDetailsTool = (orgId: string, prisma: PrismaService
                     sku: p.sku,
                     mrp: p.mrp,
                     sellingPrice: p.sellingPrice,
+                    purchasePrice: p.purchasePrice,
                     category: p.category,
                     brand: p.brand,
                 })));

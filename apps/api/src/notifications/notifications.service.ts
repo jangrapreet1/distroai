@@ -8,13 +8,14 @@ import { PushService } from './push.service';
 import { EventsGateway } from './events.gateway';
 
 export type NotificationEvent =
-    | { type: 'NEW_WHATSAPP_ORDER'; orgId: string; orderId: string; customerId: string }
-    | { type: 'ORDER_STATUS_CHANGED'; orgId: string; orderId: string; newStatus: string; customerId: string }
-    | { type: 'INVOICE_CREATED'; orgId: string; invoiceId: string; customerId: string }
-    | { type: 'PAYMENT_RECEIVED'; orgId: string; paymentId: string; customerId: string; amount: number }
-    | { type: 'PAYMENT_OVERDUE'; orgId: string; invoiceId: string; customerId: string; daysOverdue: number }
-    | { type: 'LOW_STOCK'; orgId: string; productId: string; currentQty: number; minQty: number }
-    | { type: 'SALESMAN_CHECKIN'; orgId: string; salesmanId: string; customerId: string }
+    | { type: 'NEW_ORDER'; orgId: string; orderId: string; orderNumber: string; customerName?: string; netAmount: number; source?: string; userId?: string }
+    | { type: 'NEW_WHATSAPP_ORDER'; orgId: string; orderId: string; customerId: string; orderNumber?: string; customerName?: string; netAmount?: number; userId?: string }
+    | { type: 'ORDER_STATUS_CHANGED'; orgId: string; orderId: string; newStatus: string; customerId: string; userId?: string }
+    | { type: 'INVOICE_CREATED'; orgId: string; invoiceId: string; customerId: string; userId?: string }
+    | { type: 'PAYMENT_RECEIVED'; orgId: string; paymentId: string; customerId: string; amount: number; userId?: string }
+    | { type: 'PAYMENT_OVERDUE'; orgId: string; invoiceId: string; customerId: string; daysOverdue: number; userId?: string }
+    | { type: 'LOW_STOCK'; orgId: string; productId: string; currentQty: number; minQty: number; userId?: string }
+    | { type: 'SALESMAN_CHECKIN'; orgId: string; salesmanId: string; customerId: string; userId?: string }
     | { type: 'DAILY_BRIEFING'; orgId: string; briefingMessage: string; targetUserIds: string[] }
     | { type: 'USER_INVITED'; orgId: string; userId: string; tempPassword: string };
 
@@ -37,7 +38,7 @@ export class NotificationsService {
         const notification = await this.prisma.notification.create({
             data: {
                 orgId,
-                userId: (event as any).userId ?? 'system',
+                userId: (event as any).userId ?? null,
                 type: event.type,
                 title: this.getTitle(event),
                 body: this.getMessage(event),
@@ -53,45 +54,70 @@ export class NotificationsService {
         // 2. Queue channel-specific sends
         try {
             switch (event.type) {
-                case 'NEW_WHATSAPP_ORDER':
+                case 'NEW_ORDER':
+                case 'NEW_WHATSAPP_ORDER': {
+                    const isWa = event.type === 'NEW_WHATSAPP_ORDER';
+                    const num = (event as any).orderNumber ? `#${(event as any).orderNumber}` : '';
+                    const name = (event as any).customerName ? ` from ${(event as any).customerName}` : '';
+                    const amt = (event as any).netAmount ? ` (₹${Number((event as any).netAmount).toLocaleString('en-IN')})` : '';
                     await this.queueService.addToQueue('notification', 'send-push', {
-                        orgId, type: 'new_order', orderId: event.orderId,
-                        title: 'New WhatsApp Order', body: `Order received from customer`,
+                        orgId,
+                        type: 'new_order',
+                        orderId: event.orderId,
+                        title: isWa ? `📲 New WhatsApp Order ${num}` : `🛍️ New Order ${num}`,
+                        body: `Order received${name}${amt}`,
+                        url: `/orders/${event.orderId}`,
                     });
                     break;
+                }
 
                 case 'ORDER_STATUS_CHANGED':
                     await this.queueService.addToQueue('notification', 'send-push', {
-                        orgId, type: 'order_status', orderId: event.orderId,
-                        title: 'Order Updated', body: `Order status changed to ${event.newStatus}`,
+                        orgId,
+                        type: 'order_status',
+                        orderId: event.orderId,
+                        title: 'Order Updated',
+                        body: `Order status changed to ${event.newStatus}`,
+                        url: `/orders/${event.orderId}`,
                     });
                     break;
 
                 case 'PAYMENT_RECEIVED':
                     await this.queueService.addToQueue('notification', 'send-push', {
-                        orgId, type: 'payment_received',
-                        title: 'Payment Received', body: `₹${event.amount.toLocaleString('en-IN')} received`,
+                        orgId,
+                        type: 'payment_received',
+                        title: 'Payment Received',
+                        body: `₹${event.amount.toLocaleString('en-IN')} received`,
+                        url: `/payments`,
                     });
                     break;
 
                 case 'PAYMENT_OVERDUE':
                     await this.queueService.addToQueue('notification', 'send-whatsapp', {
-                        orgId, invoiceId: event.invoiceId, customerId: event.customerId,
+                        orgId,
+                        invoiceId: event.invoiceId,
+                        customerId: event.customerId,
                         daysOverdue: event.daysOverdue,
                     });
                     break;
 
                 case 'LOW_STOCK':
                     await this.queueService.addToQueue('notification', 'send-push', {
-                        orgId, type: 'low_stock', productId: event.productId,
-                        title: 'Low Stock Alert', body: `Only ${event.currentQty} units left (min: ${event.minQty})`,
+                        orgId,
+                        type: 'low_stock',
+                        productId: event.productId,
+                        title: 'Low Stock Alert',
+                        body: `Only ${event.currentQty} units left (min: ${event.minQty})`,
+                        url: `/inventory`,
                     });
                     break;
 
                 case 'DAILY_BRIEFING':
                     for (const userId of event.targetUserIds) {
                         await this.queueService.addToQueue('notification', 'send-whatsapp-briefing', {
-                            orgId, userId, message: event.briefingMessage,
+                            orgId,
+                            userId,
+                            message: event.briefingMessage,
                         });
                     }
                     break;
@@ -110,26 +136,48 @@ export class NotificationsService {
     }
 
     private getTitle(event: NotificationEvent): string {
-        const titles: Record<string, string> = {
-            NEW_WHATSAPP_ORDER: 'New WhatsApp Order',
-            ORDER_STATUS_CHANGED: 'Order Status Updated',
-            INVOICE_CREATED: 'Invoice Created',
-            PAYMENT_RECEIVED: 'Payment Received',
-            PAYMENT_OVERDUE: 'Payment Overdue',
-            LOW_STOCK: 'Low Stock Alert',
-            SALESMAN_CHECKIN: 'Salesman Check-in',
-            DAILY_BRIEFING: 'Daily Briefing',
-            USER_INVITED: 'User Invited',
-        };
-        return titles[event.type] ?? event.type;
+        switch (event.type) {
+            case 'NEW_ORDER':
+                return (event as any).orderNumber ? `New Order #${(event as any).orderNumber}` : 'New Order';
+            case 'NEW_WHATSAPP_ORDER':
+                return (event as any).orderNumber ? `New WhatsApp Order #${(event as any).orderNumber}` : 'New WhatsApp Order';
+            case 'ORDER_STATUS_CHANGED':
+                return 'Order Status Updated';
+            case 'INVOICE_CREATED':
+                return 'Invoice Created';
+            case 'PAYMENT_RECEIVED':
+                return 'Payment Received';
+            case 'PAYMENT_OVERDUE':
+                return 'Payment Overdue';
+            case 'LOW_STOCK':
+                return 'Low Stock Alert';
+            case 'SALESMAN_CHECKIN':
+                return 'Salesman Check-in';
+            case 'DAILY_BRIEFING':
+                return 'Daily Briefing';
+            case 'USER_INVITED':
+                return 'User Invited';
+            default:
+                return (event as any).type ?? 'Notification';
+        }
     }
 
     private getMessage(event: NotificationEvent): string {
         switch (event.type) {
-            case 'PAYMENT_RECEIVED': return `₹${event.amount.toLocaleString('en-IN')} payment received`;
-            case 'LOW_STOCK': return `${event.currentQty} units remaining (min: ${event.minQty})`;
-            case 'PAYMENT_OVERDUE': return `Invoice overdue by ${event.daysOverdue} days`;
-            default: return event.type;
+            case 'NEW_ORDER':
+            case 'NEW_WHATSAPP_ORDER': {
+                const name = (event as any).customerName ? ` from ${(event as any).customerName}` : '';
+                const amt = (event as any).netAmount ? ` (₹${Number((event as any).netAmount).toLocaleString('en-IN')})` : '';
+                return `Order received${name}${amt}`;
+            }
+            case 'PAYMENT_RECEIVED':
+                return `₹${event.amount.toLocaleString('en-IN')} payment received`;
+            case 'LOW_STOCK':
+                return `${event.currentQty} units remaining (min: ${event.minQty})`;
+            case 'PAYMENT_OVERDUE':
+                return `Invoice overdue by ${event.daysOverdue} days`;
+            default:
+                return (event as any).type ?? '';
         }
     }
 }

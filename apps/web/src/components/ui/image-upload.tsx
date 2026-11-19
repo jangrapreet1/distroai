@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { UploadCloud, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface ImageUploadProps {
     value?: string;
@@ -25,10 +26,10 @@ export function ImageUpload({ value, onChange, onUpload, disabled, className = '
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
-                    if (!ctx) return reject('Failed to get canvas context');
+                    if (!ctx) return reject(new Error('Failed to get canvas context'));
 
-                    const MAX_WIDTH = 1024;
-                    const MAX_HEIGHT = 1024;
+                    const MAX_WIDTH = 1200;
+                    const MAX_HEIGHT = 1200;
                     let width = img.width;
                     let height = img.height;
 
@@ -44,22 +45,34 @@ export function ImageUpload({ value, onChange, onUpload, disabled, className = '
                         }
                     }
 
-                    canvas.width = width;
-                    canvas.height = height;
-                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.width = Math.round(width);
+                    canvas.height = Math.round(height);
+
+                    const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
+                    const isWebp = file.type === 'image/webp' || file.name.toLowerCase().endsWith('.webp');
+                    const outputType = isPng ? 'image/png' : isWebp ? 'image/webp' : 'image/jpeg';
+                    const outputExt = isPng ? '.png' : isWebp ? '.webp' : '.jpg';
+                    const quality = isPng ? undefined : 0.85;
+
+                    // If converting to JPEG, fill canvas with white so transparent PNGs don't turn black
+                    if (outputType === 'image/jpeg') {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }
+
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                     canvas.toBlob(
                         (blob) => {
-                            if (!blob) return reject('Failed to compress image');
-                            // Use JPEG format with 0.8 quality for great compression
-                            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
-                                type: 'image/jpeg',
+                            if (!blob) return reject(new Error('Failed to compress image'));
+                            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + outputExt, {
+                                type: outputType,
                                 lastModified: Date.now(),
                             });
                             resolve(compressedFile);
                         },
-                        'image/jpeg',
-                        0.8
+                        outputType,
+                        quality
                     );
                 };
                 img.onerror = (e) => reject(e);
@@ -69,15 +82,23 @@ export function ImageUpload({ value, onChange, onUpload, disabled, className = '
     };
 
     const handleFile = async (file: File) => {
-        if (!file.type.startsWith('image/')) return;
+        if (!file.type.startsWith('image/') && !file.name.match(/\.(jpg|jpeg|png|webp|avif)$/i)) return;
         setIsUploading(true);
         try {
-            // Compress image client side
-            const compressedFile = await compressImage(file);
-            const res = await onUpload(compressedFile);
-            onChange(res.url);
-        } catch (error) {
+            // Compress image client side with fallback to raw file
+            let fileToUpload = file;
+            try {
+                fileToUpload = await compressImage(file);
+            } catch (compressErr) {
+                console.warn('Image compression fallback to raw file', compressErr);
+            }
+            const res = await onUpload(fileToUpload);
+            if (res?.url) {
+                onChange(res.url);
+            }
+        } catch (error: any) {
             console.error('Upload failed', error);
+            toast.error(error?.message || 'Failed to upload image. Please try again.');
         } finally {
             setIsUploading(false);
         }

@@ -1,16 +1,31 @@
 "use client";
-import { formatINR } from "@/lib/utils";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Search, Package, ArrowDownAZ, ArrowUpZA } from "lucide-react";
 import Link from "next/link";
+import {
+    ArrowLeft,
+    Plus,
+    Trash2,
+    Search,
+    Package,
+    ArrowDownAZ,
+    ArrowUpZA,
+    AlertCircle,
+    Check,
+    ChevronDown,
+    CornerDownLeft,
+    Sparkles,
+    X,
+} from "lucide-react";
 import { useCreateOrder, useCustomers, useProducts, useWarehouses } from "@/hooks/api-hooks";
 import { AddCustomerModal } from "@/components/AddCustomerModal";
+import { formatINR } from "@/lib/utils";
 
-
-interface OrderItem {
+export interface OrderItemRow {
+    rowId: string;
     productId: string;
+    variantId?: string;
     productName: string;
     quantity: number;
     unit: string;
@@ -18,18 +33,46 @@ interface OrderItem {
     discount: number;
     taxRate: number;
     stock: number;
+    searchQuery?: string;
+    isDropdownOpen?: boolean;
 }
+
+interface SearchableProductOption {
+    productId: string;
+    variantId?: string;
+    displayName: string;
+    sku: string;
+    unit: string;
+    price: number;
+    taxRate: number;
+    stock: number;
+}
+
+const createEmptyRow = (rowId = `row-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`): OrderItemRow => ({
+    rowId,
+    productId: "",
+    productName: "",
+    quantity: 1,
+    unit: "Pcs",
+    price: 0,
+    discount: 0,
+    taxRate: 0,
+    stock: 0,
+    searchQuery: "",
+    isDropdownOpen: false,
+});
 
 export default function NewOrderPage() {
     const router = useRouter();
     const createOrder = useCreateOrder();
-    const [orderType, setOrderType] = useState<"B2B" | "B2C">("B2B");
 
+    const [orderType, setOrderType] = useState<"B2B" | "B2C">("B2B");
     const [customerId, setCustomerId] = useState("");
     const [customerSearch, setCustomerSearch] = useState("");
     const [showAddCustomer, setShowAddCustomer] = useState(false);
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
     const [customerSort, setCustomerSort] = useState<"asc" | "desc">("asc");
+    const [customerHighlightIndex, setCustomerHighlightIndex] = useState(0);
 
     const { data: whData } = useWarehouses();
     const warehouses = Array.isArray(whData) ? whData : (whData?.data ?? []);
@@ -37,9 +80,6 @@ export default function NewOrderPage() {
     const [warehouseId, setWarehouseId] = useState("");
     const [notes, setNotes] = useState("");
     const [deliveryDate, setDeliveryDate] = useState("");
-    const [items, setItems] = useState<OrderItem[]>([]);
-    const [productSearch, setProductSearch] = useState("");
-    const [showProductPicker, setShowProductPicker] = useState(false);
 
     // Commission state
     const [showCommission, setShowCommission] = useState(false);
@@ -48,71 +88,113 @@ export default function NewOrderPage() {
     const [commissionType, setCommissionType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
     const [commissionValue, setCommissionValue] = useState<number>(0);
 
-    // Only pass search if it has actual text, otherwise pass undefined so we fetch all customers
+    // Credit limit override state
+    const [overrideCreditLimit, setOverrideCreditLimit] = useState(false);
+    const [overrideReason, setOverrideReason] = useState("");
+
+    // Line items with initial empty row ready for typing
+    const [items, setItems] = useState<OrderItemRow[]>([createEmptyRow("row-initial")]);
+    const [activeRowHighlight, setActiveRowHighlight] = useState<number>(0);
+
+    // Form submission reference for keyboard shortcut
+    const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+    const customerInputRef = useRef<HTMLInputElement | null>(null);
+
+    // Dynamic input refs for grid cell navigation
+    const productInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+    const qtyInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+    const rateInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+    const discountInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+    // Fetch customers
     const { data: customersData } = useCustomers({ search: customerSearch.trim() || undefined, limit: 100 });
     const customersRaw = customersData?.data ?? [];
     const customers = useMemo(() => {
         const list = [...customersRaw];
         list.sort((a: any, b: any) => {
-            const nameA = (a.name as string ?? "").toLowerCase();
-            const nameB = (b.name as string ?? "").toLowerCase();
+            const nameA = ((a.name as string) ?? "").toLowerCase();
+            const nameB = ((b.name as string) ?? "").toLowerCase();
             return customerSort === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
         });
         return list;
     }, [customersRaw, customerSort]);
 
-    const { data: prodData } = useProducts({ limit: 100, isActive: true });
+    // Fetch products
+    const { data: prodData } = useProducts({ limit: 200, isActive: true, isDraft: false });
     const products = prodData?.data?.data ?? prodData?.data ?? [];
+
+    // Flatten products and variants into instant-search lookup
+    const searchableProductOptions = useMemo(() => {
+        const list: SearchableProductOption[] = [];
+        const prods = Array.isArray(products) ? products : [];
+        for (const p of prods) {
+            if (p.hasVariants && Array.isArray(p.variants) && p.variants.length > 0) {
+                for (const v of p.variants) {
+                    const vStock = Array.isArray(v.inventories)
+                        ? v.inventories.reduce((sum: number, inv: any) => sum + (inv.quantity - inv.reservedQty), 0)
+                        : 0;
+                    list.push({
+                        productId: p.id,
+                        variantId: v.id,
+                        displayName: `${p.name} (${v.name})`,
+                        sku: v.sku || p.sku || "",
+                        unit: p.unit || "Pieces",
+                        price: (v.sellingPrice as number) ?? ((p.sellingPrice as number) ?? 0),
+                        taxRate: (p.gstRate as number) ?? 0,
+                        stock: vStock,
+                    });
+                }
+            } else {
+                list.push({
+                    productId: p.id,
+                    displayName: p.name,
+                    sku: p.sku || "",
+                    unit: p.unit || "Pieces",
+                    price: (p.sellingPrice as number) ?? 0,
+                    taxRate: (p.gstRate as number) ?? 0,
+                    stock: (p.totalQuantity as number) ?? 0,
+                });
+            }
+        }
+        return list;
+    }, [products]);
 
     useEffect(() => {
         if (warehouses.length === 1 && !warehouseId) setWarehouseId(warehouses[0].id);
     }, [warehouses, warehouseId]);
 
-    const handleAddItem = (product: Record<string, unknown>) => {
-        const existing = items.find((i) => i.productId === product.id);
-        if (existing) {
-            setItems(items.map((i) => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i));
-        } else {
-            setItems([...items, {
-                productId: product.id as string,
-                productName: product.name as string,
-                quantity: 1,
-                unit: (product.unit as string) ?? "Pieces",
-                price: (product.sellingPrice as number) ?? 0,
-                discount: 0,
-                taxRate: (product.gstRate as number) ?? 0,
-                stock: (product.totalQuantity as number) ?? 0,
-            }]);
-        }
-        setShowProductPicker(false);
-        setProductSearch("");
-    };
+    // Global keyboard listener for Ctrl+Enter / Cmd+Enter rapid order completion
+    useEffect(() => {
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                submitButtonRef.current?.click();
+            }
+        };
+        window.addEventListener("keydown", handleGlobalKeyDown);
+        return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+    }, []);
 
-    const updateItem = (idx: number, key: keyof OrderItem, value: string | number) => {
-        setItems(items.map((item, i) => i === idx ? { ...item, [key]: value } : item));
-    };
+    const selectedCustomer = useMemo(() => {
+        return (customersRaw as any[]).find((c: any) => c.id === customerId);
+    }, [customersRaw, customerId]);
 
-    const removeItem = (idx: number) => {
-        setItems(items.filter((_, i) => i !== idx));
-    };
-
-    // ── Price Math ──
-    // B2B: price is the base taxable price → tax is added on top
-    // B2C: price is what the end customer pays (inclusive of GST) → we back-calculate
+    // ── Price & Tax Math ──
     const subtotal = useMemo(() => {
         const raw = items.reduce((s, i) => {
+            if (!i.productId) return s;
             if (orderType === "B2C") {
-                // Back-calculate taxable value: taxable = inclusive / (1 + rate/100)
                 const taxable = i.price / (1 + i.taxRate / 100);
                 return s + (taxable * i.quantity) - i.discount;
             }
             return s + (i.price * i.quantity) - i.discount;
         }, 0);
-        return Math.round(raw * 100) / 100;
+        return Math.max(0, Math.round(raw * 100) / 100);
     }, [items, orderType]);
 
     const taxTotal = useMemo(() => {
         const raw = items.reduce((s, i) => {
+            if (!i.productId) return s;
             if (orderType === "B2C") {
                 const taxable = i.price / (1 + i.taxRate / 100);
                 const lineBase = (taxable * i.quantity) - i.discount;
@@ -121,26 +203,117 @@ export default function NewOrderPage() {
             const lineTotal = (i.price * i.quantity) - i.discount;
             return s + (lineTotal * i.taxRate / 100);
         }, 0);
-        return Math.round(raw * 100) / 100;
+        return Math.max(0, Math.round(raw * 100) / 100);
     }, [items, orderType]);
 
-    // Grand Total:
-    //   B2B → subtotal + taxTotal (base price + tax on top)
-    //   B2C → simply the sum of what the customer pays (price × qty − discount)
     const grandTotal = useMemo(() => {
         if (orderType === "B2C") {
-            return Math.round(items.reduce((s, i) => s + (i.price * i.quantity) - i.discount, 0) * 100) / 100;
+            const raw = items.reduce((s, i) => {
+                if (!i.productId) return s;
+                return s + (i.price * i.quantity) - i.discount;
+            }, 0);
+            return Math.max(0, Math.round(raw * 100) / 100);
         }
-        return Math.round((subtotal + taxTotal) * 100) / 100;
+        return Math.max(0, Math.round((subtotal + taxTotal) * 100) / 100);
     }, [items, orderType, subtotal, taxTotal]);
 
+    const creditLimit = Number(selectedCustomer?.creditLimit || 0);
+    const currentOutstanding = Number(selectedCustomer?.outstandingAmount || 0);
+    const isCreditExceeded = creditLimit > 0 && (currentOutstanding + grandTotal) > creditLimit;
+    const availableCredit = creditLimit > 0 ? Math.max(0, creditLimit - currentOutstanding) : Infinity;
+
+    // Customer selection handler
+    const handleSelectCustomer = (c: any) => {
+        setCustomerId(c.id);
+        setCustomerSearch(c.name);
+        setShowCustomerDropdown(false);
+        if (c.type === "INDIVIDUAL") {
+            setOrderType("B2C");
+        } else {
+            setOrderType("B2B");
+        }
+        // Focus first row product search
+        setTimeout(() => {
+            const firstRowId = items[0]?.rowId;
+            if (firstRowId) productInputRefs.current[firstRowId]?.focus();
+        }, 50);
+    };
+
+    // Item row update helper
+    const updateRow = (rowId: string, updates: Partial<OrderItemRow>) => {
+        setItems(prev => prev.map(row => (row.rowId === rowId ? { ...row, ...updates } : row)));
+    };
+
+    // Select product into row and auto-advance to Qty
+    const handleSelectProduct = (rowId: string, option: SearchableProductOption) => {
+        setItems(prev =>
+            prev.map(row => {
+                if (row.rowId !== rowId) return row;
+                return {
+                    ...row,
+                    productId: option.productId,
+                    variantId: option.variantId,
+                    productName: option.displayName,
+                    unit: option.unit,
+                    price: option.price,
+                    taxRate: option.taxRate,
+                    stock: option.stock,
+                    searchQuery: option.displayName,
+                    isDropdownOpen: false,
+                };
+            })
+        );
+        // Focus Qty input immediately
+        setTimeout(() => {
+            const qtyInput = qtyInputRefs.current[rowId];
+            if (qtyInput) {
+                qtyInput.focus();
+                qtyInput.select();
+            }
+        }, 20);
+    };
+
+    // Remove row
+    const handleRemoveRow = (rowId: string) => {
+        setItems(prev => {
+            const next = prev.filter(r => r.rowId !== rowId);
+            if (next.length === 0) return [createEmptyRow()];
+            return next;
+        });
+    };
+
+    // Add new row manually or on Enter at end of line
+    const handleAddNewRow = (focusNew = true) => {
+        const newRow = createEmptyRow();
+        setItems(prev => [...prev, newRow]);
+        if (focusNew) {
+            setTimeout(() => {
+                productInputRefs.current[newRow.rowId]?.focus();
+            }, 30);
+        }
+    };
+
+    // Filter product options for a given row's query
+    const getRowFilteredOptions = (query: string) => {
+        if (!query || !query.trim()) return searchableProductOptions.slice(0, 15);
+        const q = query.toLowerCase().trim();
+        return searchableProductOptions
+            .filter(opt => opt.displayName.toLowerCase().includes(q) || opt.sku.toLowerCase().includes(q))
+            .slice(0, 20);
+    };
+
+    // Submit handler
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!customerId || items.length === 0) return;
+        const validItems = items.filter(i => Boolean(i.productId));
+        if (!customerId || validItems.length === 0) return;
 
-        const resolvedCommissionTo = commissionTo === "Other"
-            ? (commissionToCustom.trim() || "Custom")
-            : (commissionToCustom.trim() ? `${commissionTo} (${commissionToCustom.trim()})` : commissionTo);
+        const resolvedCommissionTo =
+            commissionTo === "Other"
+                ? commissionToCustom.trim() || "Custom"
+                : commissionToCustom.trim()
+                ? `${commissionTo} (${commissionToCustom.trim()})`
+                : commissionTo;
 
         const payload: Record<string, unknown> = {
             customerId,
@@ -148,13 +321,18 @@ export default function NewOrderPage() {
             source: "WEB",
             notes: notes || undefined,
             deliveryDate: deliveryDate || undefined,
-            ...(showCommission && resolvedCommissionTo && commissionValue > 0 ? {
-                commissionTo: resolvedCommissionTo,
-                commissionType,
-                commissionValue,
-            } : {}),
-            items: items.map((i) => ({
+            overrideCreditLimit: overrideCreditLimit || undefined,
+            overrideReason: overrideCreditLimit ? overrideReason.trim() || "Manager override" : undefined,
+            ...(showCommission && resolvedCommissionTo && commissionValue > 0
+                ? {
+                      commissionTo: resolvedCommissionTo,
+                      commissionType,
+                      commissionValue,
+                  }
+                : {}),
+            items: validItems.map(i => ({
                 productId: i.productId,
+                variantId: i.variantId || undefined,
                 quantity: i.quantity,
                 unit: i.unit,
                 price: orderType === "B2C" ? parseFloat((i.price / (1 + i.taxRate / 100)).toFixed(2)) : i.price,
@@ -162,7 +340,6 @@ export default function NewOrderPage() {
             })),
         };
 
-        // Remove warehouseId if empty — let the backend pick the default
         if (!payload.warehouseId) delete payload.warehouseId;
 
         createOrder.mutate(payload, {
@@ -173,325 +350,708 @@ export default function NewOrderPage() {
         });
     };
 
+    const validItemsCount = items.filter(i => Boolean(i.productId)).length;
+
     return (
-        <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+            {/* Header with Title, Mode Toggle & Keyboard Shortcut Badge */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/80">
                 <div className="flex items-center gap-3">
-                    <Link href="/orders" className="p-2 rounded-lg hover:bg-[var(--bg-card)] transition">
-                        <ArrowLeft size={18} className="text-[var(--text-muted)]" />
+                    <Link
+                        href="/orders"
+                        className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                    >
+                        <ArrowLeft size={16} />
                     </Link>
-                    <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>New Order</h1>
+                    <div>
+                        <h1 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                            New Sales Order
+                            <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-mono rounded bg-blue-950/60 border border-blue-800/60 text-blue-400 font-medium">
+                                <Sparkles size={11} /> Rapid Grid Mode
+                            </span>
+                        </h1>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                            Keyboard-first bill entry. Use <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px] text-zinc-300">Enter</kbd> to step through cells, <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px] text-zinc-300">Ctrl+Enter</kbd> to save.
+                        </p>
+                    </div>
                 </div>
 
-                <div className="flex items-center bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-1 w-full sm:w-64">
+                <div className="flex items-center gap-3">
+                    {/* B2B / B2C Toggle */}
+                    <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 w-full sm:w-60">
+                        <button
+                            type="button"
+                            onClick={() => setOrderType("B2B")}
+                            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${
+                                orderType === "B2B"
+                                    ? "bg-blue-600 text-white shadow-sm"
+                                    : "text-zinc-400 hover:text-zinc-200"
+                            }`}
+                        >
+                            B2B (GST Breakup)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setOrderType("B2C")}
+                            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition ${
+                                orderType === "B2C"
+                                    ? "bg-blue-600 text-white shadow-sm"
+                                    : "text-zinc-400 hover:text-zinc-200"
+                            }`}
+                        >
+                            B2C (Final Rate)
+                        </button>
+                    </div>
+
+                    {/* Quick Save Hint Button */}
                     <button
-                        onClick={() => setOrderType("B2B")}
-                        className={`flex-1 py-1.5 text-sm font-semibold rounded transition ${orderType === "B2B" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                        type="button"
+                        onClick={() => submitButtonRef.current?.click()}
+                        disabled={!customerId || validItemsCount === 0 || createOrder.isPending || (isCreditExceeded && !overrideCreditLimit)}
+                        className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 transition"
                     >
-                        B2B (GST Breakup)
-                    </button>
-                    <button
-                        onClick={() => setOrderType("B2C")}
-                        className={`flex-1 py-1.5 text-sm font-semibold rounded transition ${orderType === "B2C" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
-                    >
-                        B2C (Final Price)
+                        <kbd className="px-1 py-0.2 bg-zinc-950 border border-zinc-700 rounded text-[10px] font-mono text-zinc-400">Ctrl</kbd>
+                        <span>+</span>
+                        <kbd className="px-1 py-0.2 bg-zinc-950 border border-zinc-700 rounded text-[10px] font-mono text-zinc-400">Enter</kbd>
+                        <span>Save</span>
                     </button>
                 </div>
             </div>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-6">
-                {/* Customer Selection */}
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5">
-                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3">Customer</h3>
-                    <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                        <input
-                            value={customerSearch}
-                            onChange={(e) => { setCustomerSearch(e.target.value); setCustomerId(""); setShowCustomerDropdown(true); }}
-                            onFocus={() => { if (!customerId) setShowCustomerDropdown(true); }}
-                            placeholder="Click to browse or type to search customers..."
-                            className="w-full pl-9 pr-4 py-2.5 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition"
-                        />
+                {/* Customer Selection Card */}
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 sm:p-5 backdrop-blur-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                            Customer / Kirana Account <span className="text-rose-500">*</span>
+                        </label>
+                        {customerId && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setCustomerId("");
+                                    setCustomerSearch("");
+                                    setShowCustomerDropdown(true);
+                                    setOverrideCreditLimit(false);
+                                    setTimeout(() => customerInputRef.current?.focus(), 30);
+                                }}
+                                className="text-xs text-blue-400 hover:text-blue-300 transition"
+                            >
+                                Change Customer
+                            </button>
+                        )}
                     </div>
-                    {showCustomerDropdown && !customerId && (
-                        <div className="mt-2 border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)] flex flex-col overflow-hidden max-h-72">
-                            <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)] bg-[var(--bg-card)]">
-                                <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">{customers.length} customers</span>
-                                <button type="button" onClick={() => setCustomerSort(customerSort === "asc" ? "desc" : "asc")}
-                                    className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--gold)] transition">
-                                    {customerSort === "asc" ? <ArrowDownAZ size={14} /> : <ArrowUpZA size={14} />}
-                                    {customerSort === "asc" ? "A → Z" : "Z → A"}
-                                </button>
-                            </div>
-                            {customers.length === 0 ? (
-                                <p className="p-3 text-sm text-[var(--text-muted)] text-center">No customers found</p>
-                            ) : (
-                                <div className="overflow-y-auto">
-                                    {customers.map((c: Record<string, unknown>) => (
+
+                    {!customerId ? (
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                            <input
+                                ref={customerInputRef}
+                                value={customerSearch}
+                                onChange={e => {
+                                    setCustomerSearch(e.target.value);
+                                    setShowCustomerDropdown(true);
+                                    setCustomerHighlightIndex(0);
+                                }}
+                                onFocus={() => setShowCustomerDropdown(true)}
+                                onKeyDown={e => {
+                                    if (e.key === "ArrowDown") {
+                                        e.preventDefault();
+                                        setCustomerHighlightIndex(i => Math.min(i + 1, customers.length - 1));
+                                    } else if (e.key === "ArrowUp") {
+                                        e.preventDefault();
+                                        setCustomerHighlightIndex(i => Math.max(i - 1, 0));
+                                    } else if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        if (customers[customerHighlightIndex]) {
+                                            handleSelectCustomer(customers[customerHighlightIndex]);
+                                        }
+                                    } else if (e.key === "Escape") {
+                                        setShowCustomerDropdown(false);
+                                    }
+                                }}
+                                placeholder="Search customer by store name, phone or GSTIN... (Press ↓ to browse)"
+                                className="w-full pl-9 pr-4 py-2.5 text-sm rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 focus:outline-none transition font-sans"
+                            />
+
+                            {showCustomerDropdown && (
+                                <div
+                                    className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-72"
+                                >
+                                    <div className="flex items-center justify-between px-3.5 py-2 border-b border-zinc-800 bg-zinc-950/50">
+                                        <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold font-mono">
+                                            {customers.length} accounts found
+                                        </span>
                                         <button
-                                            key={c.id as string}
                                             type="button"
-                                            onClick={() => {
-                                                setCustomerId(c.id as string);
-                                                setCustomerSearch(c.name as string);
-                                                setShowCustomerDropdown(false);
-                                                if (c.type === "INDIVIDUAL") {
-                                                    setOrderType("B2C");
-                                                } else {
-                                                    setOrderType("B2B");
-                                                }
-                                            }}
-                                            className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] transition flex items-center justify-between"
+                                            onClick={() => setCustomerSort(customerSort === "asc" ? "desc" : "asc")}
+                                            className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-blue-400 transition"
                                         >
-                                            <span className="font-medium">{c.name as string}</span>
-                                            <span className="text-xs text-[var(--text-muted)]">{c.phone as string ?? ""}</span>
+                                            {customerSort === "asc" ? <ArrowDownAZ size={13} /> : <ArrowUpZA size={13} />}
+                                            {customerSort === "asc" ? "A → Z" : "Z → A"}
                                         </button>
-                                    ))}
+                                    </div>
+
+                                    {customers.length === 0 ? (
+                                        <div className="p-4 text-center space-y-2">
+                                            <p className="text-xs text-zinc-500">No matching customer found</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAddCustomer(true)}
+                                                className="text-xs font-medium text-blue-400 hover:underline"
+                                            >
+                                                + Add New Customer
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-y-auto divide-y divide-zinc-800/40">
+                                            {customers.map((c: any, idx: number) => {
+                                                const isHighlighted = idx === customerHighlightIndex;
+                                                return (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        onClick={() => handleSelectCustomer(c)}
+                                                        onMouseEnter={() => setCustomerHighlightIndex(idx)}
+                                                        className={`w-full text-left px-3.5 py-2.5 text-xs transition flex items-center justify-between ${
+                                                            isHighlighted
+                                                                ? "bg-blue-600/15 text-blue-200"
+                                                                : "text-zinc-300 hover:bg-zinc-800/60"
+                                                        }`}
+                                                    >
+                                                        <div>
+                                                            <div className="font-semibold text-zinc-100 flex items-center gap-1.5">
+                                                                {c.name}
+                                                                {c.type === "INDIVIDUAL" && (
+                                                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">B2C</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[11px] text-zinc-500 font-mono mt-0.5">
+                                                                {c.phone || "No phone"} {c.gstin ? `• GST: ${c.gstin}` : ""}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-[10px] text-zinc-500 uppercase">Outstanding</div>
+                                                            <div className="font-mono text-xs font-medium text-amber-400 tabular-nums">
+                                                                {formatINR(Number(c.outstandingAmount || 0))}
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <div className="p-2 border-t border-zinc-800 bg-zinc-950/60 flex items-center justify-between text-xs">
+                                        <span className="text-[10px] text-zinc-500">
+                                            Use <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">↑</kbd> <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">↓</kbd> + <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">Enter</kbd>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAddCustomer(true)}
+                                            className="flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition"
+                                        >
+                                            <Plus size={13} /> Add Customer
+                                        </button>
+                                    </div>
                                 </div>
                             )}
-                            <div className="p-2 border-t border-[var(--border)] bg-[var(--bg-card)]">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddCustomer(true)}
-                                    className="w-full flex items-center justify-center gap-2 py-2 text-sm font-semibold text-[var(--gold)] hover:bg-[var(--gold)]/10 rounded-[var(--radius-md)] transition"
-                                >
-                                    <Plus size={16} /> New Customer
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    {customerId && (
-                        <div className="mt-2 flex items-center justify-between">
-                            <p className="text-xs text-[var(--green-bright)]">✓ Customer selected</p>
-                            <button type="button" onClick={() => { setCustomerId(""); setCustomerSearch(""); setShowCustomerDropdown(true); }} className="text-xs text-[var(--text-muted)] hover:text-[var(--red)] transition">Change</button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Items */}
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-[var(--text-secondary)]">Order Items</h3>
-                        <button
-                            type="button"
-                            onClick={() => setShowProductPicker(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-[var(--radius-md)] bg-[var(--gold)]/15 text-[var(--gold)] hover:bg-[var(--gold)]/25 transition font-medium"
-                        >
-                            <Plus size={14} /> Add Product
-                        </button>
-                    </div>
-
-                    {/* Product Picker Modal */}
-                    {showProductPicker && (
-                        <div className="mb-4 border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--bg-secondary)] p-3">
-                            <div className="relative mb-3">
-                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                                <input
-                                    autoFocus
-                                    value={productSearch}
-                                    onChange={(e) => setProductSearch(e.target.value)}
-                                    placeholder="Search products..."
-                                    className="w-full pl-9 pr-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition"
-                                />
-                            </div>
-                            <div className="max-h-48 overflow-y-auto space-y-1">
-                                {(Array.isArray(products) ? products : []).filter((p: Record<string, unknown>) =>
-                                    !productSearch || (p.name as string).toLowerCase().includes(productSearch.toLowerCase()) || (p.sku as string).toLowerCase().includes(productSearch.toLowerCase())
-                                ).map((p: Record<string, unknown>) => (
-                                    <button
-                                        key={p.id as string}
-                                        type="button"
-                                        onClick={() => handleAddItem(p)}
-                                        className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--bg-card-hover)] rounded-lg transition flex items-center justify-between"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <Package size={14} className="text-[var(--text-muted)]" />
-                                            <span className="font-medium">{p.name as string}</span>
-                                            <span className="text-xs text-[var(--text-muted)]">SKU: {p.sku as string}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${((p.totalQuantity as number) ?? 0) > 0 ? 'bg-[var(--green-bright)]/10 text-[var(--green-bright)]' : 'bg-[var(--red)]/10 text-[var(--red)]'}`}>
-                                                {((p.totalQuantity as number) ?? 0)} in stock
-                                            </span>
-                                            <span className="text-sm font-medium" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((p.sellingPrice as number) ?? 0)}</span>
-                                        </div>
-                                    </button>
-                                ))}
-                                {(Array.isArray(products) ? products : []).length === 0 && (
-                                    <p className="p-3 text-sm text-[var(--text-muted)] text-center">No products found</p>
-                                )}
-                            </div>
-                            <button type="button" onClick={() => { setShowProductPicker(false); setProductSearch(""); }} className="mt-2 w-full text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition text-center py-1">
-                                Close
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Items Table */}
-                    {items.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider">
-                                        <th className="text-left py-2">Product</th>
-                                        <th className="text-center py-2 w-24">Qty</th>
-                                        <th className="text-right py-2 w-28">Price</th>
-                                        <th className="text-right py-2 w-24">Discount</th>
-                                        <th className="text-right py-2 w-28">Total</th>
-                                        <th className="w-10"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {items.map((item, idx) => (
-                                        <tr key={item.productId} className="border-b border-[var(--border)]">
-                                            <td className="py-3 font-medium">{item.productName}</td>
-                                            <td className="py-3 text-center">
-                                                <input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))}
-                                                    className="w-20 text-center px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none" />
-                                            </td>
-                                            <td className="py-3 text-right">
-                                                <input type="number" min={0} step="1" value={item.price} onChange={(e) => updateItem(idx, "price", Number(e.target.value))}
-                                                    className="w-24 text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none" />
-                                            </td>
-                                            <td className="py-3 text-right">
-                                                <input type="number" min={0} step="1" value={item.discount} onChange={(e) => updateItem(idx, "discount", Number(e.target.value))}
-                                                    className="w-20 text-right px-2 py-1 text-sm rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none" />
-                                            </td>
-                                            <td className="py-3 text-right font-medium" style={{ fontFamily: "var(--font-mono)" }}>
-                                                {formatINR(item.price * item.quantity - item.discount)}
-                                            </td>
-                                            <td className="py-3 text-center">
-                                                <button type="button" onClick={() => removeItem(idx)} className="text-[var(--red)] hover:text-[var(--red)]/80 transition">
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            <div className="flex justify-end mt-3 pt-3 border-t border-[var(--border)]">
-                                <div className="w-64 space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-[var(--text-muted)]">Subtotal</span>
-                                        <span style={{ fontFamily: "var(--font-mono)" }}>{formatINR(subtotal)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-[var(--text-muted)]">Estimated Tax</span>
-                                        <span className="text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(taxTotal)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-base font-bold pt-2 border-t border-[var(--border)]">
-                                        <span>Grand Total</span>
-                                        <span className="text-[var(--gold)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(grandTotal)}</span>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     ) : (
-                        <div className="text-center py-12 text-[var(--text-muted)]">
-                            <Package size={32} className="mx-auto mb-2 opacity-30" />
-                            <p className="text-sm">No items added yet</p>
-                            <p className="text-xs mt-1">Click &quot;Add Product&quot; to start building the order</p>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-3">
+                                <div>
+                                    <div className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                                        {selectedCustomer?.name}
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                                            Active Account
+                                        </span>
+                                    </div>
+                                    <div className="text-xs text-zinc-400 font-mono mt-0.5">
+                                        {selectedCustomer?.phone || "No phone"} {selectedCustomer?.gstin ? `| GSTIN: ${selectedCustomer?.gstin}` : ""}
+                                    </div>
+                                </div>
+                                <div className="text-xs text-zinc-500">
+                                    Billing Mode: <strong className="text-zinc-200">{orderType}</strong>
+                                </div>
+                            </div>
+
+                            {/* Credit & Exposure Gauges */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                                <div className="p-2.5 rounded-lg bg-zinc-950/40 border border-zinc-800/70">
+                                    <span className="text-zinc-500 block text-[10px] uppercase font-mono">Credit Limit</span>
+                                    <span className="font-mono font-semibold text-zinc-200 tabular-nums text-sm">
+                                        {creditLimit > 0 ? formatINR(creditLimit) : "Unlimited"}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-lg bg-zinc-950/40 border border-zinc-800/70">
+                                    <span className="text-zinc-500 block text-[10px] uppercase font-mono">Current Dues</span>
+                                    <span className="font-mono font-semibold text-amber-400 tabular-nums text-sm">
+                                        {formatINR(currentOutstanding)}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-lg bg-zinc-950/40 border border-zinc-800/70">
+                                    <span className="text-zinc-500 block text-[10px] uppercase font-mono">Available Credit</span>
+                                    <span
+                                        className={`font-mono font-semibold tabular-nums text-sm ${
+                                            availableCredit <= 0 && creditLimit > 0 ? "text-rose-400" : "text-emerald-400"
+                                        }`}
+                                    >
+                                        {creditLimit > 0 ? formatINR(availableCredit) : "Unlimited"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Credit Limit Exceeded Safeguard Banner */}
+                            {isCreditExceeded && (
+                                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 space-y-2 text-xs">
+                                    <div className="flex items-center gap-2 font-bold text-rose-400">
+                                        <AlertCircle size={15} />
+                                        <span>
+                                            Credit Limit Exceeded by {formatINR(currentOutstanding + grandTotal - creditLimit)}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-rose-200/90 leading-relaxed">
+                                        Customer credit limit is {formatINR(creditLimit)}. Total post-order balance will be {formatINR(currentOutstanding + grandTotal)}.
+                                    </p>
+                                    <label className="flex items-center gap-2 cursor-pointer pt-1 font-semibold text-zinc-100">
+                                        <input
+                                            type="checkbox"
+                                            checked={overrideCreditLimit}
+                                            onChange={e => setOverrideCreditLimit(e.target.checked)}
+                                            className="rounded border-zinc-700 bg-zinc-950 text-blue-600 focus:ring-0"
+                                        />
+                                        <span>Authorize Order via Manager/Owner Override</span>
+                                    </label>
+                                    {overrideCreditLimit && (
+                                        <input
+                                            type="text"
+                                            placeholder="Reason for override (e.g., Post-dated cheque in hand / Owner verbal approval)..."
+                                            value={overrideReason}
+                                            onChange={e => setOverrideReason(e.target.value)}
+                                            className="w-full px-3 py-1.5 text-xs rounded bg-zinc-950 border border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-rose-400"
+                                        />
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Additional Details */}
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-5">
-                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3">Additional Details</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                {/* Keyboard-First Rapid Line Items Grid */}
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 sm:p-5 backdrop-blur-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800/60">
+                        <div>
+                            <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                                Order Line Items ({validItemsCount} added)
+                            </h3>
+                            <span className="text-[11px] text-zinc-500">
+                                Press <kbd className="px-1 rounded bg-zinc-800 font-mono text-zinc-400">Enter</kbd> through cells to add rows automatically.
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => handleAddNewRow(true)}
+                                className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg bg-blue-600/15 border border-blue-500/30 text-blue-400 hover:bg-blue-600/25 transition font-medium"
+                            >
+                                <Plus size={13} /> Add Row (Enter)
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Desktop Tabular Grid */}
+                    <div className="overflow-visible">
+                        <div className="min-w-full">
+                            {/* Table Header */}
+                            <div className="grid grid-cols-12 gap-2 pb-2 border-b border-zinc-800 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold px-1">
+                                <div className="col-span-5">Product / Item (Search or Select)</div>
+                                <div className="col-span-1 text-center">Unit</div>
+                                <div className="col-span-1 text-center">Qty</div>
+                                <div className="col-span-2 text-right">Rate (₹)</div>
+                                <div className="col-span-1 text-right">Disc (₹)</div>
+                                <div className="col-span-1 text-right">GST %</div>
+                                <div className="col-span-1 text-right">Total (₹)</div>
+                            </div>
+
+                            {/* Table Rows */}
+                            <div className="space-y-2 mt-2">
+                                {items.map((row, idx) => {
+                                    const filteredOptions = getRowFilteredOptions(row.searchQuery ?? "");
+                                    const lineNet =
+                                        orderType === "B2C"
+                                            ? row.price * row.quantity - row.discount
+                                            : (row.price * row.quantity - row.discount) * (1 + row.taxRate / 100);
+
+                                    return (
+                                        <div
+                                            key={row.rowId}
+                                            className={`grid grid-cols-12 gap-2 items-center p-1.5 rounded-lg border transition ${
+                                                row.productId
+                                                    ? "bg-zinc-950/40 border-zinc-800/80"
+                                                    : "bg-zinc-950/80 border-blue-500/30 ring-1 ring-blue-500/10"
+                                            }`}
+                                        >
+                                            {/* Product Combobox Column (Col 5) */}
+                                            <div className="col-span-5 relative">
+                                                {!row.productId ? (
+                                                    <div className="relative">
+                                                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                                                        <input
+                                                            ref={el => { productInputRefs.current[row.rowId] = el; }}
+                                                            value={row.searchQuery ?? ""}
+                                                            onChange={e => {
+                                                                updateRow(row.rowId, {
+                                                                    searchQuery: e.target.value,
+                                                                    isDropdownOpen: true,
+                                                                });
+                                                                setActiveRowHighlight(0);
+                                                            }}
+                                                            onFocus={() => {
+                                                                updateRow(row.rowId, { isDropdownOpen: true });
+                                                                setActiveRowHighlight(0);
+                                                            }}
+                                                            onKeyDown={e => {
+                                                                if (e.key === "ArrowDown") {
+                                                                    e.preventDefault();
+                                                                    setActiveRowHighlight(i => Math.min(i + 1, filteredOptions.length - 1));
+                                                                } else if (e.key === "ArrowUp") {
+                                                                    e.preventDefault();
+                                                                    setActiveRowHighlight(i => Math.max(i - 1, 0));
+                                                                } else if (e.key === "Enter") {
+                                                                    e.preventDefault();
+                                                                    if (filteredOptions[activeRowHighlight]) {
+                                                                        handleSelectProduct(row.rowId, filteredOptions[activeRowHighlight]);
+                                                                    }
+                                                                } else if (e.key === "Escape") {
+                                                                    updateRow(row.rowId, { isDropdownOpen: false });
+                                                                }
+                                                            }}
+                                                            placeholder="Type product name or SKU..."
+                                                            className="w-full pl-8 pr-3 py-1.5 text-xs rounded bg-zinc-900 border border-zinc-700/80 text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/40"
+                                                        />
+
+                                                        {row.isDropdownOpen && (
+                                                            <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-zinc-800/40">
+                                                                {filteredOptions.length === 0 ? (
+                                                                    <div className="p-3 text-center text-xs text-zinc-500">
+                                                                        No product found matching &quot;{row.searchQuery}&quot;
+                                                                    </div>
+                                                                ) : (
+                                                                    filteredOptions.map((opt, optIdx) => (
+                                                                        <button
+                                                                            key={`${opt.productId}_${opt.variantId || "base"}`}
+                                                                            type="button"
+                                                                            onClick={() => handleSelectProduct(row.rowId, opt)}
+                                                                            onMouseEnter={() => setActiveRowHighlight(optIdx)}
+                                                                            className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition ${
+                                                                                optIdx === activeRowHighlight
+                                                                                    ? "bg-blue-600/20 text-blue-200"
+                                                                                    : "text-zinc-300 hover:bg-zinc-800/60"
+                                                                            }`}
+                                                                        >
+                                                                            <div>
+                                                                                <div className="font-medium text-zinc-100">{opt.displayName}</div>
+                                                                                <div className="text-[10px] text-zinc-500 font-mono">
+                                                                                    SKU: {opt.sku} | Tax: {opt.taxRate}%
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                <div className="font-mono text-zinc-200 font-semibold tabular-nums">
+                                                                                    {formatINR(opt.price)}
+                                                                                </div>
+                                                                                <div
+                                                                                    className={`text-[9px] font-mono ${
+                                                                                        opt.stock > 0 ? "text-emerald-400" : "text-rose-400"
+                                                                                    }`}
+                                                                                >
+                                                                                    {opt.stock} in stock
+                                                                                </div>
+                                                                            </div>
+                                                                        </button>
+                                                                    ))
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center justify-between bg-zinc-900/90 border border-zinc-800 rounded px-2.5 py-1.5">
+                                                        <div className="truncate pr-2">
+                                                            <span className="text-xs font-medium text-zinc-100 truncate block">
+                                                                {row.productName}
+                                                            </span>
+                                                            <span className="text-[10px] text-zinc-500 font-mono">
+                                                                Stock: {row.stock} {row.unit}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                updateRow(row.rowId, {
+                                                                    productId: "",
+                                                                    productName: "",
+                                                                    searchQuery: "",
+                                                                    isDropdownOpen: true,
+                                                                });
+                                                                setTimeout(() => productInputRefs.current[row.rowId]?.focus(), 20);
+                                                            }}
+                                                            className="text-[10px] text-zinc-500 hover:text-blue-400 uppercase font-mono px-1 rounded transition"
+                                                        >
+                                                            Change
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Unit Column (Col 1) */}
+                                            <div className="col-span-1 text-center text-xs font-mono text-zinc-400">
+                                                {row.unit || "Pcs"}
+                                            </div>
+
+                                            {/* Qty Column (Col 1) */}
+                                            <div className="col-span-1">
+                                                <input
+                                                    ref={el => { qtyInputRefs.current[row.rowId] = el; }}
+                                                    type="number"
+                                                    min={1}
+                                                    value={row.quantity}
+                                                    onChange={e => updateRow(row.rowId, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                                                    onKeyDown={e => {
+                                                        if (e.key === "Enter") {
+                                                            e.preventDefault();
+                                                            const rateInput = rateInputRefs.current[row.rowId];
+                                                            if (rateInput) {
+                                                                rateInput.focus();
+                                                                rateInput.select();
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full text-center py-1 text-xs font-mono font-medium rounded bg-zinc-900 border border-zinc-700/80 text-zinc-100 focus:border-blue-500 focus:outline-none"
+                                                />
+                                            </div>
+
+                                            {/* Rate Column (Col 2) */}
+                                            <div className="col-span-2">
+                                                <input
+                                                    ref={el => { rateInputRefs.current[row.rowId] = el; }}
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={row.price}
+                                                    onChange={e => updateRow(row.rowId, { price: parseFloat(e.target.value) || 0 })}
+                                                    onKeyDown={e => {
+                                                        if (e.key === "Enter") {
+                                                            e.preventDefault();
+                                                            const discountInput = discountInputRefs.current[row.rowId];
+                                                            if (discountInput) {
+                                                                discountInput.focus();
+                                                                discountInput.select();
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full text-right pr-2 py-1 text-xs font-mono font-medium rounded bg-zinc-900 border border-zinc-700/80 text-zinc-100 focus:border-blue-500 focus:outline-none"
+                                                />
+                                            </div>
+
+                                            {/* Discount Column (Col 1) */}
+                                            <div className="col-span-1">
+                                                <input
+                                                    ref={el => { discountInputRefs.current[row.rowId] = el; }}
+                                                    type="number"
+                                                    min={0}
+                                                    step="1"
+                                                    value={row.discount}
+                                                    onChange={e => updateRow(row.rowId, { discount: parseFloat(e.target.value) || 0 })}
+                                                    onKeyDown={e => {
+                                                        if (e.key === "Enter") {
+                                                            e.preventDefault();
+                                                            const isLast = idx === items.length - 1;
+                                                            if (isLast) {
+                                                                handleAddNewRow(true);
+                                                            } else {
+                                                                const nextRowId = items[idx + 1].rowId;
+                                                                productInputRefs.current[nextRowId]?.focus();
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full text-right pr-2 py-1 text-xs font-mono font-medium rounded bg-zinc-900 border border-zinc-700/80 text-zinc-100 focus:border-blue-500 focus:outline-none"
+                                                />
+                                            </div>
+
+                                            {/* Tax Rate (Col 1) */}
+                                            <div className="col-span-1 text-right text-xs font-mono text-zinc-400 tabular-nums">
+                                                {row.taxRate}%
+                                            </div>
+
+                                            {/* Line Total & Remove Action (Col 1) */}
+                                            <div className="col-span-1 flex items-center justify-end gap-1.5">
+                                                <span className="font-mono text-xs font-semibold text-zinc-100 tabular-nums">
+                                                    {formatINR(Math.max(0, lineNet))}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveRow(row.rowId)}
+                                                    tabIndex={-1}
+                                                    className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Summary Math Card */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 border-t border-zinc-800 gap-4">
+                        <div className="text-xs text-zinc-500 space-y-1">
+                            <p>
+                                💡 Tip: Press <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-zinc-300">Enter</kbd> on the Discount column to immediately insert a new row.
+                            </p>
+                            <p>
+                                Press <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-zinc-300">Ctrl + Enter</kbd> anywhere to finalize and create the order.
+                            </p>
+                        </div>
+
+                        <div className="w-full sm:w-72 bg-zinc-950/70 border border-zinc-800 rounded-xl p-3.5 space-y-2 text-xs">
+                            <div className="flex justify-between text-zinc-400">
+                                <span>Taxable Subtotal:</span>
+                                <span className="font-mono tabular-nums text-zinc-200">{formatINR(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-zinc-400">
+                                <span>Estimated GST:</span>
+                                <span className="font-mono tabular-nums text-zinc-300">{formatINR(taxTotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm font-bold text-zinc-100 pt-2 border-t border-zinc-800">
+                                <span>Grand Total:</span>
+                                <span className="font-mono tabular-nums text-blue-400 text-base">{formatINR(grandTotal)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Additional Logistics & Operational Details */}
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 sm:p-5 backdrop-blur-sm space-y-4">
+                    <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                        Logistics & Dispatch Details
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <label>
-                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Warehouse</span>
+                            <span className="text-xs text-zinc-400 mb-1 block">Dispatch Warehouse</span>
                             <select
                                 value={warehouseId}
-                                onChange={(e) => setWarehouseId(e.target.value)}
-                                className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition appearance-none"
+                                onChange={e => setWarehouseId(e.target.value)}
+                                className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-100 focus:border-blue-500 focus:outline-none transition appearance-none font-sans"
                             >
-                                <option value="">Select Warehouse</option>
+                                <option value="">Auto-select Primary Warehouse</option>
                                 {warehouses.map((w: any) => (
-                                    <option key={w.id} value={w.id}>{w.name}</option>
+                                    <option key={w.id} value={w.id}>
+                                        {w.name}
+                                    </option>
                                 ))}
                             </select>
                         </label>
                         <label>
-                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Delivery Date</span>
-                            <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)}
-                                className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                            <span className="text-xs text-zinc-400 mb-1 block">Expected Delivery Date</span>
+                            <input
+                                type="date"
+                                value={deliveryDate}
+                                onChange={e => setDeliveryDate(e.target.value)}
+                                className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-100 focus:border-blue-500 focus:outline-none transition font-sans"
+                            />
                         </label>
-                        <label className="col-span-2">
-                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Notes</span>
-                            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-                                className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition resize-none" />
+                        <label className="sm:col-span-2">
+                            <span className="text-xs text-zinc-400 mb-1 block">Delivery Notes / Transport Instructions</span>
+                            <textarea
+                                value={notes}
+                                onChange={e => setNotes(e.target.value)}
+                                rows={2}
+                                placeholder="e.g. Deliver before 2 PM, hand over to godown manager Ramesh..."
+                                className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none transition resize-none font-sans"
+                            />
                         </label>
                     </div>
                 </div>
 
-                {/* Force turbopack recompile */}
-                {/* Commission (Internal Only) */}
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden">
+                {/* Internal Commission Accordion */}
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl overflow-hidden backdrop-blur-sm">
                     <button
                         type="button"
                         onClick={() => setShowCommission(!showCommission)}
-                        className="w-full flex items-center justify-between p-4 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition"
+                        className="w-full flex items-center justify-between p-4 text-xs font-semibold text-zinc-300 hover:bg-zinc-800/40 transition"
                     >
-                        <span>💰 Add Commission <span className="font-normal text-xs text-[var(--text-muted)]">(internal — not visible to customer)</span></span>
-                        <span className={`text-[var(--text-muted)] transition-transform ${showCommission ? 'rotate-180' : ''}`}>▾</span>
+                        <span>
+                            💼 Internal Commission & Incentive{" "}
+                            <span className="font-normal text-zinc-500">(Not visible on customer invoice)</span>
+                        </span>
+                        <ChevronDown size={15} className={`text-zinc-500 transition-transform ${showCommission ? "rotate-180" : ""}`} />
                     </button>
                     {showCommission && (
-                        <div className="px-5 pb-5 pt-2 border-t border-[var(--border)] space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                        <div className="px-5 pb-5 pt-1 border-t border-zinc-800/80 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <label>
-                                    <span className="text-xs text-[var(--text-muted)] mb-1 block">Recipient</span>
+                                    <span className="text-xs text-zinc-400 mb-1 block">Recipient</span>
                                     <select
                                         value={commissionTo}
-                                        onChange={(e) => setCommissionTo(e.target.value)}
-                                        className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition appearance-none"
+                                        onChange={e => setCommissionTo(e.target.value)}
+                                        className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-blue-500 focus:outline-none transition appearance-none"
                                     >
-                                        <option value="">Select recipient…</option>
-                                        <option value="Salesman">Salesman</option>
+                                        <option value="">Select recipient...</option>
+                                        <option value="Salesman">Salesman / DSR</option>
                                         <option value="Mistri">Mistri / Mason</option>
-                                        <option value="Contractor">Contractor</option>
-                                        <option value="Dealer">Sub-Dealer</option>
+                                        <option value="Contractor">Contractor / Architect</option>
+                                        <option value="Dealer">Sub-Dealer / Agent</option>
                                         <option value="Other">Other (custom)</option>
                                     </select>
                                 </label>
                                 {commissionTo && (
                                     <label>
-                                        <span className="text-xs text-[var(--text-muted)] mb-1 block">
-                                            {commissionTo === "Other" ? "Custom Role / Name *" : "Person's Name (Optional)"}
+                                        <span className="text-xs text-zinc-400 mb-1 block">
+                                            {commissionTo === "Other" ? "Custom Role / Name *" : "Person Name (Optional)"}
                                         </span>
                                         <input
                                             type="text"
                                             value={commissionToCustom}
-                                            onChange={(e) => setCommissionToCustom(e.target.value)}
-                                            placeholder={commissionTo === "Other" ? "e.g. Plumber, Architect" : "e.g. Ramesh Singh"}
-                                            className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
+                                            onChange={e => setCommissionToCustom(e.target.value)}
+                                            placeholder={commissionTo === "Other" ? "e.g. Plumber, Electrician" : "e.g. Ramesh Singh"}
+                                            className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-blue-500 focus:outline-none transition"
                                         />
                                     </label>
                                 )}
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <label>
-                                    <span className="text-xs text-[var(--text-muted)] mb-1 block">Type</span>
-                                    <div className="flex bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius-md)] p-0.5">
+                                    <span className="text-xs text-zinc-400 mb-1 block">Type</span>
+                                    <div className="flex bg-zinc-950 border border-zinc-800 rounded-lg p-0.5">
                                         <button
                                             type="button"
                                             onClick={() => setCommissionType("FIXED")}
-                                            className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${commissionType === "FIXED" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}
+                                            className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${
+                                                commissionType === "FIXED"
+                                                    ? "bg-blue-600 text-white"
+                                                    : "text-zinc-500 hover:text-zinc-300"
+                                            }`}
                                         >
-                                            Fixed ₹
+                                            Fixed Amount (₹)
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setCommissionType("PERCENTAGE")}
-                                            className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${commissionType === "PERCENTAGE" ? "bg-[var(--gold)]/10 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}
+                                            className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${
+                                                commissionType === "PERCENTAGE"
+                                                    ? "bg-blue-600 text-white"
+                                                    : "text-zinc-500 hover:text-zinc-300"
+                                            }`}
                                         >
-                                            Percentage %
+                                            Percentage (%)
                                         </button>
                                     </div>
                                 </label>
                                 <label>
-                                    <span className="text-xs text-[var(--text-muted)] mb-1 block">
+                                    <span className="text-xs text-zinc-400 mb-1 block">
                                         {commissionType === "FIXED" ? "Amount (₹)" : "Percentage (%)"}
                                     </span>
                                     <input
@@ -500,37 +1060,67 @@ export default function NewOrderPage() {
                                         step={commissionType === "FIXED" ? 1 : 0.5}
                                         max={commissionType === "PERCENTAGE" ? 100 : undefined}
                                         value={commissionValue || ""}
-                                        onChange={(e) => setCommissionValue(parseFloat(e.target.value) || 0)}
+                                        onChange={e => setCommissionValue(parseFloat(e.target.value) || 0)}
                                         placeholder={commissionType === "FIXED" ? "e.g. 500" : "e.g. 2.5"}
-                                        className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition"
+                                        className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-blue-500 focus:outline-none transition font-mono"
                                     />
                                 </label>
                             </div>
-                            {commissionTo && commissionValue > 0 && (
-                                <div className="text-xs text-[var(--text-muted)] bg-[var(--bg-secondary)] rounded-lg px-3 py-2">
-                                    Commission: <strong className="text-[var(--text-primary)]">
-                                        {commissionType === "FIXED"
-                                            ? formatINR(commissionValue)
-                                            : `${commissionValue}% of net amount`
-                                        }
-                                    </strong> → {commissionTo === "Other" ? (commissionToCustom || "Custom") : (commissionToCustom ? `${commissionTo} (${commissionToCustom})` : commissionTo)}
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex justify-between items-center">
-                    <Link href="/orders" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition">
-                        ← Back to Orders
+                {/* Desktop Submission Footer */}
+                <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+                    <Link
+                        href="/orders"
+                        className="text-xs text-zinc-500 hover:text-zinc-300 transition"
+                    >
+                        ← Cancel & Return to Orders
                     </Link>
-                    <div className="flex gap-3">
-                        <button type="submit" disabled={!customerId || items.length === 0 || createOrder.isPending}
-                            className="px-6 py-2.5 text-sm font-semibold rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] hover:bg-[var(--gold-light)] transition disabled:opacity-40">
-                            {createOrder.isPending ? "Creating..." : "Create Order"}
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            ref={submitButtonRef}
+                            type="submit"
+                            disabled={
+                                !customerId ||
+                                validItemsCount === 0 ||
+                                createOrder.isPending ||
+                                (isCreditExceeded && !overrideCreditLimit)
+                            }
+                            className="px-6 py-2.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-blue-600/30 flex items-center gap-2"
+                        >
+                            <CornerDownLeft size={14} />
+                            {createOrder.isPending
+                                ? "Creating Order..."
+                                : isCreditExceeded && !overrideCreditLimit
+                                ? "Credit Limit Exceeded"
+                                : "Create Order (Ctrl+Enter)"}
                         </button>
                     </div>
+                </div>
+
+                {/* Mobile Floating Sticky Footer */}
+                <div className="sm:hidden fixed bottom-14 left-0 right-0 z-30 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 p-3 px-4 flex items-center justify-between shadow-2xl">
+                    <div>
+                        <span className="text-[10px] text-zinc-500 block uppercase font-mono">Grand Total</span>
+                        <span className="font-mono font-bold text-sm text-blue-400 tabular-nums">
+                            {formatINR(grandTotal)}
+                        </span>
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={
+                            !customerId ||
+                            validItemsCount === 0 ||
+                            createOrder.isPending ||
+                            (isCreditExceeded && !overrideCreditLimit)
+                        }
+                        className="px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 transition shadow-md"
+                    >
+                        {createOrder.isPending ? "Creating..." : "Save Order →"}
+                    </button>
                 </div>
             </form>
 

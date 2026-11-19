@@ -250,8 +250,8 @@ function DispatchModal({ order, open, onClose }: { order: any; open: boolean; on
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+            <div className="bg-[var(--bg-primary)] border-t sm:border border-[var(--border)] rounded-t-2xl sm:rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col pb-safe" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-primary)] z-10">
                     <div>
                         <h2 className="text-lg font-bold flex items-center gap-2" style={{ fontFamily: "var(--font-playfair)" }}>
@@ -300,6 +300,7 @@ function DispatchModal({ order, open, onClose }: { order: any; open: boolean; on
                                                     <td className="p-3">
                                                         <input
                                                             type="number"
+                                                            inputMode="numeric"
                                                             min={0}
                                                             max={pending}
                                                             value={currentVal}
@@ -444,8 +445,8 @@ function ReturnModal({ order, open, onClose }: { order: any; open: boolean; onCl
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+            <div className="bg-[var(--bg-primary)] border-t sm:border border-[var(--border)] rounded-t-2xl sm:rounded-[var(--radius-lg)] w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col pb-safe" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-primary)] z-10">
                     <div>
                         <h2 className="text-lg font-bold flex items-center gap-2" style={{ fontFamily: "var(--font-playfair)" }}>
@@ -492,6 +493,7 @@ function ReturnModal({ order, open, onClose }: { order: any; open: boolean; onCl
                                                     <td className="p-3">
                                                         <input
                                                             type="number"
+                                                            inputMode="numeric"
                                                             min={0}
                                                             max={maxReturnable}
                                                             value={current.qty}
@@ -725,38 +727,43 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         </div>
                     )}
 
-                    {order.status !== 'CANCELLED' && order.customer?.phone && (
-                        <div className="flex items-center gap-1.5">
-                            <button
-                                type="button"
-                                onClick={() => sendWhatsApp.mutate(order.id)}
-                                disabled={sendWhatsApp.isPending}
-                                className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-[var(--radius-md)] bg-[#25D366]/15 border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/25 font-semibold transition disabled:opacity-50 shadow-sm cursor-pointer"
-                                title="Send official automated order confirmation, UPI/Razorpay payment link, and PDF invoice directly to customer's WhatsApp"
-                            >
-                                <Send size={14} className={sendWhatsApp.isPending ? "animate-spin" : ""} />
-                                {sendWhatsApp.isPending ? "Sending WhatsApp..." : "Send WhatsApp"}
-                            </button>
-                            <a
-                                href={buildWhatsAppInvoiceLink({
-                                    customerPhone: order.customer.phone,
-                                    customerName: order.customer.name ?? "Customer",
-                                    invoiceNumber: order.orderNumber,
-                                    invoiceAmount: balanceDue > 0 ? balanceDue : order.netAmount,
-                                    balanceAmount: balanceDue,
-                                    invoiceId: order.invoiceId ?? order.id,
-                                    upiId: order.organization?.settings?.upiId,
-                                    orgName: order.organization?.name,
-                                })}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-2.5 py-2 text-xs rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[#25D366] hover:border-[#25D366]/40 hover:bg-[#25D366]/5 transition"
-                                title="Open manually in WhatsApp Web"
-                            >
-                                Web
-                            </a>
-                        </div>
-                    )}
+                    {(() => {
+                        const customerPhone = order.customer?.whatsappNumber || order.customer?.phone || order.customer?.altPhone;
+                        if (order.status === 'CANCELLED' || order.status === 'RETURNED' || !customerPhone) return null;
+
+                        return (
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => sendWhatsApp.mutate(order.id)}
+                                    disabled={sendWhatsApp.isPending}
+                                    className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-[var(--radius-md)] bg-[#25D366]/15 border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/25 font-semibold transition disabled:opacity-50 shadow-sm cursor-pointer"
+                                    title="Send official automated order confirmation, UPI/Razorpay payment link, and PDF invoice directly to customer's WhatsApp"
+                                >
+                                    <Send size={14} className={sendWhatsApp.isPending ? "animate-spin" : ""} />
+                                    {sendWhatsApp.isPending ? "Sending..." : "Send WhatsApp"}
+                                </button>
+                                <a
+                                    href={buildWhatsAppInvoiceLink({
+                                        customerPhone,
+                                        customerName: order.customer?.name ?? "Customer",
+                                        invoiceNumber: order.orderNumber,
+                                        invoiceAmount: balanceDue > 0 ? balanceDue : order.netAmount,
+                                        balanceAmount: balanceDue,
+                                        invoiceId: order.invoiceId ?? order.id,
+                                        upiId: order.organization?.settings?.upiId,
+                                        orgName: order.organization?.name,
+                                    })}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 px-2.5 py-2 text-xs rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[#25D366] hover:border-[#25D366]/40 hover:bg-[#25D366]/5 transition"
+                                    title="Open directly in WhatsApp"
+                                >
+                                    WA Link
+                                </a>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 

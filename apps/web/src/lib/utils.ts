@@ -64,7 +64,8 @@ export function getPendingQty(item: any): number {
 
 /**
  * Build a wa.me click-to-chat link for sending an invoice to a customer.
- * Opens WhatsApp with a pre-filled message containing invoice details and a view link.
+ * Opens WhatsApp with a pre-filled message containing invoice details, outstanding balance,
+ * and a 1-tap dynamic NPCI UPI payment deep link.
  */
 export function buildWhatsAppInvoiceLink(opts: {
     customerPhone: string;
@@ -72,19 +73,78 @@ export function buildWhatsAppInvoiceLink(opts: {
     invoiceNumber: string;
     invoiceAmount: number;
     invoiceId: string;
+    balanceAmount?: number;
+    upiId?: string | null;
+    orgName?: string | null;
 }): string {
     const cleanPhone = opts.customerPhone.replace(/[^0-9]/g, "");
     const invoiceUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/invoices/${opts.invoiceId}`;
-    const message = `Hello ${opts.customerName},
+    const balance = opts.balanceAmount !== undefined ? opts.balanceAmount : opts.invoiceAmount;
+    const org = opts.orgName || "DistroAI";
 
-Your invoice *${opts.invoiceNumber}* for *${formatINR(opts.invoiceAmount)}* is ready.
+    let upiBlock = "";
+    if (opts.upiId && balance > 0) {
+        const upiUri = `upi://pay?pa=${encodeURIComponent(opts.upiId)}&pn=${encodeURIComponent(org)}&am=${balance.toFixed(2)}&tr=${encodeURIComponent(opts.invoiceNumber)}&tn=Invoice+${encodeURIComponent(opts.invoiceNumber)}&cu=INR`;
+        upiBlock = `\n\n💳 *Instant UPI Payment:*
+• Payee VPA: \`${opts.upiId}\`
+• Amount Due: *${formatINR(balance)}*
+• 1-Tap Pay: ${upiUri}`;
+    }
 
-View invoice: ${invoiceUrl}
+    const message = `Namaste ${opts.customerName}! 🙏
+
+Your invoice *${opts.invoiceNumber}* for *${formatINR(opts.invoiceAmount)}* is ready.${balance < opts.invoiceAmount && balance > 0 ? `\n(Balance Due: *${formatINR(balance)}*)` : ""}${upiBlock}
+
+📄 *View / Download Invoice:*
+${invoiceUrl}
 
 Thank you for your business!
-— Sent via DistroAI`;
+— ${org}`;
 
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Triggers native mobile share sheet (navigator.share) when supported,
+ * otherwise opens the provided fallback URL (e.g. WhatsApp web link).
+ */
+export async function shareOrOpenUrl(opts: {
+    title: string;
+    text: string;
+    url?: string;
+    fallbackUrl?: string;
+}): Promise<boolean> {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        try {
+            await navigator.share({
+                title: opts.title,
+                text: opts.text,
+                url: opts.url,
+            });
+            return true;
+        } catch (err: any) {
+            // AbortError is thrown when user cancels the share dialog
+            if (err?.name === "AbortError") return false;
+        }
+    }
+    if (opts.fallbackUrl && typeof window !== "undefined") {
+        window.open(opts.fallbackUrl, "_blank", "noopener,noreferrer");
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Triggers light haptic vibration on devices supporting the Vibration API.
+ */
+export function triggerHaptic(durationMs = 15) {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        try {
+            navigator.vibrate(durationMs);
+        } catch {
+            // Ignore if blocked by browser policy
+        }
+    }
 }
 
 /**

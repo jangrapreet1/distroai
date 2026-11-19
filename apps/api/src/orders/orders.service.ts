@@ -63,9 +63,11 @@ export class OrdersService {
       source,
       dateFrom,
       dateTo,
+      type,
     } = query;
     const where = {
       orgId,
+      type: (type as any) ?? "SALE",
       ...(status && {
         status: status as
           | "DRAFT"
@@ -98,6 +100,7 @@ export class OrdersService {
         include: {
           customer: { select: { name: true, phone: true } },
           _count: { select: { items: true } },
+          invoice: { select: { id: true, invoiceNumber: true, balanceAmount: true, status: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -1171,7 +1174,10 @@ export class OrdersService {
 
       await tx.order.update({
         where: { id: original.id },
-        data: { status: isFullyReturned ? "RETURNED" : "PARTIALLY_RETURNED" },
+        data: {
+          status: isFullyReturned ? "RETURNED" : "PARTIALLY_RETURNED",
+          balanceAmount: isFullyReturned ? 0 : Math.max(0, (original.balanceAmount ?? original.netAmount) - returnNetAmount),
+        },
       });
 
       // ── GST Credit Note + Financial Reversal ──

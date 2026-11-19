@@ -35,7 +35,7 @@ export default function ReturnsPage() {
         <div>
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>
+                <h1 className="text-2xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "var(--font-playfair)" }}>
                     Returns & Credit Notes
                 </h1>
             </div>

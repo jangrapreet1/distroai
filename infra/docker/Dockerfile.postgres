@@ -1,21 +1,22 @@
 # =========================================================
 # Stage 1: Multi-Arch WAL-G Resolver (x86_64 + aarch64/ARM64)
-# Compatible with Oracle Cloud Ampere A1 Free Tier & x86 VPS
+# Compatible with Hetzner / Oracle Cloud Ampere A1 & x86 VPS
 # =========================================================
-FROM golang:1.22-alpine AS walg-builder
+FROM alpine:3.19 AS walg-builder
 ARG TARGETARCH
 WORKDIR /src
-RUN apk add --no-cache git make curl bash
+RUN apk add --no-cache curl tar
 
 RUN if [ "$TARGETARCH" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then \
-        echo "Building WAL-G for ARM64/aarch64..." && \
-        CGO_ENABLED=0 go install github.com/wal-g/wal-g/cmd/pg@v3.0.4 && \
-        mv /go/bin/pg /wal-g; \
+        echo "Downloading WAL-G prebuilt for ARM64/aarch64..." && \
+        curl -fsSL "https://github.com/wal-g/wal-g/releases/download/v3.0.9/wal-g-pg-22.04-aarch64.tar.gz" -o /tmp/wal-g.tar.gz && \
+        tar -xvzf /tmp/wal-g.tar.gz -C /tmp && \
+        mv /tmp/wal-g-pg-22.04-aarch64 /wal-g; \
     else \
         echo "Downloading WAL-G prebuilt for AMD64..." && \
-        curl -L "https://github.com/wal-g/wal-g/releases/download/v2.0.1/wal-g-pg-ubuntu-20.04-amd64.tar.gz" -o /tmp/wal-g.tar.gz && \
+        curl -fsSL "https://github.com/wal-g/wal-g/releases/download/v3.0.9/wal-g-pg-22.04-amd64.tar.gz" -o /tmp/wal-g.tar.gz && \
         tar -xvzf /tmp/wal-g.tar.gz -C /tmp && \
-        mv /tmp/wal-g-pg-ubuntu-20.04-amd64 /wal-g; \
+        mv /tmp/wal-g-pg-22.04-amd64 /wal-g; \
     fi && chmod +x /wal-g
 
 # =========================================================

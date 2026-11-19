@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { Package, Warehouse, AlertTriangle, Clock, Search, List, Grid, Plus, ArrowRightLeft, ArrowUpRight, ArrowDownRight, ArrowRight, X, Filter, FileText, Upload, SlidersHorizontal, ArrowLeft, MoreHorizontal, FileDown, Eye, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Package, Warehouse, AlertTriangle, Clock, Search, List, Grid, Plus, ArrowRightLeft, ArrowUpRight, ArrowDownRight, ArrowRight, X, Filter, FileText, Upload, SlidersHorizontal, ArrowLeft, MoreHorizontal, FileDown, Eye, CheckCircle2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { useProducts, useInventoryValuation, useAdjustInventory, useTransferInventory, useInventoryTransactions, useCreateProduct, useWarehouses, useUploadFile } from "@/hooks/api-hooks";
 import { formatDate, getPrimaryImageUrl, formatINR } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { MultiImageUpload } from "@/components/ui/multi-image-upload";
+import { UniversalImportModal } from "@/components/modals/UniversalImportModal";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 
@@ -250,6 +252,11 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 return;
             }
 
+            const primaryVariant = hasVariants && variants.length > 0 ? (variants.find(v => Number(v.sellingPrice) > 0) || variants[0]) : null;
+            const effectiveSellingPrice = primaryVariant ? Number(primaryVariant.sellingPrice) : (Number(sellingPrice) || 0);
+            const effectiveMrp = primaryVariant ? Number(primaryVariant.mrp || primaryVariant.sellingPrice) : (Number(mrp) || effectiveSellingPrice);
+            const effectivePurchasePrice = primaryVariant ? Number(primaryVariant.purchasePrice) : (Number(purchasePrice) || 0);
+
             const payload: Record<string, any> = {
                 name: name.trim(),
                 sku: sku.trim() || undefined,
@@ -257,9 +264,9 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 description: description.trim() || undefined,
                 imageUrl: imageUrls[0] || "",
                 imageUrls,
-                sellingPrice: Number(sellingPrice) || 0,
-                mrp: Number(mrp) || (Number(sellingPrice) || 0),
-                purchasePrice: Number(purchasePrice) || 0,
+                sellingPrice: effectiveSellingPrice,
+                mrp: effectiveMrp,
+                purchasePrice: effectivePurchasePrice,
                 minStockLevel: Number(minStockLevel) || 0,
                 gstRate: Number(gstRate) || 0,
                 initialQuantity: hasVariants ? 0 : (Number(initialQuantity) || 0),
@@ -293,10 +300,25 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 }
             });
         } else {
-            if (!name.trim() || !sku.trim() || !sellingPrice || !gstRate) {
-                toast.error("Name, SKU, Selling Price, and GST Rate are required");
+            if (!name.trim() || !sku.trim() || !gstRate) {
+                toast.error("Name, SKU, and GST Rate are required");
                 return;
             }
+
+            if (!hasVariants && !sellingPrice) {
+                toast.error("Selling Price is required");
+                return;
+            }
+
+            if (hasVariants && variants.length === 0) {
+                toast.error("Please add at least one variation or uncheck product variations");
+                return;
+            }
+
+            const primaryVariant = hasVariants && variants.length > 0 ? (variants.find(v => Number(v.sellingPrice) > 0) || variants[0]) : null;
+            const effectiveSellingPrice = primaryVariant ? Number(primaryVariant.sellingPrice) : (Number(sellingPrice) || 0);
+            const effectiveMrp = primaryVariant ? Number(primaryVariant.mrp || primaryVariant.sellingPrice) : (Number(mrp) || effectiveSellingPrice);
+            const effectivePurchasePrice = primaryVariant ? Number(primaryVariant.purchasePrice) : (Number(purchasePrice) || 0);
 
             const payload: Record<string, any> = {
                 name: name.trim(),
@@ -305,9 +327,9 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                 description: description.trim() || undefined,
                 imageUrl: imageUrls[0] || "",
                 imageUrls,
-                sellingPrice: Number(sellingPrice),
-                mrp: Number(mrp) || Number(sellingPrice),
-                purchasePrice: Number(purchasePrice) || 0,
+                sellingPrice: effectiveSellingPrice,
+                mrp: effectiveMrp,
+                purchasePrice: effectivePurchasePrice,
                 minStockLevel: Number(minStockLevel) || 0,
                 gstRate: Number(gstRate),
                 initialQuantity: hasVariants ? 0 : Number(initialQuantity),
@@ -444,16 +466,40 @@ function AddProductModal({ open, onClose }: { open: boolean; onClose: () => void
                             )}
                         </div>
                         <label>
-                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Base Selling Price (₹) *</span>
-                            <input type="number" step="0.01" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Base Selling Price (₹) {!hasVariants && "*"}</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={hasVariants && variants.length > 0 ? (variants[0]?.sellingPrice || sellingPrice) : sellingPrice}
+                                onChange={(e) => setSellingPrice(e.target.value)}
+                                disabled={hasVariants}
+                                className={`w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] outline-none transition ${hasVariants ? "opacity-50 blur-[0.4px] cursor-not-allowed select-none" : "focus:border-[var(--gold)]"}`}
+                            />
+                            {hasVariants && <span className="text-[10px] text-[var(--gold)] mt-0.5 block">Managed by variations</span>}
                         </label>
                         <label>
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Base MRP (₹)</span>
-                            <input type="number" step="0.01" value={mrp} onChange={(e) => setMrp(e.target.value)} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={hasVariants && variants.length > 0 ? (variants[0]?.mrp || mrp) : mrp}
+                                onChange={(e) => setMrp(e.target.value)}
+                                disabled={hasVariants}
+                                className={`w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] outline-none transition ${hasVariants ? "opacity-50 blur-[0.4px] cursor-not-allowed select-none" : "focus:border-[var(--gold)]"}`}
+                            />
+                            {hasVariants && <span className="text-[10px] text-[var(--gold)] mt-0.5 block">Managed by variations</span>}
                         </label>
                         <label>
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Base Purchase Price (₹)</span>
-                            <input type="number" step="0.01" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] focus:border-[var(--gold)] focus:outline-none transition" />
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={hasVariants && variants.length > 0 ? (variants[0]?.purchasePrice || purchasePrice) : purchasePrice}
+                                onChange={(e) => setPurchasePrice(e.target.value)}
+                                disabled={hasVariants}
+                                className={`w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] outline-none transition ${hasVariants ? "opacity-50 blur-[0.4px] cursor-not-allowed select-none" : "focus:border-[var(--gold)]"}`}
+                            />
+                            {hasVariants && <span className="text-[10px] text-[var(--gold)] mt-0.5 block">Managed by variations</span>}
                         </label>
                         <label>
                             <span className="text-xs text-[var(--text-muted)] mb-1 block">GST Rate (%) *</span>
@@ -713,7 +759,7 @@ function AdjustModal({ open, onClose, products }: { open: boolean; onClose: () =
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Adjust Stock</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
@@ -785,7 +831,7 @@ function TransferModal({ open, onClose, products }: { open: boolean; onClose: ()
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[var(--bg-primary)] border border-[var(--border)] rounded-[var(--radius-lg)] w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
                     <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-playfair)" }}>Transfer Stock</h2>
                     <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"><X size={20} /></button>
@@ -832,26 +878,30 @@ function TransferModal({ open, onClose, products }: { open: boolean; onClose: ()
 
 /* ─── Main Inventory Page ─── */
 export default function InventoryPage() {
+    const queryClient = useQueryClient();
     const [mainTab, setMainTab] = useState<"products" | "transactions">("products");
     const [tab, setTab] = useState<"all" | "active" | "drafts" | "low" | "archived">("all");
     const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(50);
     const [showAdd, setShowAdd] = useState(false);
+    const [showImport, setShowImport] = useState(false);
     const [showAdjust, setShowAdjust] = useState(false);
     const [showTransfer, setShowTransfer] = useState(false);
     const { t } = useLanguage();
 
     const { data, isLoading } = useProducts({
-        search,
+        search: search.trim() || undefined,
         page,
-        limit: 20,
+        limit,
+        ...(tab === "all" ? { isActive: true } : {}),
         ...(tab === "archived" ? { isActive: false } : {}),
         ...(tab === "active" ? { isActive: true, isDraft: false } : {}),
         ...(tab === "drafts" ? { isDraft: true } : {}),
     });
     const products = data?.data?.data ?? data?.data ?? [];
-    const meta = data?.data?.meta ?? data?.meta ?? { total: 0 };
+    const meta = data?.meta ?? data?.data?.meta ?? { total: 0, pages: 1 };
 
     const { data: valuation } = useInventoryValuation();
     const val = valuation?.data ?? valuation ?? {};
@@ -866,70 +916,78 @@ export default function InventoryPage() {
         return true;
     }) : [];
 
+    const totalItems = meta.total ?? displayProducts.length;
+    const totalPages = Math.max(1, meta.pages || Math.ceil(totalItems / limit));
+    const startItem = totalItems === 0 ? 0 : (page - 1) * limit + 1;
+    const endItem = Math.min(page * limit, totalItems);
+
     const summary = [
-        { label: t('total_products'), value: meta.total ?? 0, icon: Package, color: "var(--gold)" },
-        { label: t('total_value'), value: formatINR(val.grandTotal ?? 0), icon: Warehouse, color: "var(--green-bright)" },
-        { label: t('low_stock'), value: lowStockCount, icon: AlertTriangle, color: "var(--red)" },
-        { label: t('total_units'), value: val.totalUnits ?? 0, icon: Clock, color: "var(--orange)" },
+        { label: t('total_products'), value: meta.total ?? 0, icon: Package, color: "#3B82F6" },
+        { label: t('total_value'), value: formatINR(val.grandTotal ?? 0), icon: Warehouse, color: "#10B981" },
+        { label: t('low_stock'), value: lowStockCount, icon: AlertTriangle, color: "#EF4444" },
+        { label: t('total_units'), value: val.totalUnits ?? 0, icon: Clock, color: "#F59E0B" },
     ];
 
     return (
         <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-playfair)" }}>{t('inventory')}</h1>
-                <div className="flex gap-2">
-                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] bg-[var(--gold)] text-[var(--bg-primary)] hover:bg-[var(--gold-light)] transition whitespace-nowrap"><Plus size={14} /> <span className="hidden sm:inline">{t('add_product')}</span><span className="sm:hidden">{t('add_product').split(' ')[0]}</span></button>
-                    <button onClick={() => setShowAdjust(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><Plus size={14} /> {t('adjust')}</button>
-                    <button onClick={() => setShowTransfer(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><ArrowRightLeft size={14} /> <span className="hidden sm:inline">{t('transfer')}</span></button>
+                <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{t('inventory')}</h1>
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full sm:w-auto pb-1 sm:pb-0 flex-nowrap shrink-0">
+                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium rounded-[var(--radius-md)] bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition whitespace-nowrap"><Plus size={14} /> <span>{t('add_product')}</span></button>
+                    <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium rounded-[var(--radius-md)] border border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition whitespace-nowrap shadow-sm"><Upload size={14} /> <span>Import</span></button>
+                    <button onClick={() => setShowAdjust(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><Plus size={14} /> {t('adjust')}</button>
+                    <button onClick={() => setShowTransfer(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition whitespace-nowrap"><ArrowRightLeft size={14} /> <span>{t('transfer')}</span></button>
                 </div>
             </div>
 
             {/* Summary */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
                 {summary.map((s) => (
-                    <div key={s.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-4">
-                        <div className="flex items-center gap-2 mb-2">
+                    <div key={s.label} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-3 sm:p-4">
+                        <div className="flex items-center gap-2 mb-1.5">
                             <s.icon size={14} style={{ color: s.color }} />
-                            <span className="text-xs text-[var(--text-muted)]">{s.label}</span>
+                            <span className="text-[11px] sm:text-xs text-[var(--text-muted)]">{s.label}</span>
                         </div>
-                        <p className="text-xl font-bold" style={{ fontFamily: "var(--font-mono)" }}>{s.value}</p>
+                        <p className="text-lg sm:text-xl font-bold font-mono">{s.value}</p>
                     </div>
                 ))}
             </div>
 
             {/* Main Tabs */}
             <div className="flex gap-2 mb-4">
-                <button onClick={() => setMainTab("products")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "products" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>{t('products_tab')}</button>
-                <button onClick={() => setMainTab("transactions")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "transactions" ? "bg-[var(--gold)]/15 text-[var(--gold)] font-medium" : "text-[var(--text-muted)]"}`}>{t('transactions_tab')}</button>
+                <button onClick={() => setMainTab("products")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "products" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold" : "text-[var(--text-muted)]"}`}>{t('products_tab')}</button>
+                <button onClick={() => setMainTab("transactions")} className={`px-4 py-2 text-sm rounded-[var(--radius-md)] transition ${mainTab === "transactions" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold" : "text-[var(--text-muted)]"}`}>{t('transactions_tab')}</button>
             </div>
 
             {mainTab === "products" ? (
                 <>
                     {/* Filters */}
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="flex bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-1 overflow-x-auto no-scrollbar">
-                            {(["all", "active", "drafts", "low", "archived"] as const).map((f) => (
-                                <button key={f} onClick={() => { setTab(f); setPage(1); }} className={`px-4 py-1.5 text-sm rounded ${tab === f ? "bg-[var(--gold)]/10 text-[var(--gold)] font-medium" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
-                                    {f === "all" ? t('all') : f === "active" ? "Active" : f === "drafts" ? "Drafts" : f === "low" ? t('low_stock_tab') : "Archived"}
-                                </button>
-                            ))}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-2">
+                            <div className="flex bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] p-1 overflow-x-auto no-scrollbar flex-nowrap">
+                                {(["all", "active", "drafts", "low", "archived"] as const).map((f) => (
+                                    <button key={f} onClick={() => { setTab(f); setPage(1); }} className={`px-3 py-1 text-xs sm:text-sm whitespace-nowrap rounded ${tab === f ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
+                                        {f === "all" ? t('all') : f === "active" ? "Active" : f === "drafts" ? "Drafts" : f === "low" ? t('low_stock_tab') : "Archived"}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden shrink-0 ml-auto sm:ml-0">
+                                <button onClick={() => setViewMode("grid")} className={`p-2 ${viewMode === "grid" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 font-medium" : "text-[var(--text-muted)]"}`}><Grid size={16} /></button>
+                                <button onClick={() => setViewMode("table")} className={`p-2 ${viewMode === "table" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 font-medium" : "text-[var(--text-muted)]"}`}><List size={16} /></button>
+                            </div>
                         </div>
-                        <div className="relative flex-1 max-w-sm">
+                        <div className="relative flex-1 max-w-full sm:max-w-sm">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search_products')} className="w-full pl-9 pr-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)] focus:outline-none transition" />
-                        </div>
-                        <div className="flex border border-[var(--border)] rounded-[var(--radius-md)] overflow-hidden">
-                            <button onClick={() => setViewMode("grid")} className={`p-2 ${viewMode === "grid" ? "bg-[var(--gold)]/15 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}><Grid size={16} /></button>
-                            <button onClick={() => setViewMode("table")} className={`p-2 ${viewMode === "table" ? "bg-[var(--gold)]/15 text-[var(--gold)]" : "text-[var(--text-muted)]"}`}><List size={16} /></button>
+                            <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder={t('search_products')} className="w-full pl-9 pr-4 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none transition" />
                         </div>
                     </div>
 
                     {isLoading ? (
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             {Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton h-36 rounded-[var(--radius-md)]" />)}
                         </div>
                     ) : viewMode === "grid" ? (
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             {displayProducts.map((p: Record<string, unknown>) => {
                                 const qty = (p.totalQuantity as number) ?? 0;
                                 const minStock = (p.minStockLevel as number) ?? 10;
@@ -945,16 +1003,22 @@ export default function InventoryPage() {
                                                 <div className="w-12 h-12 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={20} /></div>
                                             )}
                                             <div className="flex-1 overflow-hidden">
-                                                <p className="text-sm font-medium mb-0.5 truncate flex items-center gap-1.5">
+                                                <p className="text-sm font-semibold mb-0.5 text-slate-900 dark:text-zinc-100 line-clamp-2 leading-snug" title={p.name as string}>
                                                     {p.name as string}
+                                                </p>
+                                                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                                                     {Boolean(p.isDraft) && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-semibold shrink-0">
+                                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-amber-500 font-semibold shrink-0">
                                                             Draft
                                                         </span>
                                                     )}
-                                                    {p.embeddingStatus === 'PENDING' && <span title="AI Indexing" className="w-1.5 h-1.5 rounded-full bg-[var(--gold)] animate-pulse shadow-[0_0_8px_var(--gold)] inline-block shrink-0" />}
-                                                </p>
-                                                <p className="text-xs text-[var(--text-muted)] truncate">{(p.brand as string) ?? ""} · {p.sku as string}</p>
+                                                    {p.embeddingStatus === 'PENDING' && (
+                                                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
+                                                            AI Syncing
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-[var(--text-muted)] truncate mt-1">{(p.brand as string) ?? ""} · {p.sku as string}</p>
                                             </div>
                                         </div>
                                         <div className="mt-auto">
@@ -982,48 +1046,164 @@ export default function InventoryPage() {
                             )}
                         </div>
                     ) : (
-                        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-x-auto">
+                        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] overflow-x-auto shadow-sm">
                             <table className="w-full text-sm">
-                                <thead><tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase">
-                                    <th className="text-left p-4">Product</th><th className="text-left p-4">SKU</th><th className="text-right p-4">Stock</th><th className="text-right p-4">Price</th><th className="text-right p-4">MRP</th>
-                                </tr></thead>
+                                <thead>
+                                    <tr className="border-b border-[var(--border)] text-[var(--text-muted)] text-xs uppercase tracking-wider bg-[var(--bg-secondary)]/50">
+                                        <th className="text-left p-3.5 min-w-[240px]">Product</th>
+                                        <th className="text-left p-3.5 min-w-[140px] whitespace-nowrap">SKU</th>
+                                        <th className="text-right p-3.5 min-w-[110px] whitespace-nowrap">Stock</th>
+                                        <th className="text-right p-3.5 min-w-[110px] whitespace-nowrap">Landed Cost</th>
+                                        <th className="text-right p-3.5 min-w-[110px] whitespace-nowrap">Selling Price</th>
+                                        <th className="text-right p-3.5 min-w-[110px] whitespace-nowrap">Margin</th>
+                                        <th className="text-right p-3.5 min-w-[90px] whitespace-nowrap">MRP</th>
+                                        <th className="text-center p-3.5 min-w-[110px] whitespace-nowrap">Status</th>
+                                    </tr>
+                                </thead>
                                 <tbody>
-                                    {displayProducts.map((p: Record<string, unknown>) => (
-                                        <tr key={p.id as string} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
-                                            <td className="p-4 font-medium flex items-center gap-3">
-                                                {getPrimaryImageUrl(p.imageUrl) ? (
-                                                    <img src={getPrimaryImageUrl(p.imageUrl)} alt={p.name as string} className="w-8 h-8 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
-                                                ) : (
-                                                    <div className="w-8 h-8 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={14} /></div>
-                                                )}
-                                                <Link href={`/inventory/products/${p.id}`} className="text-[var(--gold)] hover:underline truncate">{p.name as string}</Link>
-                                                {Boolean(p.isDraft) && (
-                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-semibold shrink-0">
-                                                        Draft
-                                                    </span>
-                                                )}
-                                                {Boolean(p.hasVariants) && (
-                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--gold)]/15 text-[var(--gold)] font-semibold shrink-0">
-                                                        {Array.isArray(p.variants) && p.variants.length > 0 ? `${p.variants.length} Variants` : 'Variants'}
-                                                    </span>
-                                                )}
-                                                {p.embeddingStatus === 'PENDING' && <span title="AI Indexing" className="w-1.5 h-1.5 rounded-full bg-[var(--gold)] animate-pulse shadow-[0_0_8px_var(--gold)] inline-block shrink-0 ml-1.5" />}
-                                            </td>
-                                            <td className="p-4 text-left">{(p.sku as string) || "-"}</td>
-                                            <td className="p-4 text-right">
-                                                <div style={{ fontFamily: "var(--font-mono)" }}>{(p.totalQuantity as number) ?? 0} {p.unit as string}</div>
-                                                {(p.secondaryUnit as string | null | undefined) && (
-                                                    <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
-                                                        ({((p.totalQuantity as number) ?? 0) * ((p.conversionFactor as number) || 1)} {p.secondaryUnit as string})
+                                    {displayProducts.map((p: Record<string, unknown>) => {
+                                        const qty = (p.totalQuantity as number) ?? 0;
+                                        const minStock = (p.minStockLevel as number) ?? 10;
+                                        const landed = Number(p.purchasePrice) || 0;
+                                        const selling = Number(p.sellingPrice) || 0;
+                                        const mrp = Number(p.mrp) || 0;
+                                        const margin = selling - landed;
+                                        const marginPct = landed > 0 ? ((margin / landed) * 100).toFixed(1) : null;
+                                        const isOutOfStock = qty <= 0;
+                                        const isLowStock = !isOutOfStock && qty <= minStock;
+
+                                        return (
+                                            <tr key={p.id as string} className="border-b border-[var(--border)] hover:bg-[var(--bg-card-hover)] transition">
+                                                <td className="p-3.5 font-medium flex items-center gap-3">
+                                                    {getPrimaryImageUrl(p.imageUrl) ? (
+                                                        <img src={getPrimaryImageUrl(p.imageUrl)} alt={p.name as string} className="w-8 h-8 rounded object-contain border border-[var(--border)] bg-[var(--bg-secondary)] shrink-0" />
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] shrink-0"><Package size={14} /></div>
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <Link href={`/inventory/products/${p.id}`} className="text-blue-600 dark:text-blue-400 hover:underline font-semibold truncate max-w-[220px] sm:max-w-[320px]">
+                                                                {p.name as string}
+                                                            </Link>
+                                                            {Boolean(p.isDraft) && (
+                                                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-amber-500 font-semibold shrink-0">
+                                                                    Draft
+                                                                </span>
+                                                            )}
+                                                            {Boolean(p.hasVariants) && (
+                                                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-500 font-semibold shrink-0">
+                                                                    {Array.isArray(p.variants) && p.variants.length > 0 ? `${p.variants.length} Var` : 'Var'}
+                                                                </span>
+                                                            )}
+                                                            {p.embeddingStatus === 'PENDING' && (
+                                                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
+                                                                    Indexing
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-[11px] text-[var(--text-muted)]">{(p.brand as string) || "General"}</span>
                                                     </div>
-                                                )}
-                                            </td>
-                                            <td className="p-4 text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((p.sellingPrice as number) ?? 0)}</td>
-                                            <td className="p-4 text-right text-[var(--text-muted)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR((p.mrp as number) ?? 0)}</td>
-                                        </tr>
-                                    ))}
+                                                </td>
+                                                <td className="p-3.5 text-left font-mono text-xs whitespace-nowrap text-slate-600 dark:text-zinc-400">{(p.sku as string) || "-"}</td>
+                                                <td className="p-3.5 text-right whitespace-nowrap">
+                                                    <div style={{ fontFamily: "var(--font-mono)" }} className={`font-semibold ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-slate-900 dark:text-zinc-100'}`}>
+                                                        {qty} <span className="text-xs font-normal text-[var(--text-muted)]">{p.unit as string}</span>
+                                                    </div>
+                                                    {(p.secondaryUnit as string | null | undefined) && (
+                                                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5 font-mono">
+                                                            ({qty * ((p.conversionFactor as number) || 1)} {p.secondaryUnit as string})
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-3.5 text-right whitespace-nowrap" style={{ fontFamily: "var(--font-mono)" }}>
+                                                    <span className="font-medium text-[var(--text-secondary)]">{formatINR(landed)}</span>
+                                                </td>
+                                                <td className="p-3.5 text-right font-semibold whitespace-nowrap" style={{ fontFamily: "var(--font-mono)" }}>
+                                                    {formatINR(selling)}
+                                                </td>
+                                                <td className="p-3.5 text-right whitespace-nowrap">
+                                                    <div className={`font-mono text-xs font-bold ${margin > 0 ? 'text-emerald-500' : margin < 0 ? 'text-red-500' : 'text-[var(--text-muted)]'}`}>
+                                                        {margin >= 0 ? `+${formatINR(margin)}` : formatINR(margin)}
+                                                    </div>
+                                                    {marginPct !== null && (
+                                                        <div className="text-[10px] text-[var(--text-muted)] font-mono">
+                                                            ({marginPct}%)
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-3.5 text-right text-[var(--text-muted)] whitespace-nowrap" style={{ fontFamily: "var(--font-mono)" }}>
+                                                    {formatINR(mrp)}
+                                                </td>
+                                                <td className="p-3.5 text-center whitespace-nowrap">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
+                                                        isOutOfStock 
+                                                            ? "bg-red-500/10 text-red-500 border border-red-500/20" 
+                                                            : isLowStock 
+                                                                ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" 
+                                                                : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                                                    }`}>
+                                                        {isOutOfStock ? "Out of Stock" : isLowStock ? "Low Stock" : "In Stock"}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+
+                    {/* Pagination Controls */}
+                    {totalItems > 0 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 px-4 py-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-md)] text-xs text-[var(--text-secondary)] shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <span>Showing <strong className="text-[var(--text-primary)] font-mono">{startItem}</strong> - <strong className="text-[var(--text-primary)] font-mono">{endItem}</strong> of <strong className="text-[var(--text-primary)] font-mono">{totalItems}</strong> products</span>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[var(--text-muted)]">Per page:</span>
+                                    <select
+                                        value={limit}
+                                        onChange={(e) => {
+                                            setLimit(Number(e.target.value));
+                                            setPage(1);
+                                        }}
+                                        className="bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] rounded px-2 py-1 text-xs focus:outline-none focus:border-[var(--gold)] cursor-pointer"
+                                    >
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                        <option value={200}>200</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={page <= 1}
+                                        className="p-1.5 rounded border border-[var(--border)] hover:bg-[var(--bg-card-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition"
+                                        title="Previous Page"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+
+                                    <span className="font-mono font-medium px-2 py-1 text-[var(--text-primary)]">
+                                        Page {page} of {totalPages}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={page >= totalPages}
+                                        className="p-1.5 rounded border border-[var(--border)] hover:bg-[var(--bg-card-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition"
+                                        title="Next Page"
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </>
@@ -1053,6 +1233,15 @@ export default function InventoryPage() {
             <AddProductModal open={showAdd} onClose={() => setShowAdd(false)} />
             <AdjustModal open={showAdjust} onClose={() => setShowAdjust(false)} products={Array.isArray(products) ? products : []} />
             <TransferModal open={showTransfer} onClose={() => setShowTransfer(false)} products={Array.isArray(products) ? products : []} />
+            <UniversalImportModal
+                isOpen={showImport}
+                onClose={() => setShowImport(false)}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ["products"] });
+                    queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
+                }}
+                type="products"
+            />
         </div>
     );
 }

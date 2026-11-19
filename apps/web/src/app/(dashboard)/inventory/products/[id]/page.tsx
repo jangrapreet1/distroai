@@ -2,7 +2,7 @@
 import { formatINR } from "@/lib/utils";
 import { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, Package, Edit, X, RefreshCcw, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Package, Edit, X, RefreshCcw, Trash2, AlertTriangle, CheckCircle2, Layers, Info } from "lucide-react";
 import { useProduct, useUpdateProduct, useDeleteProduct, useRestoreProduct, useHardDeleteProduct, useUploadFile, usePublishProduct } from "@/hooks/api-hooks";
 import { useRouter } from "next/navigation";
 import { MultiImageUpload } from "@/components/ui/multi-image-upload";
@@ -51,15 +51,16 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
 
     const handleEditOpen = () => {
         if (product) {
+            const primaryVar = (product.variants || []).find((v: any) => v.isActive !== false) || product.variants?.[0];
             setEditData({
                 name: product.name || "",
                 sku: product.sku || "",
                 brand: product.brand || "",
                 category: product.category || "",
                 description: product.description || "",
-                purchasePrice: product.purchasePrice || 0,
-                sellingPrice: product.sellingPrice || 0,
-                mrp: product.mrp || 0,
+                purchasePrice: (primaryVar?.purchasePrice ?? product.purchasePrice) || 0,
+                sellingPrice: (primaryVar?.sellingPrice ?? product.sellingPrice) || 0,
+                mrp: (primaryVar?.mrp ?? product.mrp) || 0,
                 gstRate: product.gstRate || 0,
                 unit: product.unit || "",
                 secondaryUnit: product.secondaryUnit || "",
@@ -110,10 +111,19 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
 
         setEditVariants(sanitizedVariants);
 
+        // Keep base product prices in sync with the primary (first active) variant
+        const primary = sanitizedVariants.find(v => v.isActive !== false) || sanitizedVariants[0];
+        const updatedEditData = sanitizedVariants.length > 0 && primary ? {
+            ...editData,
+            sellingPrice: primary.sellingPrice !== undefined ? Number(primary.sellingPrice) : editData.sellingPrice,
+            mrp: primary.mrp !== undefined ? Number(primary.mrp) : editData.mrp,
+            purchasePrice: primary.purchasePrice !== undefined ? Number(primary.purchasePrice) : editData.purchasePrice,
+        } : editData;
+
         updateProduct.mutate({
             id: product.id,
             data: {
-                ...editData,
+                ...updatedEditData,
                 imageUrl: editImages[0] || "",
                 imageUrls: editImages,
                 ...(sanitizedVariants.length > 0 ? {
@@ -258,24 +268,25 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                         )}
                     </div>
                 ) : (
-                    <div className="w-32 h-32 md:w-40 md:h-40 shrink-0 mx-auto md:mx-0 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)] opacity-50">
-                        <Package size={48} />
+                    <div className="w-28 h-28 md:w-32 md:h-32 shrink-0 mx-auto md:mx-0 rounded-xl border border-dashed border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/40 flex flex-col items-center justify-center gap-1.5 text-slate-400 dark:text-zinc-500">
+                        <Package size={28} />
+                        <span className="text-[10px] font-medium">No Image</span>
                     </div>
                 )}
                 <div className="text-center md:text-left w-full mt-2 md:mt-0">
-                    <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: "var(--font-playfair)" }}>{product.name}</h1>
+                    <h1 className="text-2xl font-bold tracking-tight mb-1 text-[var(--text-primary)]">{product.name}</h1>
                     <p className="text-sm text-[var(--text-muted)] mb-4">{product.sku} • {product.brand || "No Brand"}</p>
-                    <div className="flex justify-center md:justify-start gap-3">
+                    <div className="flex justify-center md:justify-start gap-2.5">
                         {product.isDraft ? (
-                            <span className="inline-block px-3 py-1 bg-amber-500/15 border border-amber-500/30 rounded-full text-xs font-semibold text-amber-400">
+                            <span className="inline-block px-2.5 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-semibold text-amber-500">
                                 Draft
                             </span>
                         ) : (
-                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${product.isActive ? 'bg-[var(--green)]/15 text-[var(--green-bright)]' : 'bg-[var(--red)]/15 text-[var(--red)]'}`}>
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${product.isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'}`}>
                                 {product.isActive ? "Active" : "Inactive"}
                             </span>
                         )}
-                        <span className="inline-block px-3 py-1 bg-[var(--bg-secondary)] rounded-full text-xs font-semibold text-[var(--text-secondary)]">
+                        <span className="inline-block px-2.5 py-0.5 bg-slate-100 dark:bg-zinc-800 rounded-full text-xs font-medium text-slate-600 dark:text-zinc-400">
                             {product.category || "Uncategorized"}
                         </span>
                     </div>
@@ -284,26 +295,50 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
 
             {product.description && (
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
-                    <h2 className="text-base font-bold mb-3" style={{ fontFamily: "var(--font-playfair)" }}>Product Description</h2>
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-3">Product Description</h2>
                     <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{product.description}</p>
                 </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
-                    <h2 className="text-lg font-bold mb-4" style={{ fontFamily: "var(--font-playfair)" }}>Pricing Details</h2>
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-4">Pricing Details</h2>
                     <dl className="space-y-3">
                         <div className="flex justify-between border-b border-[var(--border)] pb-2 text-sm">
                             <dt className="text-[var(--text-muted)]">Selling Price</dt>
-                            <dd className="font-semibold text-[var(--gold)]" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(product.sellingPrice || 0)}</dd>
+                            <dd className="font-semibold text-blue-600 dark:text-blue-400" style={{ fontFamily: "var(--font-mono)" }}>
+                                {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 ? (() => {
+                                    const prices = product.variants.map((v: any) => Number(v.sellingPrice)).filter((p: number) => !isNaN(p) && p > 0);
+                                    if (prices.length === 0) return formatINR(product.sellingPrice || 0);
+                                    const min = Math.min(...prices);
+                                    const max = Math.max(...prices);
+                                    return min === max ? formatINR(min) : `${formatINR(min)} – ${formatINR(max)}`;
+                                })() : formatINR(product.sellingPrice || 0)}
+                            </dd>
                         </div>
                         <div className="flex justify-between border-b border-[var(--border)] pb-2 text-sm">
                             <dt className="text-[var(--text-muted)]">MRP</dt>
-                            <dd className="text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(product.mrp || 0)}</dd>
+                            <dd className="text-right" style={{ fontFamily: "var(--font-mono)" }}>
+                                {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 ? (() => {
+                                    const mrps = product.variants.map((v: any) => Number(v.mrp)).filter((m: number) => !isNaN(m) && m > 0);
+                                    if (mrps.length === 0) return formatINR(product.mrp || 0);
+                                    const min = Math.min(...mrps);
+                                    const max = Math.max(...mrps);
+                                    return min === max ? formatINR(min) : `${formatINR(min)} – ${formatINR(max)}`;
+                                })() : formatINR(product.mrp || 0)}
+                            </dd>
                         </div>
                         <div className="flex justify-between border-b border-[var(--border)] pb-2 text-sm">
                             <dt className="text-[var(--text-muted)]">Purchase Price</dt>
-                            <dd className="text-right" style={{ fontFamily: "var(--font-mono)" }}>{formatINR(product.purchasePrice || 0)}</dd>
+                            <dd className="text-right" style={{ fontFamily: "var(--font-mono)" }}>
+                                {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 ? (() => {
+                                    const buys = product.variants.map((v: any) => Number(v.purchasePrice)).filter((b: number) => !isNaN(b) && b > 0);
+                                    if (buys.length === 0) return formatINR(product.purchasePrice || 0);
+                                    const min = Math.min(...buys);
+                                    const max = Math.max(...buys);
+                                    return min === max ? formatINR(min) : `${formatINR(min)} – ${formatINR(max)}`;
+                                })() : formatINR(product.purchasePrice || 0)}
+                            </dd>
                         </div>
                         <div className="flex justify-between border-b border-[var(--border)] pb-2 text-sm">
                             <dt className="text-[var(--text-muted)]">GST Rate</dt>
@@ -320,7 +355,7 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
                     </dl>
                 </div>
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-6">
-                    <h2 className="text-lg font-bold mb-4" style={{ fontFamily: "var(--font-playfair)" }}>Stock Details</h2>
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-4">Stock Details</h2>
                     <dl className="space-y-3">
                         <div className="flex justify-between border-b border-[var(--border)] pb-2 text-sm">
                             <dt className="text-[var(--text-muted)]">Total Stock</dt>
@@ -474,27 +509,94 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
 
                                 {/* Pricing */}
                                 <div className="space-y-4 lg:col-span-3">
-                                    <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border)] pb-2">Pricing & Stock</h4>
+                                    <div className="flex items-center justify-between border-b border-[var(--border)] pb-2">
+                                        <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Pricing & Stock</h4>
+                                        {editVariants.length > 0 && (
+                                            <span className="text-xs text-[var(--gold)] bg-[var(--gold)]/10 px-2.5 py-1 rounded-full border border-[var(--gold)]/20 font-medium flex items-center gap-1.5">
+                                                <Layers size={13} /> Managed by Variations ({editVariants.length})
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {editVariants.length > 0 && (
+                                        <div className="p-3 bg-[var(--bg-secondary)]/70 rounded-[var(--radius-md)] border border-[var(--gold)]/25 text-xs text-[var(--text-secondary)] flex items-start gap-2.5">
+                                            <Info size={15} className="text-[var(--gold)] shrink-0 mt-0.5" />
+                                            <div>
+                                                <span className="font-semibold text-[var(--text-primary)]">Variation Pricing Active:</span> This product has {editVariants.length} variations. Purchase Price, Selling Price, and MRP are defined per variant in the table below. Base prices are blurred/disabled and automatically reflect your primary variant.
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                         <label className="block">
-                                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Purchase Price *</span>
-                                            <input type="number" step="0.01" min="0" value={editData.purchasePrice} onChange={(e) => setEditData({ ...editData, purchasePrice: Number(e.target.value) })} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" required />
+                                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Purchase Price {editVariants.length === 0 ? "*" : ""}</span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={editVariants.length > 0 ? (editVariants.find(v => v.isActive !== false)?.purchasePrice ?? editData.purchasePrice) : editData.purchasePrice}
+                                                onChange={(e) => setEditData({ ...editData, purchasePrice: Number(e.target.value) })}
+                                                disabled={editVariants.length > 0}
+                                                className={`w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] outline-none ${editVariants.length > 0 ? "opacity-50 blur-[0.4px] bg-[var(--bg-secondary)]/50 cursor-not-allowed select-none" : "focus:border-[var(--gold)]"}`}
+                                                required={editVariants.length === 0}
+                                            />
+                                            {editVariants.length > 0 && (
+                                                <span className="text-[10px] text-[var(--gold)] mt-1 block">From primary variant</span>
+                                            )}
                                         </label>
                                         <label className="block">
-                                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Selling Price *</span>
-                                            <input type="number" step="0.01" min="0" value={editData.sellingPrice} onChange={(e) => setEditData({ ...editData, sellingPrice: Number(e.target.value) })} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" required />
+                                            <span className="text-xs text-[var(--text-muted)] mb-1 block">Selling Price {editVariants.length === 0 ? "*" : ""}</span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={editVariants.length > 0 ? (editVariants.find(v => v.isActive !== false)?.sellingPrice ?? editData.sellingPrice) : editData.sellingPrice}
+                                                onChange={(e) => setEditData({ ...editData, sellingPrice: Number(e.target.value) })}
+                                                disabled={editVariants.length > 0}
+                                                className={`w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] outline-none ${editVariants.length > 0 ? "opacity-50 blur-[0.4px] bg-[var(--bg-secondary)]/50 cursor-not-allowed select-none" : "focus:border-[var(--gold)]"}`}
+                                                required={editVariants.length === 0}
+                                            />
+                                            {editVariants.length > 0 && (
+                                                <span className="text-[10px] text-[var(--gold)] mt-1 block">From primary variant</span>
+                                            )}
                                         </label>
                                         <label className="block">
-                                            <span className="text-xs text-[var(--text-muted)] mb-1 block">MRP *</span>
-                                            <input type="number" step="0.01" min="0" value={editData.mrp} onChange={(e) => setEditData({ ...editData, mrp: Number(e.target.value) })} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" required />
+                                            <span className="text-xs text-[var(--text-muted)] mb-1 block">MRP {editVariants.length === 0 ? "*" : ""}</span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={editVariants.length > 0 ? (editVariants.find(v => v.isActive !== false)?.mrp ?? editData.mrp) : editData.mrp}
+                                                onChange={(e) => setEditData({ ...editData, mrp: Number(e.target.value) })}
+                                                disabled={editVariants.length > 0}
+                                                className={`w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] outline-none ${editVariants.length > 0 ? "opacity-50 blur-[0.4px] bg-[var(--bg-secondary)]/50 cursor-not-allowed select-none" : "focus:border-[var(--gold)]"}`}
+                                                required={editVariants.length === 0}
+                                            />
+                                            {editVariants.length > 0 && (
+                                                <span className="text-[10px] text-[var(--gold)] mt-1 block">From primary variant</span>
+                                            )}
                                         </label>
                                         <label className="block">
                                             <span className="text-xs text-[var(--text-muted)] mb-1 block">GST Rate (%) *</span>
-                                            <input type="number" step="0.01" min="0" value={editData.gstRate} onChange={(e) => setEditData({ ...editData, gstRate: Number(e.target.value) })} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" required />
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={editData.gstRate}
+                                                onChange={(e) => setEditData({ ...editData, gstRate: Number(e.target.value) })}
+                                                className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none"
+                                                required
+                                            />
                                         </label>
                                         <label className="block">
                                             <span className="text-xs text-[var(--text-muted)] mb-1 block">Min. Stock Level</span>
-                                            <input type="number" min="0" value={editData.minStockLevel} onChange={(e) => setEditData({ ...editData, minStockLevel: Number(e.target.value) })} className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none" />
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={editData.minStockLevel}
+                                                onChange={(e) => setEditData({ ...editData, minStockLevel: Number(e.target.value) })}
+                                                className="w-full px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--bg-primary)] border border-[var(--border)] focus:border-[var(--gold)] outline-none"
+                                            />
                                         </label>
                                     </div>
                                 </div>

@@ -43,18 +43,24 @@ function InlineChart({ spec }: { spec: ChartSpec }) {
 
 function InlineTable({ spec }: { spec: TableSpec }) {
     return (
-        <div className="mt-3 overflow-x-auto rounded-lg border border-[var(--border)]">
-            <table className="text-xs w-full">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-[var(--border)] max-w-full">
+            <table className="text-xs min-w-[480px] w-full border-collapse">
                 <thead>
-                    <tr className="bg-[var(--bg-secondary)]">
-                        {spec.headers.map((h, i) => <th key={i} className="px-3 py-2 text-left font-semibold text-[var(--text-secondary)]">{h}</th>)}
+                    <tr className="bg-[var(--bg-secondary)] border-b border-[var(--border)]">
+                        {spec.headers.map((h, i) => (
+                            <th key={i} className="px-3.5 py-2.5 text-left font-semibold text-[var(--text-primary)] whitespace-nowrap tracking-wide">
+                                {h}
+                            </th>
+                        ))}
                     </tr>
                 </thead>
                 <tbody>
                     {spec.rows.map((row, i) => (
-                        <tr key={i} className="border-t border-[var(--border)] hover:bg-[var(--bg-secondary)] transition">
+                        <tr key={i} className="border-t border-[var(--border)] hover:bg-[var(--bg-secondary)]/60 transition">
                             {(Array.isArray(row) ? row : Object.values(row)).map((cell: any, j) => (
-                                <td key={j} className="px-3 py-2 text-[var(--text-secondary)]">{String(cell)}</td>
+                                <td key={j} className="px-3.5 py-2 text-[var(--text-secondary)] whitespace-nowrap">
+                                    {String(cell)}
+                                </td>
                             ))}
                         </tr>
                     ))}
@@ -112,11 +118,32 @@ export function ChatMessage({ message, onRetry, onSelectInput }: {
 }) {
     return (
         <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm ${message.role === "user" ? "bg-[var(--gold)]/10 text-[var(--text-primary)] border border-[var(--gold)]/20 rounded-tr-sm" : "bg-[var(--bg-card)] border border-[var(--border)] rounded-tl-sm"}`}>
+            <div className={`max-w-[92%] sm:max-w-[85%] md:max-w-[78%] rounded-2xl px-4 sm:px-5 py-3.5 text-sm leading-relaxed shadow-sm ${
+                message.role === "user"
+                    ? "bg-blue-600 text-white rounded-tr-sm"
+                    : "bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] rounded-tl-sm"
+            }`}>
                 {message.image && <img src={message.image} alt="Upload" className="max-w-[150px] md:max-w-[200px] rounded-lg mb-3 object-cover border border-[var(--border)] shadow-sm" />}
                 {message.role === "assistant" ? (
-                    <div className="ai-markdown-content">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    <div className="ai-markdown-content overflow-hidden">
+                        <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                                table: ({ node, ...props }) => (
+                                    <div className="overflow-x-auto my-3 p-0.5 border border-[var(--border)] rounded-lg bg-[var(--bg-secondary)]/30 max-w-full">
+                                        <table className="w-full text-left border-collapse bg-transparent min-w-[440px]" {...props} />
+                                    </div>
+                                ),
+                                th: ({ node, ...props }) => (
+                                    <th className="px-3 py-2 font-semibold text-xs tracking-wider uppercase border-b border-[var(--border)] text-[var(--text-primary)] whitespace-nowrap bg-[var(--bg-secondary)]" {...props} />
+                                ),
+                                td: ({ node, ...props }) => (
+                                    <td className="px-3 py-2 text-xs border-b border-[var(--border)]/60 text-[var(--text-secondary)] whitespace-nowrap" {...props} />
+                                ),
+                            }}
+                        >
+                            {message.content}
+                        </ReactMarkdown>
                     </div>
                 ) : (
                     <div className="whitespace-pre-wrap">{message.content}</div>

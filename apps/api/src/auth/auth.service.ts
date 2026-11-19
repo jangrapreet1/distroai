@@ -179,23 +179,45 @@ export class AuthService {
     }
 
     async refresh(dto: RefreshTokenDto) {
-        // Find all non-expired tokens and check hash
-        const tokens = await this.prisma.refreshToken.findMany({
-            where: { expiresAt: { gt: new Date() } },
-            take: 50,
+        if (!dto.refreshToken) {
+            throw new UnauthorizedException({ code: 'AUTH_TOKEN_INVALID', message: 'Refresh token is required' });
+        }
+
+        // 1. Check if this token was recently rotated within a 45s grace period (multi-tab race prevention)
+        const tokenHash = crypto.createHash('sha256').update(dto.refreshToken).digest('hex');
+        const graceKey = `rotated_refresh:${tokenHash}`;
+        const cachedRotation = await this.redis.get(graceKey);
+        if (cachedRotation) {
+            try {
+                return JSON.parse(cachedRotation);
+            } catch { /* proceed */ }
+        }
+
+        // 2. Fast O(1) indexed lookup for SHA-256 tokens
+        let matchedToken = await this.prisma.refreshToken.findFirst({
+            where: { token: tokenHash, expiresAt: { gt: new Date() } },
         });
 
-        let matchedToken: (typeof tokens)[0] | undefined;
-        for (const t of tokens) {
-            const match = await bcrypt.compare(dto.refreshToken, t.token);
-            if (match) { matchedToken = t; break; }
+        // 3. Fallback for existing legacy bcrypt tokens
+        if (!matchedToken) {
+            const tokens = await this.prisma.refreshToken.findMany({
+                where: { expiresAt: { gt: new Date() } },
+                take: 100,
+            });
+
+            for (const t of tokens) {
+                if (t.token.startsWith('$2')) {
+                    const match = await bcrypt.compare(dto.refreshToken, t.token);
+                    if (match) { matchedToken = t; break; }
+                }
+            }
         }
 
         if (!matchedToken) {
             throw new UnauthorizedException({ code: 'AUTH_TOKEN_INVALID', message: 'Invalid or expired refresh token' });
         }
 
-        // Rotate: delete old
+        // 4. Rotate: delete old
         await this.prisma.refreshToken.delete({ where: { id: matchedToken.id } });
 
         const user = await this.prisma.user.findUnique({ where: { id: matchedToken.userId } });
@@ -203,16 +225,30 @@ export class AuthService {
             throw new UnauthorizedException({ code: 'AUTH_TOKEN_INVALID', message: 'User not found or inactive' });
         }
 
-        return this.generateTokens(user.id, user.orgId, user.role, user.email);
+        const newTokens = await this.generateTokens(user.id, user.orgId, user.role, user.email);
+
+        // Store in grace period cache for 45 seconds to protect concurrent tab requests
+        await this.redis.set(graceKey, JSON.stringify(newTokens), 45);
+
+        return newTokens;
     }
 
     async logout(userId: string, refreshToken: string) {
-        const tokens = await this.prisma.refreshToken.findMany({ where: { userId } });
-        for (const t of tokens) {
-            const match = await bcrypt.compare(refreshToken, t.token);
-            if (match) {
-                await this.prisma.refreshToken.delete({ where: { id: t.id } });
-                break;
+        if (!refreshToken) return { success: true };
+        const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+        const deleted = await this.prisma.refreshToken.deleteMany({
+            where: { userId, token: tokenHash },
+        });
+        if (deleted.count === 0) {
+            const tokens = await this.prisma.refreshToken.findMany({ where: { userId } });
+            for (const t of tokens) {
+                if (t.token.startsWith('$2')) {
+                    const match = await bcrypt.compare(refreshToken, t.token);
+                    if (match) {
+                        await this.prisma.refreshToken.delete({ where: { id: t.id } });
+                        break;
+                    }
+                }
             }
         }
         return { success: true };
@@ -373,17 +409,21 @@ export class AuthService {
     private async generateTokens(userId: string, orgId: string, role: string, email: string) {
         const payload = { sub: userId, orgId, role, email };
 
+        const expiresIn = this.config.get<string>('JWT_ACCESS_EXPIRY')
+            || this.config.get<string>('JWT_EXPIRES_IN')
+            || '7d';
+
         const accessToken = this.jwtService.sign(payload, {
             secret: this.config.get('JWT_ACCESS_SECRET'),
-            expiresIn: this.config.get('JWT_ACCESS_EXPIRY', '15m'),
+            expiresIn,
         });
 
         const rawRefreshToken = crypto.randomBytes(64).toString('hex');
-        const hashedRefreshToken = await bcrypt.hash(rawRefreshToken, 8);
+        const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
         const refreshExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
         await this.prisma.refreshToken.create({
-            data: { userId, token: hashedRefreshToken, expiresAt: refreshExpiry },
+            data: { userId, token: tokenHash, expiresAt: refreshExpiry },
         });
 
         return { accessToken, refreshToken: rawRefreshToken };
