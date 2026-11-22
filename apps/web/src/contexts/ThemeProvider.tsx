@@ -16,15 +16,24 @@ const STORAGE_KEY = "distroai-theme";
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const [theme, setTheme] = useState<Theme>("dark");
 
+    const applyThemeToDOM = (t: Theme) => {
+        document.documentElement.setAttribute("data-theme", t);
+        if (t === "dark") {
+            document.documentElement.classList.add("dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+        }
+    };
+
     useEffect(() => {
         try {
             const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
             const initial = stored === "light" ? "light" : "dark";
             setTheme(initial);
-            document.documentElement.setAttribute("data-theme", initial);
+            applyThemeToDOM(initial);
         } catch {
             // In case localStorage is blocked (e.g. Safari private browsing)
-            document.documentElement.setAttribute("data-theme", "dark");
+            applyThemeToDOM("dark");
         }
     }, []);
 
@@ -36,7 +45,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             } catch {
                 // In case localStorage is blocked
             }
-            document.documentElement.setAttribute("data-theme", next);
+            applyThemeToDOM(next);
             return next;
         });
     }, []);

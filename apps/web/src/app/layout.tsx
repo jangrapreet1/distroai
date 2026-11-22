@@ -50,9 +50,30 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${sansFont.variable} ${jetbrainsMono.variable}`}
       style={{ backgroundColor: "var(--bg-primary)", color: "var(--text-primary)" }}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('distroai-theme');
+                  var theme = stored === 'light' ? 'light' : 'dark';
+                  document.documentElement.setAttribute('data-theme', theme);
+                  if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         className="antialiased"
         style={{
