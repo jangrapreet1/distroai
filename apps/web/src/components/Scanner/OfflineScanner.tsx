@@ -44,11 +44,14 @@ export function OfflineScanner({ onClose }: OfflineScannerProps) {
 
     // Initialize Barcode Reader
     useEffect(() => {
+        let isCancelled = false;
+        let scannerInstance: Html5Qrcode | null = null;
+
         const startScanner = async () => {
             if (!document.getElementById('reader')) return;
 
             try {
-                scannerRef.current = new Html5Qrcode("reader", {
+                scannerInstance = new Html5Qrcode("reader", {
                     formatsToSupport: [
                         Html5QrcodeSupportedFormats.QR_CODE,
                         Html5QrcodeSupportedFormats.EAN_13,
@@ -58,31 +61,50 @@ export function OfflineScanner({ onClose }: OfflineScannerProps) {
                     ],
                     verbose: false
                 });
-                await scannerRef.current.start(
+                scannerRef.current = scannerInstance;
+
+                // Omit qrbox to scan full frame and prevent html5-qrcode from injecting
+                // conflicting shaded regions and hardcoded white corner div blocks
+                await scannerInstance.start(
                     { facingMode: "environment" },
-                    {
-                        fps: 10,
-                        qrbox: { width: 250, height: 250 }
-                    },
+                    { fps: 10 },
                     (decodedText) => {
                         if (isScanning && !ocrMode) {
                             lookupProduct(decodedText);
                         }
                     },
-                    (errorMessage) => {
+                    () => {
                         // ignore background scan errors
                     }
                 );
+
+                if (isCancelled && scannerInstance.isScanning) {
+                    await scannerInstance.stop().catch(() => {});
+                    scannerInstance.clear();
+                }
             } catch (err) {
-                console.error("Error starting scanner", err);
+                if (!isCancelled) {
+                    console.error("Error starting scanner", err);
+                }
             }
         };
 
         startScanner();
 
         return () => {
-            if (scannerRef.current && scannerRef.current.isScanning) {
-                scannerRef.current.stop().catch(console.error);
+            isCancelled = true;
+            if (scannerInstance) {
+                if (scannerInstance.isScanning) {
+                    scannerInstance.stop().then(() => scannerInstance?.clear()).catch(() => {});
+                } else {
+                    try { scannerInstance.clear(); } catch {}
+                }
+            } else if (scannerRef.current) {
+                if (scannerRef.current.isScanning) {
+                    scannerRef.current.stop().then(() => scannerRef.current?.clear()).catch(() => {});
+                } else {
+                    try { scannerRef.current.clear(); } catch {}
+                }
             }
         };
     }, []);
@@ -164,18 +186,21 @@ export function OfflineScanner({ onClose }: OfflineScannerProps) {
             </div>
 
             {/* Camera Viewport */}
-            <div className="relative w-full h-full max-h-screen overflow-hidden flex items-center justify-center bg-gray-900">
+            <div className="relative w-full h-full max-h-screen overflow-hidden flex items-center justify-center bg-gray-900 [&_#qr-shaded-region]:!hidden [&_#qr-shaded-region_*]:!hidden [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover">
                 <div id="reader" className="w-full h-full object-cover"></div>
 
                 {/* Aiming Reticle overlay */}
                 {isScanning && !ocrMode && (
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-64 h-64 border-2 border-white/50 rounded-xl relative">
+                        <div className="w-64 h-64 border-2 border-white/40 rounded-2xl relative overflow-hidden shadow-2xl backdrop-blur-[1px]">
                             {/* Corner accents */}
-                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[var(--gold)] rounded-tl-xl -mt-0.5 -ml-0.5"></div>
-                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[var(--gold)] rounded-tr-xl -mt-0.5 -mr-0.5"></div>
-                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[var(--gold)] rounded-bl-xl -mb-0.5 -ml-0.5"></div>
-                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[var(--gold)] rounded-br-xl -mb-0.5 -mr-0.5"></div>
+                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -mt-0.5 -ml-0.5"></div>
+                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl -mt-0.5 -mr-0.5"></div>
+                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -mb-0.5 -ml-0.5"></div>
+                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl -mb-0.5 -mr-0.5"></div>
+
+                            {/* Subtle animated scan beam */}
+                            <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent shadow-[0_0_12px_rgba(59,130,246,0.9)] animate-pulse" />
                         </div>
                     </div>
                 )}
